@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Filter, Grid2x2 as Grid, List } from 'lucide-react-native';
+import { Filter, Grid2x2 as Grid, List, Clock, MapPin } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
+import Typography from '@/constants/Typography';
 
 type DiscoverItem = {
   id: string;
@@ -127,6 +128,15 @@ export default function DiscoverScreen() {
     }
   };
 
+  const getItemColor = (type: string): string => {
+    switch (type) {
+      case 'cheese': return '#FFF0DB';
+      case 'recipe': return '#FFE8EC';
+      case 'article': return '#E8F4FF';
+      default: return '#F5F5F5';
+    }
+  };
+
   const renderGridItem = (item: DiscoverItem) => (
     <TouchableOpacity
       key={item.id}
@@ -136,7 +146,9 @@ export default function DiscoverScreen() {
       <Image source={{ uri: item.image_url }} style={styles.gridImage} />
       <View style={styles.gridContent}>
         <View style={styles.itemMeta}>
-          <Text style={styles.itemIcon}>{getItemIcon(item.type)}</Text>
+          <View style={[styles.typeIcon, { backgroundColor: getItemColor(item.type) }]}>
+            <Text style={styles.itemIcon}>{getItemIcon(item.type)}</Text>
+          </View>
           <Text style={styles.itemType}>{item.type}</Text>
         </View>
         <Text style={styles.gridTitle} numberOfLines={2}>
@@ -145,6 +157,18 @@ export default function DiscoverScreen() {
         <Text style={styles.gridDescription} numberOfLines={2}>
           {item.description}
         </Text>
+        {item.metadata?.origin_country && (
+          <View style={styles.metadataContainer}>
+            <MapPin size={12} color={Colors.subtleText} />
+            <Text style={styles.metadataText}>{item.metadata.origin_country}</Text>
+          </View>
+        )}
+        {item.metadata?.reading_time && (
+          <View style={styles.metadataContainer}>
+            <Clock size={12} color={Colors.subtleText} />
+            <Text style={styles.metadataText}>{item.metadata.reading_time} min read</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -158,7 +182,9 @@ export default function DiscoverScreen() {
       <Image source={{ uri: item.image_url }} style={styles.listImage} />
       <View style={styles.listContent}>
         <View style={styles.itemMeta}>
-          <Text style={styles.itemIcon}>{getItemIcon(item.type)}</Text>
+          <View style={[styles.typeIcon, { backgroundColor: getItemColor(item.type) }]}>
+            <Text style={styles.itemIcon}>{getItemIcon(item.type)}</Text>
+          </View>
           <Text style={styles.itemType}>{item.type}</Text>
         </View>
         <Text style={styles.listTitle} numberOfLines={1}>
@@ -167,11 +193,20 @@ export default function DiscoverScreen() {
         <Text style={styles.listDescription} numberOfLines={2}>
           {item.description}
         </Text>
-        {item.metadata?.origin_country && (
-          <Text style={styles.metadata}>
-            {item.metadata.origin_country}
-          </Text>
-        )}
+        <View style={styles.listMetadata}>
+          {item.metadata?.origin_country && (
+            <View style={styles.metadataContainer}>
+              <MapPin size={12} color={Colors.subtleText} />
+              <Text style={styles.metadataText}>{item.metadata.origin_country}</Text>
+            </View>
+          )}
+          {item.metadata?.reading_time && (
+            <View style={styles.metadataContainer}>
+              <Clock size={12} color={Colors.subtleText} />
+              <Text style={styles.metadataText}>{item.metadata.reading_time} min</Text>
+            </View>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -181,16 +216,19 @@ export default function DiscoverScreen() {
       <StatusBar style="dark" />
       
       <View style={styles.header}>
-        <Text style={styles.title}>Discover</Text>
+        <View>
+          <Text style={styles.title}>Discover</Text>
+          <Text style={styles.subtitle}>Explore the world of cheese</Text>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={styles.viewToggle}
+            style={[styles.viewToggle, viewMode === 'list' && styles.viewToggleActive]}
             onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
           >
             {viewMode === 'grid' ? (
-              <List size={20} color={Colors.text} />
+              <List size={18} color={viewMode === 'list' ? Colors.primary : Colors.text} />
             ) : (
-              <Grid size={20} color={Colors.text} />
+              <Grid size={18} color={viewMode === 'grid' ? Colors.primary : Colors.text} />
             )}
           </TouchableOpacity>
         </View>
@@ -208,21 +246,39 @@ export default function DiscoverScreen() {
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
       >
-        {['all', 'cheese', 'articles', 'recipes'].map((filter) => (
+        {[
+          { key: 'all', label: 'All', count: items.length },
+          { key: 'cheese', label: 'Cheeses', count: items.filter(i => i.type === 'cheese').length },
+          { key: 'articles', label: 'Articles', count: items.filter(i => i.type === 'article').length },
+          { key: 'recipes', label: 'Recipes', count: items.filter(i => i.type === 'recipe').length },
+        ].map((filter) => (
           <TouchableOpacity
-            key={filter}
+            key={filter.key}
             style={[
               styles.filterButton,
-              activeFilter === filter && styles.filterButtonActive
+              activeFilter === filter.key && styles.filterButtonActive
             ]}
-            onPress={() => setActiveFilter(filter as any)}
+            onPress={() => setActiveFilter(filter.key as any)}
           >
             <Text style={[
               styles.filterText,
-              activeFilter === filter && styles.filterTextActive
+              activeFilter === filter.key && styles.filterTextActive
             ]}>
-              {filter.charAt(0).toUpperCase() + filter.slice(1)}
+              {filter.label}
             </Text>
+            {filter.count > 0 && (
+              <View style={[
+                styles.filterCount,
+                activeFilter === filter.key && styles.filterCountActive
+              ]}>
+                <Text style={[
+                  styles.filterCountText,
+                  activeFilter === filter.key && styles.filterCountTextActive
+                ]}>
+                  {filter.count}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -230,12 +286,14 @@ export default function DiscoverScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
+            <View style={styles.loadingSpinner} />
+            <Text style={styles.loadingText}>Discovering amazing content...</Text>
           </View>
         ) : items.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No items found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyTitle}>No items found</Text>
+            <Text style={styles.emptySubtext}>Try adjusting your search or filters to discover more content</Text>
           </View>
         ) : (
           <View style={viewMode === 'grid' ? styles.gridContainer : styles.listContainer}>
@@ -259,14 +317,21 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    fontSize: Typography.sizes['3xl'],
+    fontFamily: Typography.fonts.heading,
     color: Colors.text,
+    letterSpacing: Typography.letterSpacing.tight,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: 4,
   },
   headerActions: {
     flexDirection: 'row',
@@ -274,8 +339,11 @@ const styles = StyleSheet.create({
   },
   viewToggle: {
     padding: Layout.spacing.s,
-    borderRadius: Layout.borderRadius.small,
+    borderRadius: Layout.borderRadius.medium,
     backgroundColor: Colors.backgroundSecondary,
+  },
+  viewToggleActive: {
+    backgroundColor: '#FFF0DB',
   },
   filterContainer: {
     marginVertical: Layout.spacing.s,
@@ -285,20 +353,42 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
   },
   filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
     borderRadius: Layout.borderRadius.large,
     backgroundColor: Colors.backgroundSecondary,
+    gap: Layout.spacing.xs,
   },
   filterButtonActive: {
     backgroundColor: Colors.primary,
   },
   filterText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   filterTextActive: {
+    color: Colors.background,
+  },
+  filterCount: {
+    backgroundColor: Colors.border,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  filterCountActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  filterCountText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+  },
+  filterCountTextActive: {
     color: Colors.background,
   },
   content: {
@@ -313,13 +403,13 @@ const styles = StyleSheet.create({
   gridItem: {
     width: '47%',
     backgroundColor: Colors.card,
-    borderRadius: Layout.borderRadius.medium,
+    borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
-    ...Layout.shadow.small,
+    ...Layout.shadow.medium,
   },
   gridImage: {
     width: '100%',
-    height: 120,
+    height: 140,
     ...Platform.select({
       web: {
         objectFit: 'cover',
@@ -330,16 +420,18 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.m,
   },
   gridTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: Layout.spacing.xs,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.tight,
   },
   gridDescription: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    lineHeight: 16,
+    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
+    marginBottom: Layout.spacing.s,
   },
   listContainer: {
     paddingHorizontal: Layout.spacing.m,
@@ -348,13 +440,13 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: 'row',
     backgroundColor: Colors.card,
-    borderRadius: Layout.borderRadius.medium,
+    borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
-    ...Layout.shadow.small,
+    ...Layout.shadow.medium,
   },
   listImage: {
-    width: 100,
-    height: 100,
+    width: 120,
+    height: 120,
     ...Platform.select({
       web: {
         objectFit: 'cover',
@@ -366,37 +458,55 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.m,
   },
   listTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: Layout.spacing.xs,
+    lineHeight: Typography.sizes.lg * Typography.lineHeights.tight,
   },
   listDescription: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    lineHeight: 20,
-    marginBottom: Layout.spacing.xs,
+    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
+    marginBottom: Layout.spacing.s,
+  },
+  listMetadata: {
+    flexDirection: 'row',
+    gap: Layout.spacing.m,
   },
   itemMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Layout.spacing.xs,
-    gap: Layout.spacing.xs,
+    marginBottom: Layout.spacing.s,
+    gap: Layout.spacing.s,
+  },
+  typeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   itemIcon: {
-    fontSize: 14,
+    fontSize: Typography.sizes.sm,
   },
   itemType: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
     textTransform: 'uppercase',
+    letterSpacing: Typography.letterSpacing.wide,
   },
-  metadata: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: Colors.primary,
+  metadataContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metadataText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
   },
   loadingContainer: {
     flex: 1,
@@ -404,9 +514,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Layout.spacing.xl,
   },
+  loadingSpinner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF0DB',
+    marginBottom: Layout.spacing.m,
+  },
   loadingText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
   },
   emptyContainer: {
@@ -415,17 +532,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Layout.spacing.xl,
   },
-  emptyText: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: Layout.spacing.l,
+  },
+  emptyTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
     marginBottom: Layout.spacing.s,
+    textAlign: 'center',
   },
   emptySubtext: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     textAlign: 'center',
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
   },
   bottomSpacing: {
     height: Layout.spacing.xl,
