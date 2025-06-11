@@ -231,8 +231,8 @@ export default function HomeScreen() {
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.greeting}>Good morning</Text>
-          <Text style={styles.title}>Discover amazing cheese</Text>
+          <Text style={styles.greeting}>Hello Cheeky Cheese Lovers!</Text>
+          <Text style={styles.title}>Let's Get Cheesy</Text>
         </View>
 
         <SearchBar 
