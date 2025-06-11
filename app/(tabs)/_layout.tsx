@@ -7,8 +7,8 @@ import {
   Platform,
 } from 'react-native';
 
-import { useAuth } from '@/contexts/AuthContext';
-import { useProtectedRoute } from '@/hooks/useProtectedRoute';
+import { useAuth } from '../../contexts/AuthContext';
+import { useProtectedRoute } from '../../hooks/useProtectedRoute';
 import Colors from '@/constants/Colors';
 
 export default function TabLayout() {
@@ -53,7 +53,7 @@ export default function TabLayout() {
           }}
         />
 
-        {/* Hidden “Add” tab — no href, no icon */}
+        {/* Hidden "Add" tab — no href, no icon */}
         <Tabs.Screen
           name="add"
           options={{
@@ -86,7 +86,7 @@ export default function TabLayout() {
         />
       </Tabs>
 
-      {/* Floating “+” button that routes to /add-cheese */}
+      {/* Floating "+" button that routes to /add-cheese */}
       <TouchableOpacity
         style={styles.floatingAddButton}
         onPress={() => router.push('/add-cheese')}
