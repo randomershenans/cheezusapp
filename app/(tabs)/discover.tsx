@@ -327,9 +327,12 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   filterContent: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',         // keep everything on one line
+    columnGap: Layout.spacing.xl,
     paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.xl,
   },
+
   filterItem: {
     alignItems: 'center',
     gap: Layout.spacing.xs,
