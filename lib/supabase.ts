@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { makeRedirectUri } from 'expo-auth-session';
 import { Platform } from 'react-native';
@@ -8,33 +7,43 @@ const MOBILE_TIMEOUT = 20000; // 20 seconds for mobile
 // In-memory fallback storage for when AsyncStorage fails
 const memoryStorage = new Map<string, string>();
 
-const customStorageAdapter = {
-  getItem: async (key: string) => {
-    try {
-      return await AsyncStorage.getItem(key) || memoryStorage.get(key) || null;
-    } catch (error) {
-      console.error('Error reading from storage:', error);
-      return memoryStorage.get(key) || null;
-    }
-  },
-  setItem: async (key: string, value: string) => {
-    try {
-      await AsyncStorage.setItem(key, value);
-      memoryStorage.set(key, value);
-    } catch (error) {
-      console.error('Error writing to storage:', error);
-      memoryStorage.set(key, value);
-    }
-  },
-  removeItem: async (key: string) => {
-    try {
-      await AsyncStorage.removeItem(key);
-      memoryStorage.delete(key);
-    } catch (error) {
-      console.error('Error removing from storage:', error);
-      memoryStorage.delete(key);
-    }
+const createCustomStorageAdapter = () => {
+  // Only use AsyncStorage on native platforms
+  if (Platform.OS === 'web') {
+    return undefined; // Let Supabase use its default web storage (localStorage)
   }
+
+  // Dynamically import AsyncStorage only for native platforms
+  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+
+  return {
+    getItem: async (key: string) => {
+      try {
+        return await AsyncStorage.getItem(key) || memoryStorage.get(key) || null;
+      } catch (error) {
+        console.error('Error reading from storage:', error);
+        return memoryStorage.get(key) || null;
+      }
+    },
+    setItem: async (key: string, value: string) => {
+      try {
+        await AsyncStorage.setItem(key, value);
+        memoryStorage.set(key, value);
+      } catch (error) {
+        console.error('Error writing to storage:', error);
+        memoryStorage.set(key, value);
+      }
+    },
+    removeItem: async (key: string) => {
+      try {
+        await AsyncStorage.removeItem(key);
+        memoryStorage.delete(key);
+      } catch (error) {
+        console.error('Error removing from storage:', error);
+        memoryStorage.delete(key);
+      }
+    }
+  };
 };
 
 const supabaseUrl = 'https://xkvjqhgnwqawpojjegtr.supabase.co';
@@ -56,12 +65,14 @@ const createCustomFetch = () => {
 };
 
 const createAuthConfig = () => {
+  const customStorage = createCustomStorageAdapter();
+  
   const config = {
-    storage: customStorageAdapter,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
     flowType: 'pkce' as const,
+    ...(customStorage && { storage: customStorage }), // Only add storage if it exists
   };
 
   if (Platform.OS === 'web') {
