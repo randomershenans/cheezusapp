@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   filterItem: {
     alignItems: 'center',
     gap: Layout.spacing.xs,
-    minWidth: 60,
+    minWidth: 2,
   },
   filterText: {
     fontSize: Typography.sizes.sm,
