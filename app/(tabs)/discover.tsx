@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Filter, Grid, List } from 'lucide-react-native';
+import { Filter, Grid2x2 as Grid, List } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
 import Colors from '@/constants/Colors';
