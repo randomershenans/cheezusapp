@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     marginTop: Layout.spacing.s,
-    marginBottom: Layout.spacing.s,
+    marginBottom: 20px,
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
