@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     marginTop: Layout.spacing.s,
-    marginBottom: Layout.spacing.m,
+    marginBottom: Layout.spacing.s,
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
@@ -350,6 +350,7 @@ const styles = StyleSheet.create({
   },
   heroContainer: {
     paddingHorizontal: Layout.spacing.m,
+    paddingTop: Layout.spacing.s,
     gap: Layout.spacing.l,
   },
   heroCard: {
