@@ -23,48 +23,50 @@ export default function TabLayout() {
           headerShown: false,
         }}
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Home',
-            href: '/',
-            tabBarIcon: ({ color, size }) => <House size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="discover"
-          options={{
-            title: 'Discover',
-            href: '/discover',
-            tabBarIcon: ({ color, size }) => <Search size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="add"
-          options={{
-            title: '',
-            href: '/add',
-            tabBarButton: (props) => <View {...props} style={{ display: 'none' }} />,
-          }}
-        />
-        <Tabs.Screen
-          name="cheese-box"
-          options={{
-            title: 'Cheese Box',
-            href: user ? '/cheese-box' : '/auth/login',
-            tabBarIcon: ({ color, size }) => <PackageOpen size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            href: '/profile',
-            tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-          }}
-        />
-      </Tabs>
-      
+<Tabs.Screen
+  name="index"
+  options={{
+    title: 'Home',
+    href: '/',
+    tabBarIcon: ({ color, size }) => <House size={size} color={color} />,
+  }}
+/>
+
+<Tabs.Screen
+  name="discover"
+  options={{
+    title: 'Discover',
+    href: '/discover',
+    tabBarIcon: ({ color, size }) => <Search size={size} color={color} />,
+  }}
+/>
+
+<Tabs.Screen
+  name="add"
+  options={{
+    title: '',
+    tabBarButton: () => null,   // hide it; no href
+  }}
+/>
+
+<Tabs.Screen
+  name="cheese-box"
+  options={{
+    title: 'Cheese Box',
+    href: user ? '/cheese-box' : '/auth/login',
+    tabBarIcon: ({ color, size }) => <PackageOpen size={size} color={color} />,
+  }}
+/>
+
+<Tabs.Screen
+  name="profile"
+  options={{
+    title: 'Profile',
+    href: '/profile',
+    tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+  }}
+/>
+
       {/* Floating Add Button */}
       <TouchableOpacity
         style={styles.floatingAddButton}
