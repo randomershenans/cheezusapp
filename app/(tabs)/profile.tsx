@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
+import Typography from '@/constants/Typography';
 
 type Badge = {
   id: string;
@@ -366,26 +367,27 @@ const styles = StyleSheet.create({
     }),
   },
   welcomeTitle: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    fontSize: Typography.sizes['3xl'],
+    fontFamily: Typography.fonts.heading,
     color: Colors.text,
     marginBottom: Layout.spacing.m,
     textAlign: 'center',
+    letterSpacing: Typography.letterSpacing.tight,
   },
   welcomeText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
   },
   featuresSection: {
     padding: Layout.spacing.xl,
     backgroundColor: '#F9F9F9',
   },
   featuresTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
     marginBottom: Layout.spacing.l,
   },
@@ -423,14 +425,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
     marginBottom: 2,
   },
   featureDescription: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
   },
   actionSection: {
@@ -444,8 +446,8 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: Colors.text,
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     textAlign: 'center',
   },
   signupButton: {
@@ -458,8 +460,8 @@ const styles = StyleSheet.create({
   },
   signupButtonText: {
     color: Colors.text,
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     textAlign: 'center',
   },
   profileContent: {
@@ -488,8 +490,8 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   nameInput: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -498,8 +500,8 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.s,
   },
   bioInput: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -518,8 +520,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   cancelButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
     textAlign: 'center',
   },
@@ -530,22 +532,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   saveButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.background,
     textAlign: 'center',
   },
   profileName: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: 4,
   },
   profileBio: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    lineHeight: 20,
+    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
   },
   menuSection: {
     padding: Layout.spacing.m,
@@ -554,8 +556,8 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
     marginBottom: Layout.spacing.m,
   },
@@ -576,8 +578,8 @@ const styles = StyleSheet.create({
     marginRight: Layout.spacing.m,
   },
   menuText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   modernHeader: {
@@ -642,13 +644,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.display,
     color: Colors.text,
   },
   statLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
     marginTop: 4,
   },
@@ -689,14 +691,14 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.s,
   },
   badgeName: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: 4,
   },
   badgeDescription: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
   },
   logoutButton: {
@@ -712,8 +714,8 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     marginLeft: Layout.spacing.s,
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.error,
   }
 });

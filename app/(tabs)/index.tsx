@@ -8,6 +8,7 @@ import SearchBar from '@/components/SearchBar';
 import NearbyCheeseCard from '@/components/NearbyCheeseCard';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
+import Typography from '@/constants/Typography';
 
 type FeaturedEntry = {
   id: string;
@@ -201,15 +202,16 @@ const styles = StyleSheet.create({
     paddingBottom: Layout.spacing.s,
   },
   greeting: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginBottom: 4,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    fontSize: Typography.sizes['3xl'],
+    fontFamily: Typography.fonts.heading,
     color: Colors.text,
+    letterSpacing: Typography.letterSpacing.tight,
   },
   section: {
     marginTop: Layout.spacing.l,
@@ -227,13 +229,13 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
   },
   seeAll: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.primary,
   },
   featuredContainer: {
@@ -273,8 +275,8 @@ const styles = StyleSheet.create({
   },
   typeBadgeText: {
     color: Colors.background,
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -282,21 +284,22 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   timeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
   },
   featuredTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: Layout.spacing.xs,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.tight,
   },
   featuredDescription: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    lineHeight: 20,
+    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
   },
   cheeseGrid: {
     flexDirection: 'row',
@@ -324,14 +327,14 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.m,
   },
   cheeseName: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: 4,
   },
   cheeseType: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginBottom: Layout.spacing.xs,
   },
@@ -341,8 +344,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   bottomSpacing: {

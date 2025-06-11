@@ -4,6 +4,7 @@ import { Search, Filter } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
+import Typography from '@/constants/Typography';
 
 // Levenshtein distance implementation
 function levenshteinDistance(str1: string, str2: string): number {
@@ -48,6 +49,12 @@ type SearchResult = {
 };
 
 type SearchMode = 'all' | 'cheese' | 'pairing';
+
+interface SearchBarProps {
+  placeholder?: string;
+  onSearch?: (query: string) => void;
+  onFilter?: () => void;
+}
 
 export default function SearchBar({ 
   placeholder = 'Search + filter', 
@@ -214,8 +221,8 @@ export default function SearchBar({
         setResults(suggestions.map(s => ({
           id: s.id,
           type: 'cheese',
-          title: s.name,
-          description: `Did you mean: ${s.name}?`,
+          title: s.title,
+          description: `Did you mean: ${s.title}?`,
           score: s.similarity
         })));
       } else {
@@ -241,7 +248,7 @@ export default function SearchBar({
       return;
     }
     
-    setSearchResults(data || []);
+    // Handle filtered results here
   };
 
   const handleRegionFilter = async (country: string) => {
@@ -256,7 +263,7 @@ export default function SearchBar({
       return;
     }
     
-    setSearchResults(data || []);
+    // Handle filtered results here
   };
 
   const handleResultPress = (result: SearchResult) => {
@@ -488,9 +495,9 @@ const styles = StyleSheet.create({
     marginRight: Layout.spacing.s,
   },
   placeholder: {
-    fontSize: 14,
+    fontSize: Typography.sizes.sm,
     color: '#888',
-    fontFamily: 'Poppins-Regular',
+    fontFamily: Typography.fonts.body,
   },
   filterContainer: {
     marginLeft: Layout.spacing.s,
@@ -562,8 +569,8 @@ const styles = StyleSheet.create({
     ...Layout.shadow.small,
   },
   segmentText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
   },
   segmentTextActive: {
@@ -589,8 +596,8 @@ const styles = StyleSheet.create({
   },
   expandedInput: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.text,
   },
   cancelButton: {
@@ -598,8 +605,8 @@ const styles = StyleSheet.create({
     paddingVertical: Layout.spacing.s,
   },
   cancelText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   section: {
@@ -613,13 +620,13 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.m,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   seeAll: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.primary,
     textDecorationLine: 'underline',
   },
@@ -641,13 +648,13 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
   },
   typeText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   countText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     backgroundColor: '#E8E8E8',
     paddingHorizontal: 6,
@@ -672,11 +679,11 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
   },
   regionFlag: {
-    fontSize: 16,
+    fontSize: Typography.sizes.base,
   },
   regionText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   pairingGrid: {
@@ -694,8 +701,8 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
   },
   pairingText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.primary,
   },
   resultsContainer: {
@@ -706,14 +713,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messageText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
     textAlign: 'center',
   },
   errorText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.error,
     textAlign: 'center',
   },
@@ -732,22 +739,22 @@ const styles = StyleSheet.create({
     }),
   },
   resultIcon: {
-    fontSize: 20,
+    fontSize: Typography.sizes.xl,
     marginRight: Layout.spacing.m,
   },
   resultContent: {
     flex: 1,
   },
   resultTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
     marginBottom: 4,
   },
   resultDescription: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    lineHeight: 20,
+    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
   },
 });
