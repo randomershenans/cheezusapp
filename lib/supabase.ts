@@ -8,12 +8,12 @@ const MOBILE_TIMEOUT = 20000; // 20 seconds for mobile
 const memoryStorage = new Map<string, string>();
 
 const createCustomStorageAdapter = () => {
-  // Only use AsyncStorage on native platforms
-  if (Platform.OS === 'web') {
+  // Only use AsyncStorage on native platforms AND when not in Node.js environment
+  if (Platform.OS === 'web' || typeof window === 'undefined') {
     return undefined; // Let Supabase use its default web storage (localStorage)
   }
 
-  // Dynamically import AsyncStorage only for native platforms
+  // Dynamically import AsyncStorage only for native platforms in proper environment
   const AsyncStorage = require('@react-native-async-storage/async-storage').default;
 
   return {
