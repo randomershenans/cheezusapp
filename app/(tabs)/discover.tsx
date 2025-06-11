@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
-   
+    gap: Layout.spacing.xl,
   },
   filterItem: {
     alignItems: 'center',
