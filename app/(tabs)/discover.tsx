@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Filter, Grid2x2 as Grid, List, Clock, MapPin } from 'lucide-react-native';
+import { Filter, Grid2x2 as Grid, List, Clock, MapPin, Star, ChefHat, BookOpen, Utensils } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 type DiscoverItem = {
   id: string;
@@ -22,12 +24,42 @@ type DiscoverItem = {
   };
 };
 
+const filterOptions = [
+  { 
+    key: 'all', 
+    label: 'All', 
+    icon: Grid,
+    color: '#E8F4FF',
+    iconColor: '#0066CC'
+  },
+  { 
+    key: 'cheese', 
+    label: 'Cheeses', 
+    icon: ChefHat,
+    color: '#FFF0DB',
+    iconColor: '#E67E22'
+  },
+  { 
+    key: 'articles', 
+    label: 'Articles', 
+    icon: BookOpen,
+    color: '#E8F8F0',
+    iconColor: '#27AE60'
+  },
+  { 
+    key: 'recipes', 
+    label: 'Recipes', 
+    icon: Utensils,
+    color: '#FFE8EC',
+    iconColor: '#E74C3C'
+  },
+];
+
 export default function DiscoverScreen() {
   const router = useRouter();
   const { q } = useLocalSearchParams();
   const [items, setItems] = useState<DiscoverItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeFilter, setActiveFilter] = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
 
   useEffect(() => {
@@ -128,88 +160,59 @@ export default function DiscoverScreen() {
     }
   };
 
-  const getItemColor = (type: string): string => {
-    switch (type) {
-      case 'cheese': return '#FFF0DB';
-      case 'recipe': return '#FFE8EC';
-      case 'article': return '#E8F4FF';
-      default: return '#F5F5F5';
-    }
+  const renderHeroCard = (item: DiscoverItem) => {
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.heroCard}
+        onPress={() => handleItemPress(item)}
+      >
+        <Image 
+          source={{ uri: item.image_url }} 
+          style={styles.heroImage}
+        />
+        <View style={styles.heroOverlay}>
+          <View style={styles.heroContent}>
+            <View style={styles.heroMeta}>
+              <View style={styles.typeBadge}>
+                <Text style={styles.typeIcon}>{getItemIcon(item.type)}</Text>
+                <Text style={styles.typeBadgeText}>{item.type}</Text>
+              </View>
+              {item.metadata?.reading_time && (
+                <View style={styles.timeBadge}>
+                  <Clock size={14} color={Colors.background} />
+                  <Text style={styles.timeBadgeText}>{item.metadata.reading_time} min</Text>
+                </View>
+              )}
+              {item.type === 'cheese' && (
+                <View style={styles.ratingBadge}>
+                  <Star size={14} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
+                </View>
+              )}
+            </View>
+            
+            <Text style={styles.heroTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            
+            {item.metadata?.origin_country && (
+              <View style={styles.heroLocation}>
+                <MapPin size={16} color="rgba(255, 255, 255, 0.9)" />
+                <Text style={styles.heroLocationText}>
+                  {item.metadata.origin_country}
+                </Text>
+              </View>
+            )}
+            
+            <Text style={styles.heroDescription} numberOfLines={3}>
+              {item.description}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
   };
-
-  const renderGridItem = (item: DiscoverItem) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.gridItem}
-      onPress={() => handleItemPress(item)}
-    >
-      <Image source={{ uri: item.image_url }} style={styles.gridImage} />
-      <View style={styles.gridContent}>
-        <View style={styles.itemMeta}>
-          <View style={[styles.typeIcon, { backgroundColor: getItemColor(item.type) }]}>
-            <Text style={styles.itemIcon}>{getItemIcon(item.type)}</Text>
-          </View>
-          <Text style={styles.itemType}>{item.type}</Text>
-        </View>
-        <Text style={styles.gridTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.gridDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
-        {item.metadata?.origin_country && (
-          <View style={styles.metadataContainer}>
-            <MapPin size={12} color={Colors.subtleText} />
-            <Text style={styles.metadataText}>{item.metadata.origin_country}</Text>
-          </View>
-        )}
-        {item.metadata?.reading_time && (
-          <View style={styles.metadataContainer}>
-            <Clock size={12} color={Colors.subtleText} />
-            <Text style={styles.metadataText}>{item.metadata.reading_time} min read</Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderListItem = (item: DiscoverItem) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.listItem}
-      onPress={() => handleItemPress(item)}
-    >
-      <Image source={{ uri: item.image_url }} style={styles.listImage} />
-      <View style={styles.listContent}>
-        <View style={styles.itemMeta}>
-          <View style={[styles.typeIcon, { backgroundColor: getItemColor(item.type) }]}>
-            <Text style={styles.itemIcon}>{getItemIcon(item.type)}</Text>
-          </View>
-          <Text style={styles.itemType}>{item.type}</Text>
-        </View>
-        <Text style={styles.listTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={styles.listDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
-        <View style={styles.listMetadata}>
-          {item.metadata?.origin_country && (
-            <View style={styles.metadataContainer}>
-              <MapPin size={12} color={Colors.subtleText} />
-              <Text style={styles.metadataText}>{item.metadata.origin_country}</Text>
-            </View>
-          )}
-          {item.metadata?.reading_time && (
-            <View style={styles.metadataContainer}>
-              <Clock size={12} color={Colors.subtleText} />
-              <Text style={styles.metadataText}>{item.metadata.reading_time} min</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -219,18 +222,6 @@ export default function DiscoverScreen() {
         <View>
           <Text style={styles.title}>Discover</Text>
           <Text style={styles.subtitle}>Explore the world of cheese</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.viewToggle, viewMode === 'list' && styles.viewToggleActive]}
-            onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-          >
-            {viewMode === 'grid' ? (
-              <List size={18} color={viewMode === 'list' ? Colors.primary : Colors.text} />
-            ) : (
-              <Grid size={18} color={viewMode === 'grid' ? Colors.primary : Colors.text} />
-            )}
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -246,41 +237,56 @@ export default function DiscoverScreen() {
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
       >
-        {[
-          { key: 'all', label: 'All', count: items.length },
-          { key: 'cheese', label: 'Cheeses', count: items.filter(i => i.type === 'cheese').length },
-          { key: 'articles', label: 'Articles', count: items.filter(i => i.type === 'article').length },
-          { key: 'recipes', label: 'Recipes', count: items.filter(i => i.type === 'recipe').length },
-        ].map((filter) => (
-          <TouchableOpacity
-            key={filter.key}
-            style={[
-              styles.filterButton,
-              activeFilter === filter.key && styles.filterButtonActive
-            ]}
-            onPress={() => setActiveFilter(filter.key as any)}
-          >
-            <Text style={[
-              styles.filterText,
-              activeFilter === filter.key && styles.filterTextActive
-            ]}>
-              {filter.label}
-            </Text>
-            {filter.count > 0 && (
+        {filterOptions.map((filter) => {
+          const isActive = activeFilter === filter.key;
+          const IconComponent = filter.icon;
+          const itemCount = filter.key === 'all' 
+            ? items.length 
+            : items.filter(i => {
+                if (filter.key === 'cheese') return i.type === 'cheese';
+                if (filter.key === 'articles') return i.type === 'article';
+                if (filter.key === 'recipes') return i.type === 'recipe';
+                return false;
+              }).length;
+
+          return (
+            <TouchableOpacity
+              key={filter.key}
+              style={[
+                styles.filterButton,
+                isActive && styles.filterButtonActive,
+                { backgroundColor: isActive ? filter.color : Colors.backgroundSecondary }
+              ]}
+              onPress={() => setActiveFilter(filter.key as any)}
+            >
               <View style={[
-                styles.filterCount,
-                activeFilter === filter.key && styles.filterCountActive
+                styles.filterIcon,
+                { backgroundColor: isActive ? 'rgba(255, 255, 255, 0.9)' : filter.color }
               ]}>
-                <Text style={[
-                  styles.filterCountText,
-                  activeFilter === filter.key && styles.filterCountTextActive
-                ]}>
-                  {filter.count}
-                </Text>
+                <IconComponent 
+                  size={18} 
+                  color={isActive ? filter.iconColor : filter.iconColor} 
+                />
               </View>
-            )}
-          </TouchableOpacity>
-        ))}
+              <View style={styles.filterTextContainer}>
+                <Text style={[
+                  styles.filterText,
+                  { color: isActive ? filter.iconColor : Colors.text }
+                ]}>
+                  {filter.label}
+                </Text>
+                {itemCount > 0 && (
+                  <Text style={[
+                    styles.filterCount,
+                    { color: isActive ? filter.iconColor : Colors.subtleText }
+                  ]}>
+                    {itemCount}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -296,10 +302,8 @@ export default function DiscoverScreen() {
             <Text style={styles.emptySubtext}>Try adjusting your search or filters to discover more content</Text>
           </View>
         ) : (
-          <View style={viewMode === 'grid' ? styles.gridContainer : styles.listContainer}>
-            {items.map(item => 
-              viewMode === 'grid' ? renderGridItem(item) : renderListItem(item)
-            )}
+          <View style={styles.heroContainer}>
+            {items.map(item => renderHeroCard(item))}
           </View>
         )}
         <View style={styles.bottomSpacing} />
@@ -333,180 +337,165 @@ const styles = StyleSheet.create({
     color: Colors.subtleText,
     marginTop: 4,
   },
-  headerActions: {
-    flexDirection: 'row',
-    gap: Layout.spacing.s,
-  },
-  viewToggle: {
-    padding: Layout.spacing.s,
-    borderRadius: Layout.borderRadius.medium,
-    backgroundColor: Colors.backgroundSecondary,
-  },
-  viewToggleActive: {
-    backgroundColor: '#FFF0DB',
-  },
   filterContainer: {
     marginVertical: Layout.spacing.s,
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.s,
+    gap: Layout.spacing.m,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Layout.spacing.m,
-    paddingVertical: Layout.spacing.s,
+    paddingVertical: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
-    backgroundColor: Colors.backgroundSecondary,
-    gap: Layout.spacing.xs,
+    gap: Layout.spacing.m,
+    minWidth: 120,
+    ...Layout.shadow.small,
   },
   filterButtonActive: {
-    backgroundColor: Colors.primary,
+    ...Layout.shadow.medium,
   },
-  filterText: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-  },
-  filterTextActive: {
-    color: Colors.background,
-  },
-  filterCount: {
-    backgroundColor: Colors.border,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
+  filterIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  filterCountActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  filterTextContainer: {
+    flex: 1,
   },
-  filterCountText: {
+  filterText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    marginBottom: 2,
+  },
+  filterCount: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.subtleText,
-  },
-  filterCountTextActive: {
-    color: Colors.background,
   },
   content: {
     flex: 1,
   },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  heroContainer: {
     paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.m,
+    gap: Layout.spacing.l,
   },
-  gridItem: {
-    width: '47%',
-    backgroundColor: Colors.card,
+  heroCard: {
+    width: screenWidth - (Layout.spacing.m * 2),
+    height: 320,
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
-    ...Layout.shadow.medium,
+    ...Layout.shadow.large,
   },
-  gridImage: {
+  heroImage: {
     width: '100%',
-    height: 140,
+    height: '100%',
+    position: 'absolute',
     ...Platform.select({
       web: {
         objectFit: 'cover',
       },
     }),
   },
-  gridContent: {
-    padding: Layout.spacing.m,
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%)',
+    justifyContent: 'flex-end',
   },
-  gridTitle: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
-    marginBottom: Layout.spacing.xs,
-    lineHeight: Typography.sizes.base * Typography.lineHeights.tight,
+  heroContent: {
+    padding: Layout.spacing.l,
   },
-  gridDescription: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
-    marginBottom: Layout.spacing.s,
-  },
-  listContainer: {
-    paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.m,
-  },
-  listItem: {
-    flexDirection: 'row',
-    backgroundColor: Colors.card,
-    borderRadius: Layout.borderRadius.large,
-    overflow: 'hidden',
-    ...Layout.shadow.medium,
-  },
-  listImage: {
-    width: 120,
-    height: 120,
-    ...Platform.select({
-      web: {
-        objectFit: 'cover',
-      },
-    }),
-  },
-  listContent: {
-    flex: 1,
-    padding: Layout.spacing.m,
-  },
-  listTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
-    marginBottom: Layout.spacing.xs,
-    lineHeight: Typography.sizes.lg * Typography.lineHeights.tight,
-  },
-  listDescription: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
-    marginBottom: Layout.spacing.s,
-  },
-  listMetadata: {
-    flexDirection: 'row',
-    gap: Layout.spacing.m,
-  },
-  itemMeta: {
+  heroMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Layout.spacing.s,
+    marginBottom: Layout.spacing.m,
     gap: Layout.spacing.s,
   },
-  typeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  itemIcon: {
-    fontSize: Typography.sizes.sm,
-  },
-  itemType: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.subtleText,
-    textTransform: 'uppercase',
-    letterSpacing: Typography.letterSpacing.wide,
-  },
-  metadataContainer: {
+  typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    backgroundColor: 'rgba(230, 126, 34, 0.95)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
   },
-  metadataText: {
-    fontSize: Typography.sizes.xs,
+  typeIcon: {
+    fontSize: Typography.sizes.sm,
+  },
+  typeBadgeText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textTransform: 'capitalize',
+  },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
+  },
+  timeBadgeText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
+  },
+  ratingText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  heroTitle: {
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.heading,
+    color: Colors.background,
+    marginBottom: Layout.spacing.s,
+    lineHeight: Typography.sizes['2xl'] * Typography.lineHeights.tight,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  heroLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.xs,
+    marginBottom: Layout.spacing.m,
+  },
+  heroLocationText: {
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  heroDescription: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   loadingContainer: {
     flex: 1,
