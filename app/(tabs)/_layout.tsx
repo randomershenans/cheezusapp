@@ -43,6 +43,7 @@ export default function TabLayout() {
           name="add"
           options={{
             title: '',
+            href: '/add',
             tabBarButton: (props) => <View {...props} style={{ display: 'none' }} />,
           }}
         />
