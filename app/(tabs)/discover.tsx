@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
 
     /* ⬇ Prevent the horizontal ScrollView from stretching vertically */
     flexGrow: 0,
-    maxHeight: 72, // adjust to icon+text height; optional but keeps layout tidy
+    maxHeight: 76, // adjust to icon+text height; optional but keeps layout tidy
   },
   filterContent: {
     flexDirection: 'row',
