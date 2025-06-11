@@ -29,29 +29,25 @@ const filterOptions = [
     key: 'all', 
     label: 'All', 
     icon: Grid,
-    color: '#E8F4FF',
-    iconColor: '#0066CC'
+    color: '#0066CC'
   },
   { 
     key: 'cheese', 
     label: 'Cheeses', 
     icon: ChefHat,
-    color: '#FFF0DB',
-    iconColor: '#E67E22'
+    color: '#E67E22'
   },
   { 
     key: 'articles', 
     label: 'Articles', 
     icon: BookOpen,
-    color: '#E8F8F0',
-    iconColor: '#27AE60'
+    color: '#27AE60'
   },
   { 
     key: 'recipes', 
     label: 'Recipes', 
     icon: Utensils,
-    color: '#FFE8EC',
-    iconColor: '#E74C3C'
+    color: '#E74C3C'
   },
 ];
 
@@ -252,32 +248,23 @@ export default function DiscoverScreen() {
           return (
             <TouchableOpacity
               key={filter.key}
-              style={[
-                styles.filterButton,
-                isActive && styles.filterButtonActive,
-                { backgroundColor: isActive ? filter.color : Colors.backgroundSecondary }
-              ]}
+              style={styles.filterItem}
               onPress={() => setActiveFilter(filter.key as any)}
             >
-              <View style={[
-                styles.filterIcon,
-                { backgroundColor: isActive ? 'rgba(255, 255, 255, 0.9)' : filter.color }
-              ]}>
-                <IconComponent 
-                  size={16} 
-                  color={filter.iconColor} 
-                />
-              </View>
+              <IconComponent 
+                size={20} 
+                color={isActive ? filter.color : Colors.subtleText} 
+              />
               <Text style={[
                 styles.filterText,
-                { color: isActive ? filter.iconColor : Colors.text }
+                { color: isActive ? filter.color : Colors.subtleText }
               ]}>
                 {filter.label}
               </Text>
               {itemCount > 0 && (
                 <Text style={[
                   styles.filterCount,
-                  { color: isActive ? filter.iconColor : Colors.subtleText }
+                  { color: isActive ? filter.color : Colors.subtleText }
                 ]}>
                   {itemCount}
                 </Text>
@@ -340,40 +327,21 @@ const styles = StyleSheet.create({
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.s,
+    gap: Layout.spacing.xl,
   },
-  filterButton: {
-    flexDirection: 'row',
+  filterItem: {
     alignItems: 'center',
-    paddingHorizontal: Layout.spacing.m,
-    paddingVertical: Layout.spacing.s,
-    borderRadius: Layout.borderRadius.large,
-    gap: Layout.spacing.s,
-    minHeight: 44,
-    ...Layout.shadow.small,
-  },
-  filterButtonActive: {
-    ...Layout.shadow.medium,
-  },
-  filterIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    gap: Layout.spacing.xs,
+    minWidth: 60,
   },
   filterText: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
+    textAlign: 'center',
   },
   filterCount: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.bodyMedium,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
     textAlign: 'center',
   },
   content: {
