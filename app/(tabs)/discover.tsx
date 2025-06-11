@@ -323,7 +323,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   filterContainer: {
-    marginVertical: Layout.spacing.s,
+    marginTop: Layout.spacing.s,
+    marginBottom: Layout.spacing.m,
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
