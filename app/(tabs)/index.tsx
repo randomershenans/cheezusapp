@@ -57,7 +57,7 @@ export default function HomeScreen() {
         .from('cheeses')
         .select('id, name, type, origin_country, origin_region, description, image_url')
         .order('created_at', { ascending: false })
-        .limit(4);
+        .limit(6);
 
       setFeaturedEntries(entries || []);
       setTrendingCheeses(cheeses || []);
@@ -77,22 +77,10 @@ export default function HomeScreen() {
   };
 
   const renderTrendingCheeseCard = (cheese: TrendingCheese, index: number) => {
-    const isLarge = index === 0;
-    const cardWidth = isLarge ? screenWidth - (Layout.spacing.m * 2) : (screenWidth - (Layout.spacing.m * 3)) / 2;
-    const cardHeight = isLarge ? 280 : 220;
-
     return (
       <TouchableOpacity
         key={cheese.id}
-        style={[
-          styles.trendingCard,
-          {
-            width: cardWidth,
-            height: cardHeight,
-            marginBottom: Layout.spacing.m,
-            marginRight: isLarge ? 0 : (index % 2 === 0 ? Layout.spacing.m : 0),
-          }
-        ]}
+        style={styles.trendingCard}
         onPress={() => router.push(`/cheese/${cheese.id}`)}
       >
         <Image 
@@ -103,35 +91,30 @@ export default function HomeScreen() {
           <View style={styles.trendingContent}>
             <View style={styles.trendingMeta}>
               <View style={styles.trendingBadge}>
-                <ChefHat size={12} color={Colors.background} />
+                <ChefHat size={14} color={Colors.background} />
                 <Text style={styles.trendingBadgeText}>{cheese.type}</Text>
               </View>
               <View style={styles.ratingBadge}>
-                <Star size={12} color="#FFD700" fill="#FFD700" />
-                <Text style={styles.ratingText}>4.8</Text>
+                <Star size={14} color="#FFD700" fill="#FFD700" />
+                <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
               </View>
             </View>
             
-            <Text style={[
-              styles.trendingTitle,
-              { fontSize: isLarge ? Typography.sizes.xl : Typography.sizes.lg }
-            ]} numberOfLines={2}>
+            <Text style={styles.trendingTitle} numberOfLines={2}>
               {cheese.name}
             </Text>
             
             <View style={styles.trendingLocation}>
-              <MapPin size={14} color="rgba(255, 255, 255, 0.8)" />
+              <MapPin size={16} color="rgba(255, 255, 255, 0.9)" />
               <Text style={styles.trendingLocationText}>
                 {cheese.origin_country}
                 {cheese.origin_region ? `, ${cheese.origin_region}` : ''}
               </Text>
             </View>
             
-            {isLarge && (
-              <Text style={styles.trendingDescription} numberOfLines={2}>
-                {cheese.description}
-              </Text>
-            )}
+            <Text style={styles.trendingDescription} numberOfLines={3}>
+              {cheese.description}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -346,10 +329,11 @@ const styles = StyleSheet.create({
   },
   trendingContainer: {
     paddingHorizontal: Layout.spacing.m,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: Layout.spacing.m,
   },
   trendingCard: {
+    width: screenWidth - (Layout.spacing.m * 2),
+    height: 320,
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
     ...Layout.shadow.large,
@@ -370,71 +354,78 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%)',
     justifyContent: 'flex-end',
   },
   trendingContent: {
-    padding: Layout.spacing.m,
+    padding: Layout.spacing.l,
   },
   trendingMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Layout.spacing.s,
+    marginBottom: Layout.spacing.m,
   },
   trendingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(230, 126, 34, 0.9)',
-    paddingHorizontal: Layout.spacing.s,
-    paddingVertical: 4,
-    borderRadius: Layout.borderRadius.small,
-    gap: 4,
+    backgroundColor: 'rgba(230, 126, 34, 0.95)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
   },
   trendingBadgeText: {
     color: Colors.background,
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
   },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: Layout.spacing.s,
-    paddingVertical: 4,
-    borderRadius: Layout.borderRadius.small,
-    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
   },
   ratingText: {
     color: Colors.background,
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
   },
   trendingTitle: {
-    fontFamily: Typography.fonts.bodySemiBold,
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.heading,
     color: Colors.background,
-    marginBottom: Layout.spacing.xs,
-    lineHeight: Typography.sizes.lg * Typography.lineHeights.tight,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    marginBottom: Layout.spacing.s,
+    lineHeight: Typography.sizes['2xl'] * Typography.lineHeights.tight,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   trendingLocation: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: Layout.spacing.xs,
+    gap: Layout.spacing.xs,
+    marginBottom: Layout.spacing.m,
   },
   trendingLocationText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   trendingDescription: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: Typography.sizes.sm,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.body,
-    lineHeight: Typography.sizes.sm * Typography.lineHeights.normal,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   bottomSpacing: {
     height: Layout.spacing.xl,
