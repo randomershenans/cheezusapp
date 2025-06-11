@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, Dimensions, TextInput, Modal, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Heart, Share2, Plus, Star, MapPin, Clock, Users } from 'lucide-react-native';
+import { ArrowLeft, Heart, Share2, Plus, Star, MapPin, Clock, Users, Edit3, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
@@ -41,6 +41,9 @@ export default function CheeseDetailScreen() {
   const [cheeseBoxEntry, setCheeseBoxEntry] = useState<CheeseBoxEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editRating, setEditRating] = useState<number>(0);
+  const [editNotes, setEditNotes] = useState<string>('');
 
   useEffect(() => {
     if (id) {
@@ -92,45 +95,197 @@ export default function CheeseDetailScreen() {
     }
   };
 
-  const handleAddToCheeseBox = async () => {
+  const handleAddToCheeseBox = () => {
     if (!user) {
       router.push('/auth/login');
       return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('cheese_box_entries')
-        .insert([
-          {
-            user_id: user.id,
-            cheese_id: id,
-            rating: null,
-            notes: null
-          }
-        ])
-        .select()
-        .single();
+    // Open modal for new entry
+    setEditRating(0);
+    setEditNotes('');
+    setShowEditModal(true);
+  };
 
-      if (error) throw error;
-      
-      setCheeseBoxEntry(data);
-      setSaved(true);
+  const handleEditEntry = () => {
+    if (!cheeseBoxEntry) return;
+    
+    setEditRating(cheeseBoxEntry.rating || 0);
+    setEditNotes(cheeseBoxEntry.notes || '');
+    setShowEditModal(true);
+  };
+
+  const handleSaveEntry = async () => {
+    if (!user) return;
+
+    try {
+      if (cheeseBoxEntry) {
+        // Update existing entry
+        const { error } = await supabase
+          .from('cheese_box_entries')
+          .update({
+            rating: editRating > 0 ? editRating : null,
+            notes: editNotes.trim() || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', cheeseBoxEntry.id);
+
+        if (error) throw error;
+
+        setCheeseBoxEntry({
+          ...cheeseBoxEntry,
+          rating: editRating > 0 ? editRating : undefined,
+          notes: editNotes.trim() || undefined
+        });
+      } else {
+        // Create new entry
+        const { data, error } = await supabase
+          .from('cheese_box_entries')
+          .insert([
+            {
+              user_id: user.id,
+              cheese_id: id,
+              rating: editRating > 0 ? editRating : null,
+              notes: editNotes.trim() || null
+            }
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        setCheeseBoxEntry(data);
+        setSaved(true);
+      }
+
+      setShowEditModal(false);
     } catch (error) {
-      console.error('Error adding to cheese box:', error);
+      console.error('Error saving cheese box entry:', error);
+      Alert.alert('Error', 'Failed to save your cheese entry. Please try again.');
     }
   };
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <Star
-        key={index}
-        size={16}
-        color={index < rating ? '#FFD700' : '#E0E0E0'}
-        fill={index < rating ? '#FFD700' : 'none'}
-      />
-    ));
+  const handleRemoveFromCheeseBox = async () => {
+    if (!cheeseBoxEntry) return;
+
+    Alert.alert(
+      'Remove from Cheese Box',
+      'Are you sure you want to remove this cheese from your box?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('cheese_box_entries')
+                .delete()
+                .eq('id', cheeseBoxEntry.id);
+
+              if (error) throw error;
+              
+              setCheeseBoxEntry(null);
+              setSaved(false);
+            } catch (error) {
+              console.error('Error removing from cheese box:', error);
+              Alert.alert('Error', 'Failed to remove cheese from your box.');
+            }
+          }
+        }
+      ]
+    );
   };
+
+  const renderStars = (rating: number, interactive: boolean = false, onPress?: (rating: number) => void) => {
+    return Array.from({ length: 5 }, (_, index) => {
+      const starValue = index + 1;
+      const isFilled = starValue <= rating;
+      const isHalfFilled = rating > index && rating < starValue;
+      
+      return (
+        <TouchableOpacity
+          key={index}
+          onPress={() => interactive && onPress && onPress(starValue)}
+          disabled={!interactive}
+          style={interactive ? styles.interactiveStar : undefined}
+        >
+          <Star
+            size={interactive ? 32 : 16}
+            color={isFilled || isHalfFilled ? '#FFD700' : '#E0E0E0'}
+            fill={isFilled ? '#FFD700' : isHalfFilled ? '#FFD700' : 'none'}
+          />
+        </TouchableOpacity>
+      );
+    });
+  };
+
+  const renderRatingModal = () => (
+    <Modal
+      visible={showEditModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowEditModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {cheeseBoxEntry ? 'Edit your tasting' : 'Add to cheese box'}
+            </Text>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowEditModal(false)}
+            >
+              <X size={24} color={Colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalSection}>
+            <Text style={styles.modalSectionTitle}>Your rating</Text>
+            <View style={styles.ratingContainer}>
+              {renderStars(editRating, true, setEditRating)}
+            </View>
+            <Text style={styles.ratingText}>
+              {editRating > 0 ? `${editRating}/5 stars` : 'Tap to rate'}
+            </Text>
+          </View>
+
+          <View style={styles.modalSection}>
+            <Text style={styles.modalSectionTitle}>Tasting notes</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Share your thoughts about this cheese..."
+              value={editNotes}
+              onChangeText={setEditNotes}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.modalActions}>
+            {cheeseBoxEntry && (
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={handleRemoveFromCheeseBox}
+              >
+                <Text style={styles.removeButtonText}>Remove from box</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveEntry}
+            >
+              <Text style={styles.saveButtonText}>
+                {cheeseBoxEntry ? 'Update' : 'Add to box'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (loading) {
     return (
@@ -197,9 +352,9 @@ export default function CheeseDetailScreen() {
               <View style={styles.typeBadge}>
                 <Text style={styles.typeBadgeText}>{cheese.type}</Text>
               </View>
-              <View style={styles.ratingContainer}>
+              <View style={styles.heroRatingContainer}>
                 <Star size={16} color="#FFD700" fill="#FFD700" />
-                <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
+                <Text style={styles.heroRatingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
                 <Text style={styles.reviewCount}>({Math.floor(Math.random() * 50) + 10} reviews)</Text>
               </View>
             </View>
@@ -231,33 +386,42 @@ export default function CheeseDetailScreen() {
         
         <View style={styles.contentContainer}>
           <View style={styles.actionSection}>
-            <TouchableOpacity
-              style={[styles.addButton, saved && styles.addButtonSaved]}
-              onPress={handleAddToCheeseBox}
-              disabled={saved}
-            >
-              {saved ? (
-                <>
+            {saved ? (
+              <View style={styles.savedSection}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={handleEditEntry}
+                >
                   <Heart size={20} color={Colors.success} fill={Colors.success} />
-                  <Text style={[styles.addButtonText, { color: Colors.success }]}>
-                    In your cheese box
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Plus size={20} color={Colors.background} />
-                  <Text style={styles.addButtonText}>Add to cheese box</Text>
-                </>
-              )}
-            </TouchableOpacity>
+                  <Text style={styles.editButtonText}>In your cheese box</Text>
+                  <Edit3 size={16} color={Colors.success} />
+                </TouchableOpacity>
 
-            {cheeseBoxEntry?.rating && (
-              <View style={styles.userRating}>
-                <Text style={styles.userRatingLabel}>Your rating:</Text>
-                <View style={styles.starsContainer}>
-                  {renderStars(cheeseBoxEntry.rating)}
-                </View>
+                {cheeseBoxEntry?.rating && (
+                  <View style={styles.userRatingDisplay}>
+                    <Text style={styles.userRatingLabel}>Your rating:</Text>
+                    <View style={styles.starsContainer}>
+                      {renderStars(cheeseBoxEntry.rating)}
+                    </View>
+                    <Text style={styles.userRatingValue}>{cheeseBoxEntry.rating}/5</Text>
+                  </View>
+                )}
+
+                {cheeseBoxEntry?.notes && (
+                  <View style={styles.userNotesDisplay}>
+                    <Text style={styles.userNotesLabel}>Your notes:</Text>
+                    <Text style={styles.userNotesText}>"{cheeseBoxEntry.notes}"</Text>
+                  </View>
+                )}
               </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleAddToCheeseBox}
+              >
+                <Plus size={20} color={Colors.background} />
+                <Text style={styles.addButtonText}>Add to cheese box</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -339,6 +503,8 @@ export default function CheeseDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {renderRatingModal()}
     </SafeAreaView>
   );
 }
@@ -422,12 +588,12 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
   },
-  ratingContainer: {
+  heroRatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Layout.spacing.xs,
   },
-  ratingText: {
+  heroRatingText: {
     color: Colors.background,
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
@@ -496,20 +662,39 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
     ...Layout.shadow.medium,
   },
-  addButtonSaved: {
-    backgroundColor: '#E8F8F0',
-  },
   addButtonText: {
     color: Colors.background,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
   },
-  userRating: {
+  savedSection: {
+    gap: Layout.spacing.m,
+  },
+  editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Layout.spacing.m,
+    backgroundColor: '#E8F8F0',
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
     gap: Layout.spacing.s,
+    ...Layout.shadow.small,
+  },
+  editButtonText: {
+    color: Colors.success,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    flex: 1,
+    textAlign: 'center',
+  },
+  userRatingDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.s,
+    ...Layout.shadow.small,
   },
   userRatingLabel: {
     fontSize: Typography.sizes.sm,
@@ -519,6 +704,31 @@ const styles = StyleSheet.create({
   starsContainer: {
     flexDirection: 'row',
     gap: 2,
+  },
+  userRatingValue: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+    marginLeft: Layout.spacing.s,
+  },
+  userNotesDisplay: {
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+    ...Layout.shadow.small,
+  },
+  userNotesLabel: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    marginBottom: Layout.spacing.xs,
+  },
+  userNotesText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    fontStyle: 'italic',
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
   },
   section: {
     marginBottom: Layout.spacing.xl,
@@ -639,6 +849,96 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.large,
   },
   backButtonText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: Layout.borderRadius.large,
+    borderTopRightRadius: Layout.borderRadius.large,
+    padding: Layout.spacing.l,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Layout.spacing.l,
+  },
+  modalTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.headingMedium,
+    color: Colors.text,
+  },
+  modalCloseButton: {
+    padding: Layout.spacing.s,
+  },
+  modalSection: {
+    marginBottom: Layout.spacing.l,
+  },
+  modalSectionTitle: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    marginBottom: Layout.spacing.m,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Layout.spacing.s,
+    marginBottom: Layout.spacing.s,
+  },
+  interactiveStar: {
+    padding: Layout.spacing.xs,
+  },
+  ratingText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+    textAlign: 'center',
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Layout.borderRadius.medium,
+    padding: Layout.spacing.m,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Layout.spacing.m,
+  },
+  removeButton: {
+    flex: 1,
+    backgroundColor: '#FFE8EC',
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    color: Colors.error,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  saveButton: {
+    flex: 2,
+    backgroundColor: Colors.primary,
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    alignItems: 'center',
+  },
+  saveButtonText: {
     color: Colors.background,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
