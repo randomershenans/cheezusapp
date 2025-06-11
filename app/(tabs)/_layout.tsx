@@ -1,14 +1,22 @@
 import { Tabs, useRouter } from 'expo-router';
 import { House, Search, Plus, PackageOpen, User } from 'lucide-react-native';
-import { StyleSheet, View, TouchableOpacity, Platform } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  TouchableOpacity,
+  Platform,
+} from 'react-native';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useProtectedRoute } from '@/hooks/useProtectedRoute';
 import Colors from '@/constants/Colors';
 
 export default function TabLayout() {
   useProtectedRoute();
+
   const router = useRouter();
   const { user } = useAuth();
+
   const iconColor = '#000000';
   const activeIconColor = '#000000';
 
@@ -23,51 +31,62 @@ export default function TabLayout() {
           headerShown: false,
         }}
       >
-<Tabs.Screen
-  name="index"
-  options={{
-    title: 'Home',
-    href: '/',
-    tabBarIcon: ({ color, size }) => <House size={size} color={color} />,
-  }}
-/>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Home',
+            href: '/',
+            tabBarIcon: ({ color, size }) => (
+              <House size={size} color={color} />
+            ),
+          }}
+        />
 
-<Tabs.Screen
-  name="discover"
-  options={{
-    title: 'Discover',
-    href: '/discover',
-    tabBarIcon: ({ color, size }) => <Search size={size} color={color} />,
-  }}
-/>
+        <Tabs.Screen
+          name="discover"
+          options={{
+            title: 'Discover',
+            href: '/discover',
+            tabBarIcon: ({ color, size }) => (
+              <Search size={size} color={color} />
+            ),
+          }}
+        />
 
-<Tabs.Screen
-  name="add"
-  options={{
-    title: '',
-    tabBarButton: () => null,   // hide it; no href
-  }}
-/>
+        {/* Hidden “Add” tab — no href, no icon */}
+        <Tabs.Screen
+          name="add"
+          options={{
+            title: '',
+            // ❌ no `href` here — `href` + `tabBarButton` = runtime error
+            tabBarButton: () => null,
+          }}
+        />
 
-<Tabs.Screen
-  name="cheese-box"
-  options={{
-    title: 'Cheese Box',
-    href: user ? '/cheese-box' : '/auth/login',
-    tabBarIcon: ({ color, size }) => <PackageOpen size={size} color={color} />,
-  }}
-/>
+        <Tabs.Screen
+          name="cheese-box"
+          options={{
+            title: 'Cheese Box',
+            href: user ? '/cheese-box' : '/auth/login',
+            tabBarIcon: ({ color, size }) => (
+              <PackageOpen size={size} color={color} />
+            ),
+          }}
+        />
 
-<Tabs.Screen
-  name="profile"
-  options={{
-    title: 'Profile',
-    href: '/profile',
-    tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-  }}
-/>
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Profile',
+            href: '/profile',
+            tabBarIcon: ({ color, size }) => (
+              <User size={size} color={color} />
+            ),
+          }}
+        />
+      </Tabs>
 
-      {/* Floating Add Button */}
+      {/* Floating “+” button that routes to /add-cheese */}
       <TouchableOpacity
         style={styles.floatingAddButton}
         onPress={() => router.push('/add-cheese')}
@@ -79,6 +98,7 @@ export default function TabLayout() {
   );
 }
 
+/* ───────────────────────── platform-specific shadows ──────────────────────── */
 const platformShadowStyles = Platform.select({
   ios: {
     shadowColor: '#000',
@@ -94,6 +114,7 @@ const platformShadowStyles = Platform.select({
   },
 }) || {};
 
+/* ────────────────────────────── styles ────────────────────────────────────── */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -109,7 +130,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 40,
     left: '50%',
-    marginLeft: -28, // Half of button width (56/2)
+    marginLeft: -28, // half of width (56 / 2)
     width: 56,
     height: 56,
     backgroundColor: '#E67E22',
