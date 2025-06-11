@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
+  Image,
+  Platform,
+  Dimensions,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Filter, Grid2x2 as Grid, List, Clock, MapPin, Star, ChefHat, BookOpen, Utensils } from 'lucide-react-native';
+import {
+  Filter,
+  Grid2x2 as Grid,
+  List,
+  Clock,
+  MapPin,
+  Star,
+  ChefHat,
+  BookOpen,
+  Utensils,
+} from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
 import Colors from '@/constants/Colors';
@@ -11,6 +31,7 @@ import Typography from '@/constants/Typography';
 
 const { width: screenWidth } = Dimensions.get('window');
 
+/* ───────────────────────────── types & constants ────────────────────────── */
 type DiscoverItem = {
   id: string;
   title: string;
@@ -25,39 +46,22 @@ type DiscoverItem = {
 };
 
 const filterOptions = [
-  { 
-    key: 'all', 
-    label: 'All', 
-    icon: Grid,
-    color: '#0066CC'
-  },
-  { 
-    key: 'cheese', 
-    label: 'Cheeses', 
-    icon: ChefHat,
-    color: '#E67E22'
-  },
-  { 
-    key: 'articles', 
-    label: 'Articles', 
-    icon: BookOpen,
-    color: '#27AE60'
-  },
-  { 
-    key: 'recipes', 
-    label: 'Recipes', 
-    icon: Utensils,
-    color: '#E74C3C'
-  },
+  { key: 'all',      label: 'All',      icon: Grid,     color: '#0066CC' },
+  { key: 'cheese',   label: 'Cheeses',  icon: ChefHat,  color: '#E67E22' },
+  { key: 'articles', label: 'Articles', icon: BookOpen, color: '#27AE60' },
+  { key: 'recipes',  label: 'Recipes',  icon: Utensils, color: '#E74C3C' },
 ];
 
+/* ────────────────────────────── component ───────────────────────────────── */
 export default function DiscoverScreen() {
   const router = useRouter();
   const { q } = useLocalSearchParams();
-  const [items, setItems] = useState<DiscoverItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
 
+  const [items,      setItems]      = useState<DiscoverItem[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [activeFilter, setActive]   = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
+
+  /* ── data fetch ── */
   useEffect(() => {
     fetchDiscoverItems();
   }, [q, activeFilter]);
@@ -65,9 +69,9 @@ export default function DiscoverScreen() {
   const fetchDiscoverItems = async () => {
     setLoading(true);
     try {
-      let allItems: DiscoverItem[] = [];
+      let all: DiscoverItem[] = [];
 
-      // Fetch cheeses if not filtered out
+      /* Cheeses */
       if (activeFilter === 'all' || activeFilter === 'cheese') {
         const { data: cheeses } = await supabase
           .from('cheeses')
@@ -76,21 +80,23 @@ export default function DiscoverScreen() {
           .limit(20);
 
         if (cheeses) {
-          allItems.push(...cheeses.map(cheese => ({
-            id: cheese.id,
-            title: cheese.name,
-            description: cheese.description,
-            image_url: cheese.image_url,
-            type: 'cheese' as const,
-            metadata: {
-              origin_country: cheese.origin_country,
-              cheese_type: cheese.type,
-            }
-          })));
+          all.push(
+            ...cheeses.map(c => ({
+              id: c.id,
+              title: c.name,
+              description: c.description,
+              image_url: c.image_url,
+              type: 'cheese',
+              metadata: {
+                origin_country: c.origin_country,
+                cheese_type:    c.type,
+              },
+            }))
+          );
         }
       }
 
-      // Fetch articles and recipes if not filtered out
+      /* Articles & Recipes */
       if (activeFilter === 'all' || activeFilter === 'articles' || activeFilter === 'recipes') {
         const { data: entries } = await supabase
           .from('cheezopedia_entries')
@@ -100,120 +106,102 @@ export default function DiscoverScreen() {
           .limit(20);
 
         if (entries) {
-          allItems.push(...entries
-            .filter(entry => {
-              if (activeFilter === 'articles') return entry.content_type === 'article';
-              if (activeFilter === 'recipes') return entry.content_type === 'recipe';
-              return true;
-            })
-            .map(entry => ({
-              id: entry.id,
-              title: entry.title,
-              description: entry.description,
-              image_url: entry.image_url,
-              type: entry.content_type === 'recipe' ? 'recipe' as const : 'article' as const,
-              metadata: {
-                reading_time: entry.reading_time_minutes,
-              }
-            })));
+          all.push(
+            ...entries
+              .filter(e => {
+                if (activeFilter === 'articles') return e.content_type === 'article';
+                if (activeFilter === 'recipes')  return e.content_type === 'recipe';
+                return true;
+              })
+              .map(e => ({
+                id:        e.id,
+                title:     e.title,
+                description: e.description,
+                image_url: e.image_url,
+                type:      e.content_type === 'recipe' ? 'recipe' : 'article',
+                metadata:  { reading_time: e.reading_time_minutes },
+              }))
+          );
         }
       }
 
-      // Filter by search query if provided
+      /* Search filter */
       if (q && typeof q === 'string') {
-        const searchTerm = q.toLowerCase();
-        allItems = allItems.filter(item => 
-          item.title.toLowerCase().includes(searchTerm) ||
-          item.description.toLowerCase().includes(searchTerm)
+        const term = q.toLowerCase();
+        all = all.filter(i =>
+          i.title.toLowerCase().includes(term) ||
+          i.description.toLowerCase().includes(term)
         );
       }
 
-      // Shuffle and limit results
-      allItems = allItems.sort(() => Math.random() - 0.5).slice(0, 20);
-      
-      setItems(allItems);
-    } catch (error) {
-      console.error('Error fetching discover items:', error);
+      /* Shuffle and trim */
+      all = all.sort(() => Math.random() - 0.5).slice(0, 20);
+      setItems(all);
+    } catch (err) {
+      console.error('Error fetching discover items:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleItemPress = (item: DiscoverItem) => {
-    if (item.type === 'cheese') {
-      router.push(`/cheese/${item.id}`);
-    } else {
-      router.push(`/cheezopedia/${item.id}`);
-    }
-  };
+  /* ── helpers ── */
+  const handlePress = (item: DiscoverItem) =>
+    router.push(item.type === 'cheese' ? `/cheese/${item.id}` : `/cheezopedia/${item.id}`);
 
-  const getItemIcon = (type: string): string => {
-    switch (type) {
-      case 'cheese': return '🧀';
-      case 'recipe': return '👨‍🍳';
-      case 'article': return '📝';
-      default: return '📄';
-    }
-  };
+  const getItemIcon = (t: DiscoverItem['type']) =>
+    t === 'cheese' ? '🧀' : t === 'recipe' ? '👨‍🍳' : '📝';
 
-  const renderHeroCard = (item: DiscoverItem) => {
-    return (
-      <TouchableOpacity
-        key={item.id}
-        style={styles.heroCard}
-        onPress={() => handleItemPress(item)}
-      >
-        <Image 
-          source={{ uri: item.image_url }} 
-          style={styles.heroImage}
-        />
-        <View style={styles.heroOverlay}>
-          <View style={styles.heroContent}>
-            <View style={styles.heroMeta}>
-              <View style={styles.typeBadge}>
-                <Text style={styles.typeIcon}>{getItemIcon(item.type)}</Text>
-                <Text style={styles.typeBadgeText}>{item.type}</Text>
-              </View>
-              {item.metadata?.reading_time && (
-                <View style={styles.timeBadge}>
-                  <Clock size={14} color={Colors.background} />
-                  <Text style={styles.timeBadgeText}>{item.metadata.reading_time} min</Text>
-                </View>
-              )}
-              {item.type === 'cheese' && (
-                <View style={styles.ratingBadge}>
-                  <Star size={14} color="#FFD700" fill="#FFD700" />
-                  <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
-                </View>
-              )}
+  /* ── render hero card ── */
+  const renderHeroCard = (item: DiscoverItem) => (
+    <TouchableOpacity key={item.id} style={styles.heroCard} onPress={() => handlePress(item)}>
+      <Image source={{ uri: item.image_url }} style={styles.heroImage} />
+      <View style={styles.heroOverlay}>
+        <View style={styles.heroContent}>
+          <View style={styles.heroMeta}>
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeIcon}>{getItemIcon(item.type)}</Text>
+              <Text style={styles.typeBadgeText}>{item.type}</Text>
             </View>
-            
-            <Text style={styles.heroTitle} numberOfLines={2}>
-              {item.title}
-            </Text>
-            
-            {item.metadata?.origin_country && (
-              <View style={styles.heroLocation}>
-                <MapPin size={16} color="rgba(255, 255, 255, 0.9)" />
-                <Text style={styles.heroLocationText}>
-                  {item.metadata.origin_country}
-                </Text>
+
+            {item.metadata?.reading_time && (
+              <View style={styles.timeBadge}>
+                <Clock size={14} color={Colors.background} />
+                <Text style={styles.timeBadgeText}>{item.metadata.reading_time} min</Text>
               </View>
             )}
-            
-            <Text style={styles.heroDescription} numberOfLines={3}>
-              {item.description}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
 
+            {item.type === 'cheese' && (
+              <View style={styles.ratingBadge}>
+                <Star size={14} color="#FFD700" fill="#FFD700" />
+                <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.heroTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+
+          {item.metadata?.origin_country && (
+            <View style={styles.heroLocation}>
+              <MapPin size={16} color="rgba(255, 255, 255, 0.9)" />
+              <Text style={styles.heroLocationText}>{item.metadata.origin_country}</Text>
+            </View>
+          )}
+
+          <Text style={styles.heroDescription} numberOfLines={3}>
+            {item.description}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  /* ── UI ── */
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
+
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Discover</Text>
@@ -221,52 +209,52 @@ export default function DiscoverScreen() {
         </View>
       </View>
 
-      <SearchBar 
+      <SearchBar
         placeholder="Search everything..."
-        onSearch={(query) => router.push(`/discover?q=${encodeURIComponent(query)}`)}
+        onSearch={query => router.push(`/discover?q=${encodeURIComponent(query)}`)}
         onFilter={() => {}}
       />
 
-      <ScrollView 
-        horizontal 
+      {/* ---------- Horizontal filter row ---------- */}
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
       >
-        {filterOptions.map((filter) => {
-          const isActive = activeFilter === filter.key;
-          const IconComponent = filter.icon;
-          const itemCount = filter.key === 'all' 
-            ? items.length 
-            : items.filter(i => {
-                if (filter.key === 'cheese') return i.type === 'cheese';
-                if (filter.key === 'articles') return i.type === 'article';
-                if (filter.key === 'recipes') return i.type === 'recipe';
-                return false;
-              }).length;
+        {filterOptions.map(opt => {
+          const active   = activeFilter === opt.key;
+          const Count    =
+            opt.key === 'all'
+              ? items.length
+              : items.filter(i =>
+                  opt.key === 'cheese'
+                    ? i.type === 'cheese'
+                    : opt.key === 'articles'
+                    ? i.type === 'article'
+                    : i.type === 'recipe'
+                ).length;
+
+          const Icon = opt.icon;
 
           return (
             <TouchableOpacity
-              key={filter.key}
+              key={opt.key}
               style={styles.filterItem}
-              onPress={() => setActiveFilter(filter.key as any)}
+              onPress={() => setActive(opt.key as any)}
             >
-              <IconComponent 
-                size={20} 
-                color={isActive ? filter.color : Colors.subtleText} 
-              />
-              <Text style={[
-                styles.filterText,
-                { color: isActive ? filter.color : Colors.subtleText }
-              ]}>
-                {filter.label}
+              <Icon size={20} color={active ? opt.color : Colors.subtleText} />
+              <Text style={[styles.filterText, { color: active ? opt.color : Colors.subtleText }]}>
+                {opt.label}
               </Text>
-              {itemCount > 0 && (
-                <Text style={[
-                  styles.filterCount,
-                  { color: isActive ? filter.color : Colors.subtleText }
-                ]}>
-                  {itemCount}
+              {!!Count && (
+                <Text
+                  style={[
+                    styles.filterCount,
+                    { color: active ? opt.color : Colors.subtleText },
+                  ]}
+                >
+                  {Count}
                 </Text>
               )}
             </TouchableOpacity>
@@ -274,6 +262,7 @@ export default function DiscoverScreen() {
         })}
       </ScrollView>
 
+      {/* ---------- Main content ---------- */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -284,12 +273,12 @@ export default function DiscoverScreen() {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>🔍</Text>
             <Text style={styles.emptyTitle}>No items found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your search or filters to discover more content</Text>
+            <Text style={styles.emptySubtext}>
+              Try adjusting your search or filters to discover more content
+            </Text>
           </View>
         ) : (
-          <View style={styles.heroContainer}>
-            {items.map(item => renderHeroCard(item))}
-          </View>
+          <View style={styles.heroContainer}>{items.map(renderHeroCard)}</View>
         )}
         <View style={styles.bottomSpacing} />
       </ScrollView>
@@ -297,7 +286,9 @@ export default function DiscoverScreen() {
   );
 }
 
+/* ─────────────────────────────── styles ─────────────────────────────────── */
 const styles = StyleSheet.create({
+  /* -------- layout -------- */
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -310,6 +301,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
   },
+
+  /* -------- titles -------- */
   title: {
     fontSize: Typography.sizes['3xl'],
     fontFamily: Typography.fonts.heading,
@@ -322,17 +315,23 @@ const styles = StyleSheet.create({
     color: Colors.subtleText,
     marginTop: 4,
   },
+
+  /* -------- filter bar -------- */
   filterContainer: {
     marginTop: Layout.spacing.s,
     marginBottom: 2,
+
+    /* ⬇ Prevent the horizontal ScrollView from stretching vertically */
+    flexGrow: 0,
+    maxHeight: 72, // adjust to icon+text height; optional but keeps layout tidy
   },
   filterContent: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',         // keep everything on one line
+    flexWrap: 'nowrap',
     columnGap: Layout.spacing.xl,
     paddingHorizontal: Layout.spacing.m,
+    alignItems: 'center',
   },
-
   filterItem: {
     alignItems: 'center',
     gap: Layout.spacing.xs,
@@ -348,16 +347,17 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodyMedium,
     textAlign: 'center',
   },
-  content: {
-    flex: 1,
-  },
+
+  /* -------- main list -------- */
+  content: { flex: 1 },
+
   heroContainer: {
     paddingHorizontal: Layout.spacing.m,
     paddingTop: Layout.spacing.s,
     gap: Layout.spacing.l,
   },
   heroCard: {
-    width: screenWidth - (Layout.spacing.m * 2),
+    width: screenWidth - Layout.spacing.m * 2,
     height: 320,
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
@@ -367,30 +367,24 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'absolute',
-    ...Platform.select({
-      web: {
-        objectFit: 'cover',
-      },
-    }),
+    ...Platform.select({ web: { objectFit: 'cover' } }),
   },
   heroOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%)',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor:
+      'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%)',
     justifyContent: 'flex-end',
   },
-  heroContent: {
-    padding: Layout.spacing.l,
-  },
+  heroContent: { padding: Layout.spacing.l },
+
   heroMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: Layout.spacing.m,
     gap: Layout.spacing.s,
   },
+
+  /* -------- badges -------- */
   typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,15 +394,14 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.medium,
     gap: Layout.spacing.xs,
   },
-  typeIcon: {
-    fontSize: Typography.sizes.sm,
-  },
+  typeIcon: { fontSize: Typography.sizes.sm },
   typeBadgeText: {
     color: Colors.background,
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
     textTransform: 'capitalize',
   },
+
   timeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -423,6 +416,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
   },
+
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -437,6 +431,8 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
   },
+
+  /* -------- hero text -------- */
   heroTitle: {
     fontSize: Typography.sizes['2xl'],
     fontFamily: Typography.fonts.heading,
@@ -470,6 +466,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+
+  /* -------- states -------- */
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -494,10 +492,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Layout.spacing.xl,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: Layout.spacing.l,
-  },
+  emptyIcon: { fontSize: 64, marginBottom: Layout.spacing.l },
   emptyTitle: {
     fontSize: Typography.sizes.xl,
     fontFamily: Typography.fonts.headingMedium,
@@ -512,7 +507,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
   },
-  bottomSpacing: {
-    height: Layout.spacing.xl,
-  },
+
+  bottomSpacing: { height: Layout.spacing.xl },
 });
