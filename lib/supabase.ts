@@ -8,9 +8,14 @@ const MOBILE_TIMEOUT = 20000; // 20 seconds for mobile
 const memoryStorage = new Map<string, string>();
 
 const createCustomStorageAdapter = () => {
-  // Only use AsyncStorage on native platforms AND when not in Node.js environment
-  if (Platform.OS === 'web' || typeof window === 'undefined') {
-    return undefined; // Let Supabase use its default web storage (localStorage)
+  // If we're in a Node.js environment (SSR), return null to prevent localStorage access
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  // For web platform, let Supabase use its default web storage (localStorage)
+  if (Platform.OS === 'web') {
+    return undefined;
   }
 
   // Dynamically import AsyncStorage only for native platforms in proper environment
@@ -72,7 +77,7 @@ const createAuthConfig = () => {
     persistSession: true,
     detectSessionInUrl: false,
     flowType: 'pkce' as const,
-    ...(customStorage && { storage: customStorage }), // Only add storage if it exists
+    storage: customStorage, // Always pass storage property, even if null
   };
 
   if (Platform.OS === 'web') {
