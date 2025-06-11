@@ -264,26 +264,24 @@ export default function DiscoverScreen() {
                 { backgroundColor: isActive ? 'rgba(255, 255, 255, 0.9)' : filter.color }
               ]}>
                 <IconComponent 
-                  size={18} 
-                  color={isActive ? filter.iconColor : filter.iconColor} 
+                  size={16} 
+                  color={filter.iconColor} 
                 />
               </View>
-              <View style={styles.filterTextContainer}>
+              <Text style={[
+                styles.filterText,
+                { color: isActive ? filter.iconColor : Colors.text }
+              ]}>
+                {filter.label}
+              </Text>
+              {itemCount > 0 && (
                 <Text style={[
-                  styles.filterText,
-                  { color: isActive ? filter.iconColor : Colors.text }
+                  styles.filterCount,
+                  { color: isActive ? filter.iconColor : Colors.subtleText }
                 ]}>
-                  {filter.label}
+                  {itemCount}
                 </Text>
-                {itemCount > 0 && (
-                  <Text style={[
-                    styles.filterCount,
-                    { color: isActive ? filter.iconColor : Colors.subtleText }
-                  ]}>
-                    {itemCount}
-                  </Text>
-                )}
-              </View>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -342,39 +340,41 @@ const styles = StyleSheet.create({
   },
   filterContent: {
     paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.m,
+    gap: Layout.spacing.s,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Layout.spacing.m,
-    paddingVertical: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
     borderRadius: Layout.borderRadius.large,
-    gap: Layout.spacing.m,
-    minWidth: 120,
+    gap: Layout.spacing.s,
+    minHeight: 44,
     ...Layout.shadow.small,
   },
   filterButtonActive: {
     ...Layout.shadow.medium,
   },
   filterIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  filterTextContainer: {
-    flex: 1,
-  },
   filterText: {
-    fontSize: Typography.sizes.base,
+    fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
-    marginBottom: 2,
   },
   filterCount: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.bodyMedium,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    textAlign: 'center',
   },
   content: {
     flex: 1,
