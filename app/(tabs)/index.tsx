@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils } from 'lucide-react-native';
@@ -10,7 +10,7 @@ import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: initialScreenWidth } = Dimensions.get('window');
 
 type FeaturedEntry = {
   id: string;
@@ -39,6 +39,7 @@ type FeedItem = {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -121,9 +122,12 @@ export default function HomeScreen() {
   };
 
   const renderCheeseCard = (cheese: TrendingCheese) => {
+    // Calculate responsive height based on screen width
+    const cardHeight = screenWidth * 0.75; // 75% of screen width for better aspect ratio
+
     return (
       <TouchableOpacity
-        style={styles.cheeseCard}
+        style={[styles.cheeseCard, { height: cardHeight }]}
         onPress={() => router.push(`/cheese/${cheese.id}`)}
       >
         <Image 
@@ -173,9 +177,12 @@ export default function HomeScreen() {
       }
     };
 
+    // Calculate responsive height based on screen width
+    const cardHeight = screenWidth * 0.9; // 90% of screen width
+
     return (
       <TouchableOpacity
-        style={styles.featuredCard}
+        style={[styles.featuredCard, { height: cardHeight }]}
         onPress={() => router.push(`/cheezopedia/${entry.id}`)}
       >
         <Image 
@@ -308,15 +315,18 @@ const styles = StyleSheet.create({
   },
   feedContainer: {
     paddingTop: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.s, // Add some horizontal padding to the feed container
   },
   feedItem: {
     marginBottom: Layout.spacing.l,
+    width: '100%', // Make sure items take full width
   },
   // Cheese card styles
   cheeseCard: {
-    width: screenWidth - (Layout.spacing.m * 2),
-    height: 320,
-    marginHorizontal: Layout.spacing.m,
+    width: '92%', // Slightly narrower to create space on the sides
+    maxWidth: 600, // Maximum width on larger screens
+    alignSelf: 'center',
+    marginHorizontal: '4%', // Even margins on both sides
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
     ...Layout.shadow.large,
@@ -378,11 +388,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodySemiBold,
   },
   cheeseTitle: {
-    fontSize: Typography.sizes['2xl'],
+    fontSize: Typography.sizes.xl, // Smaller font size for better scaling
     fontFamily: Typography.fonts.heading,
     color: Colors.background,
     marginBottom: Layout.spacing.s,
-    lineHeight: Typography.sizes['2xl'] * Typography.lineHeights.tight,
+    lineHeight: Typography.sizes.xl * Typography.lineHeights.tight,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
@@ -412,9 +422,10 @@ const styles = StyleSheet.create({
   },
   // Featured card styles (full screen)
   featuredCard: {
-    width: screenWidth - (Layout.spacing.m * 2),
-    height: 400,
-    marginHorizontal: Layout.spacing.m,
+    width: '92%', // Slightly narrower to create space on the sides
+    maxWidth: 600, // Maximum width on larger screens
+    alignSelf: 'center',
+    marginHorizontal: '4%', // Even margins on both sides
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
     ...Layout.shadow.large,
@@ -476,11 +487,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodySemiBold,
   },
   featuredTitle: {
-    fontSize: Typography.sizes['2xl'],
+    fontSize: Typography.sizes.xl, // Smaller font size for better scaling
     fontFamily: Typography.fonts.heading,
     color: Colors.background,
     marginBottom: Layout.spacing.m,
-    lineHeight: Typography.sizes['2xl'] * Typography.lineHeights.tight,
+    lineHeight: Typography.sizes.xl * Typography.lineHeights.tight,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,

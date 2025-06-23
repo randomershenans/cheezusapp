@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { cheeses, type Cheese } from '@/constants/cheeseData';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
+import Typography from '@/constants/Typography';
 
 type SearchResult = {
   id: string;
@@ -239,8 +240,8 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   searchResultsContainer: {
@@ -255,14 +256,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   resultName: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: Layout.spacing.xs,
   },
   resultOrigin: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginBottom: Layout.spacing.xs,
   },
@@ -274,8 +275,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   similarityText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.primary,
   },
   messageContainer: {
@@ -283,14 +284,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messageText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
     textAlign: 'center',
   },
   errorText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.error,
     textAlign: 'center',
   },
@@ -304,8 +305,8 @@ const styles = StyleSheet.create({
   },
   addNewText: {
     marginLeft: Layout.spacing.s,
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.primary
   }
 });

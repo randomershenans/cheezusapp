@@ -6,6 +6,7 @@ import { ArrowLeft, Clock, Bookmark, Share2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
+import Typography from '@/constants/Typography';
 
 type CheezeEntry = {
   id: string;
@@ -216,8 +217,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   errorContainer: {
@@ -227,15 +228,15 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.l,
   },
   errorText: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
     marginBottom: Layout.spacing.m,
   },
   backButtonText: {
     color: Colors.background,
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
   },
   scrollView: {
     flex: 1,
@@ -286,8 +287,8 @@ const styles = StyleSheet.create({
   },
   typeBadgeText: {
     color: Colors.background,
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -295,21 +296,21 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.xs,
   },
   timeText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.heading,
     color: Colors.text,
     marginBottom: Layout.spacing.s,
   },
   description: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    lineHeight: 24,
+    lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
     marginBottom: Layout.spacing.m,
   },
   tagsContainer: {
@@ -324,15 +325,15 @@ const styles = StyleSheet.create({
     marginRight: Layout.spacing.s,
   },
   tagText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
   },
   content: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.text,
-    lineHeight: 26,
+    lineHeight: Typography.lineHeights.relaxed * Typography.sizes.base,
   },
   recipeContent: {
     marginTop: Layout.spacing.l,
@@ -341,8 +342,8 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.xl,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
     marginBottom: Layout.spacing.m,
   },
@@ -360,8 +361,8 @@ const styles = StyleSheet.create({
   },
   ingredientText: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.text,
   },
   instructionItem: {
@@ -379,14 +380,14 @@ const styles = StyleSheet.create({
   },
   stepNumberText: {
     color: Colors.background,
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
   },
   instructionText: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
     color: Colors.text,
-    lineHeight: 24,
+    lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
   },
 });
