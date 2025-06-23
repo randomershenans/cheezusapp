@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, Platform, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { User, ChevronRight, Heart, BookOpen, ChefHat, Settings, LogOut, Award, Star, Crown, CreditCard as Edit2 } from 'lucide-react-native';
+import { User, ChevronRight, Heart, BookOpen, ChefHat, Settings, LogOut, Award, Star, Crown, CreditCard as Edit2, Trophy } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -14,33 +14,12 @@ type Badge = {
   id: string;
   name: string;
   description: string;
-  icon: React.ReactNode;
-  color: string;
+  icon: string;
+  category: string;
+  threshold: number;
+  progress: number;
+  completed: boolean;
 };
-
-const badges: Badge[] = [
-  {
-    id: 'og',
-    name: 'OG Cheese Lover',
-    description: 'Member since day one',
-    icon: <Crown size={24} color="#FFD700" />,
-    color: '#FFF7E6'
-  },
-  {
-    id: 'fiend',
-    name: 'Cheese Fiend',
-    description: 'Tried over 50 cheeses',
-    icon: <Star size={24} color="#FF6B6B" />,
-    color: '#FFE8EC'
-  },
-  {
-    id: 'french',
-    name: 'French Connoisseur',
-    description: 'Expert in French cheeses',
-    icon: <Award size={24} color="#4CAF50" />,
-    color: '#E8F8F0'
-  }
-];
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -55,15 +34,19 @@ export default function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedTagline, setEditedTagline] = useState('');
+  const [badges, setBadges] = useState<Badge[]>([]);
   const [stats, setStats] = useState({
-    cheesesTried: 42,
-    reviews: 28,
-    favorites: 15
+    cheesesTried: 0,
+    reviews: 0,
+    favorites: 0,
+    badgesEarned: 0
   });
 
   useEffect(() => {
     if (user) {
       fetchProfile();
+      fetchBadges();
+      fetchStats();
     } else {
       setLoading(false);
     }
@@ -85,6 +68,77 @@ export default function ProfileScreen() {
       console.error('Error fetching profile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBadges = async () => {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_user_badges_with_progress', { user_id: user.id });
+      
+      if (error) throw error;
+      
+      if (data && Array.isArray(data)) {
+        // Sort by progress percentage (completed first, then by progress)
+        const sortedBadges = data.sort((a, b) => {
+          if (a.completed && !b.completed) return -1;
+          if (!a.completed && b.completed) return 1;
+          return (b.progress / b.threshold) - (a.progress / a.threshold);
+        });
+        
+        // Take the top 5 for display in the profile
+        setBadges(sortedBadges.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Error fetching badges:', error);
+    }
+  };
+  
+  const fetchStats = async () => {
+    try {
+      // Fetch cheese count
+      const { count: cheesesCount, error: cheesesError } = await supabase
+        .from('cheese_box_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      
+      if (cheesesError) throw cheesesError;
+      
+      // Fetch reviews count
+      const { count: reviewsCount, error: reviewsError } = await supabase
+        .from('cheese_box_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .not('notes', 'is', null);
+      
+      if (reviewsError) throw reviewsError;
+      
+      // Fetch favorites count
+      const { count: favoritesCount, error: favoritesError } = await supabase
+        .from('cheese_box_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_favorite', true);
+      
+      if (favoritesError) throw favoritesError;
+      
+      // Fetch completed badges count
+      const { count: badgesCount, error: badgesError } = await supabase
+        .from('user_badges')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('completed', true);
+      
+      if (badgesError) throw badgesError;
+      
+      setStats({
+        cheesesTried: cheesesCount || 0,
+        reviews: reviewsCount || 0,
+        favorites: favoritesCount || 0,
+        badgesEarned: badgesCount || 0
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
   };
 
@@ -260,8 +314,8 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.reviews}</Text>
-            <Text style={styles.statLabel}>Reviews</Text>
+            <Text style={styles.statNumber}>{stats.badgesEarned}</Text>
+            <Text style={styles.statLabel}>Badges Earned</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
@@ -271,25 +325,100 @@ export default function ProfileScreen() {
         </View>
         
         <View style={styles.badgesSection}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.badgesContainer}
-          >
-            {badges.map((badge) => (
-              <View 
-                key={badge.id} 
-                style={[styles.badgeCard, { backgroundColor: badge.color }]}
-              >
-                <View style={styles.badgeIcon}>
-                  {badge.icon}
-                </View>
-                <Text style={styles.badgeName}>{badge.name}</Text>
-                <Text style={styles.badgeDescription}>{badge.description}</Text>
-              </View>
-            ))}
-          </ScrollView>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <TouchableOpacity 
+              style={styles.viewAllButton} 
+              onPress={() => router.push('/badges')}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <ChevronRight size={16} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          {badges.length > 0 ? (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.badgesContainer}
+            >
+              {badges.map((badge) => {
+                // Calculate percentage complete for progress bar
+                const percentComplete = Math.min(100, (badge.progress / badge.threshold) * 100);
+                
+                // Determine badge color based on category
+                let badgeColor = '#FFF7E6';
+                let iconDisplay = '🏆';
+                
+                switch (badge.category) {
+                  case 'quantity':
+                    badgeColor = '#FFF0E6';
+                    iconDisplay = '🧀';
+                    break;
+                  case 'specialty':
+                    badgeColor = '#F0E6FF';
+                    iconDisplay = '⭐';
+                    break;
+                  case 'type':
+                    badgeColor = '#E8FFFD';
+                    iconDisplay = '🥪';
+                    break;
+                  case 'origin':
+                    badgeColor = '#E8F4FF';
+                    iconDisplay = '🌍';
+                    break;
+                  case 'pairing':
+                    badgeColor = '#E8F8F0';
+                    iconDisplay = '🍷';
+                    break;
+                  case 'engagement':
+                    badgeColor = '#F0E6FF';
+                    iconDisplay = '👍';
+                    break;
+                  default:
+                    iconDisplay = '🏆';
+                }
+                
+                if (badge.completed) {
+                  badgeColor = '#FFF8D6'; // Gold-tinted for completed badges
+                }
+                
+                return (
+                  <TouchableOpacity 
+                    key={badge.id} 
+                    style={[styles.badgeCard, { backgroundColor: badgeColor }]}
+                    onPress={() => router.push('/badges')}
+                  >
+                    <View style={styles.badgeIcon}>
+                      <Text style={styles.badgeEmoji}>{iconDisplay}</Text>
+                    </View>
+                    <Text style={styles.badgeName}>{badge.name}</Text>
+                    <Text style={styles.badgeDescription}>{badge.description}</Text>
+                    
+                    {/* Progress bar */}
+                    <View style={styles.badgeProgressContainer}>
+                      <View style={styles.badgeProgressBar}>
+                        <View 
+                          style={[
+                            styles.badgeProgressFill,
+                            { width: `${percentComplete}%`, backgroundColor: badge.completed ? '#FFD700' : '#3B82F6' }
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.badgeProgressText}>
+                        {badge.progress}/{badge.threshold}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <View style={styles.emptyBadges}>
+              <Trophy size={40} color={Colors.subtleText} />
+              <Text style={styles.emptyBadgesText}>Start your cheese journey to earn badges!</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.menuSection}>
@@ -713,9 +842,62 @@ const styles = StyleSheet.create({
     borderColor: Colors.error,
   },
   logoutText: {
-    marginLeft: Layout.spacing.s,
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.error,
+    marginLeft: Layout.spacing.m,
+    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.base,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Layout.spacing.m,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllText: {
+    color: Colors.primary,
+    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.sm,
+    marginRight: 4,
+  },
+  badgeEmoji: {
+    fontSize: 24,
+    textAlign: 'center',
+  },
+  badgeProgressContainer: {
+    marginTop: Layout.spacing.s,
+    width: '100%',
+  },
+  badgeProgressBar: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    marginBottom: 4,
+    overflow: 'hidden',
+  },
+  badgeProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  badgeProgressText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.subtleText,
+    fontFamily: Typography.fonts.body,
+    textAlign: 'right',
+  },
+  emptyBadges: {
+    padding: Layout.spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyBadgesText: {
+    marginTop: Layout.spacing.m,
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textAlign: 'center',
   }
 });

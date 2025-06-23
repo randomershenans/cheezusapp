@@ -56,6 +56,7 @@ export default function RootLayout() {
         <Stack.Screen name="add-cheese" options={{ headerShown: false }} />
         <Stack.Screen name="cheese/new" options={{ headerShown: false }} />
         <Stack.Screen name="cheezopedia/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="badges" options={{ headerShown: true, headerTitle: 'My Achievements', headerTintColor: '#222', headerStyle: { backgroundColor: '#FFF8EF' } }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

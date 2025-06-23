@@ -86,7 +86,7 @@ export default function DiscoverScreen() {
               title: c.name,
               description: c.description,
               image_url: c.image_url,
-              type: 'cheese',
+              type: 'cheese' as const,
               metadata: {
                 origin_country: c.origin_country,
                 cheese_type:    c.type,
@@ -118,7 +118,7 @@ export default function DiscoverScreen() {
                 title:     e.title,
                 description: e.description,
                 image_url: e.image_url,
-                type:      e.content_type === 'recipe' ? 'recipe' : 'article',
+                type:      e.content_type === 'recipe' ? 'recipe' as DiscoverItem['type'] : 'article' as DiscoverItem['type'],
                 metadata:  { reading_time: e.reading_time_minutes },
               }))
           );
@@ -352,13 +352,16 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
 
   heroContainer: {
-    paddingHorizontal: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.s,
     paddingTop: Layout.spacing.s,
     gap: Layout.spacing.l,
+    alignItems: 'center',
   },
   heroCard: {
-    width: screenWidth - Layout.spacing.m * 2,
-    height: 320,
+    width: '92%',
+    height: Math.round(screenWidth * 0.75), // Dynamic height based on width
+    maxWidth: 600, // Maximum width on larger screens
+    marginHorizontal: '4%',
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
     ...Layout.shadow.large,
