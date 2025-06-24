@@ -26,7 +26,11 @@ type Cheese = {
   image_url: string;
   created_at: string;
   flavors?: { flavor: string }[];
-  pairings?: { pairing: string; type: string }[];
+  pairings?: {
+    id: string;
+    pairing: string;
+    type: string;
+  }[];
 };
 
 type CheeseBoxEntry = {
@@ -64,7 +68,7 @@ export default function CheeseDetailScreen() {
         .select(`
           *,
           flavors:cheese_flavors(flavor),
-          pairings:cheese_pairings(pairing, type)
+          pairings:cheese_pairings(id, pairing, type)
         `)
         .eq('id', id)
         .single();
@@ -513,9 +517,13 @@ export default function CheeseDetailScreen() {
                   <Text style={styles.pairingCategoryTitle}>🍷 Drinks</Text>
                   <View style={styles.pairingsGrid}>
                     {drinkPairings.map((pairing, index) => (
-                      <View key={index} style={styles.pairingItem}>
+                      <TouchableOpacity 
+                        key={index} 
+                        style={styles.pairingItem}
+                        onPress={() => router.push(`/pairing/${pairing.id}`)}
+                      >
                         <Text style={styles.pairingText}>{pairing.pairing}</Text>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 </View>
@@ -526,9 +534,13 @@ export default function CheeseDetailScreen() {
                   <Text style={styles.pairingCategoryTitle}>🍯 Foods</Text>
                   <View style={styles.pairingsGrid}>
                     {foodPairings.map((pairing, index) => (
-                      <View key={index} style={styles.pairingItem}>
+                      <TouchableOpacity 
+                        key={index} 
+                        style={styles.pairingItem}
+                        onPress={() => router.push(`/pairing/${pairing.id}`)}
+                      >
                         <Text style={styles.pairingText}>{pairing.pairing}</Text>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 </View>
