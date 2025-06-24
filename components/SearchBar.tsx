@@ -248,7 +248,9 @@ export default function SearchBar({
       return;
     }
     
-    // Handle filtered results here
+    // Close the search modal and navigate to filtered results
+    setIsExpanded(false);
+    router.push(`/discover?type=${encodeURIComponent(type)}`);
   };
 
   const handleRegionFilter = async (country: string) => {
@@ -263,7 +265,9 @@ export default function SearchBar({
       return;
     }
     
-    // Handle filtered results here
+    // Close the search modal and navigate to filtered results
+    setIsExpanded(false);
+    router.push(`/discover?region=${encodeURIComponent(country)}`);
   };
 
   const handleResultPress = (result: SearchResult) => {
@@ -366,7 +370,10 @@ export default function SearchBar({
             </View>
             
             {searchMode === 'cheese' ? (
-              <ScrollView style={styles.resultsContainer}>
+              <ScrollView
+                style={styles.resultsContainer}
+                contentContainerStyle={styles.resultsContentContainer}
+              >
                 {loading ? (
                   <View style={styles.messageContainer}>
                     <Text style={styles.messageText}>Searching...</Text>
@@ -404,7 +411,10 @@ export default function SearchBar({
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Cheese by type</Text>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      setIsExpanded(false);
+                      router.push('/discover?filter=types');
+                    }}>
                       <Text style={styles.seeAll}>See all</Text>
                     </TouchableOpacity>
                   </View>
@@ -425,7 +435,10 @@ export default function SearchBar({
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Cheese by region</Text>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      setIsExpanded(false);
+                      router.push('/discover?filter=regions');
+                    }}>
                       <Text style={styles.seeAll}>See all</Text>
                     </TouchableOpacity>
                   </View>
@@ -707,6 +720,9 @@ const styles = StyleSheet.create({
   },
   resultsContainer: {
     flex: 1,
+  },
+  resultsContentContainer: {
+    paddingBottom: Layout.spacing.xl * 2, // Add extra bottom padding for scroll area
   },
   messageContainer: {
     padding: Layout.spacing.xl,

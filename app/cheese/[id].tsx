@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, Dimensions, TextInput, Modal, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Image, ScrollView, Alert, TouchableOpacity, Modal, TextInput, ActivityIndicator, Dimensions, SafeAreaView, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Heart, Share2, Plus, Star, MapPin, Clock, Users, CreditCard as Edit3, X } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Star, Heart, Calendar, MapPin, Info, Award, Edit3, Plus, X, Trash2, ArrowLeft, Share2, Clock, Users } from 'lucide-react-native';
+import { formatDistanceToNow } from 'date-fns';
+import Slider from '@react-native-community/slider';
+
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
@@ -124,7 +127,7 @@ export default function CheeseDetailScreen() {
         const { error } = await supabase
           .from('cheese_box_entries')
           .update({
-            rating: editRating > 0 ? editRating : null,
+            rating: editRating > 0 ? parseFloat(editRating.toFixed(1)) : null,
             notes: editNotes.trim() || null,
             updated_at: new Date().toISOString()
           })
@@ -134,7 +137,7 @@ export default function CheeseDetailScreen() {
 
         setCheeseBoxEntry({
           ...cheeseBoxEntry,
-          rating: editRating > 0 ? editRating : undefined,
+          rating: editRating > 0 ? parseFloat(editRating.toFixed(1)) : undefined,
           notes: editNotes.trim() || undefined
         });
       } else {
@@ -145,7 +148,7 @@ export default function CheeseDetailScreen() {
             {
               user_id: user.id,
               cheese_id: id,
-              rating: editRating > 0 ? editRating : null,
+              rating: editRating > 0 ? parseFloat(editRating.toFixed(1)) : null,
               notes: editNotes.trim() || null
             }
           ])
@@ -197,27 +200,67 @@ export default function CheeseDetailScreen() {
     );
   };
 
-  const renderStars = (rating: number, interactive: boolean = false, onPress?: (rating: number) => void) => {
+  const renderDecimalRating = () => {
+    return (
+      <View style={styles.decimalRatingContainer}>
+        <View style={styles.starsDisplay}>
+          {renderStarsForDisplay(editRating)}
+        </View>
+        <View style={styles.sliderContainer}>
+          <Slider
+            style={styles.ratingSlider}
+            minimumValue={0}
+            maximumValue={5}
+            step={0.1}
+            value={editRating}
+            minimumTrackTintColor={Colors.primary}
+            maximumTrackTintColor="#E0E0E0"
+            thumbTintColor={Colors.primary}
+            // Thumb styling is controlled via thumbTintColor
+            onValueChange={value => setEditRating(parseFloat(value.toFixed(1)))}
+          />
+        </View>
+      </View>
+    );
+  };
+
+  const renderStars = (rating: number, interactive: boolean = false) => {
     return Array.from({ length: 5 }, (_, index) => {
       const starValue = index + 1;
-      const isFilled = starValue <= rating;
-      const isHalfFilled = rating > index && rating < starValue;
+      const fillPercentage = Math.max(0, Math.min(1, rating - index));
+      const starColor = fillPercentage > 0 ? '#FFD700' : '#E0E0E0';
+      const starSize = interactive ? 28 : 16;
       
       return (
-        <TouchableOpacity
-          key={index}
-          onPress={() => interactive && onPress && onPress(starValue)}
-          disabled={!interactive}
-          style={interactive ? styles.interactiveStar : undefined}
-        >
-          <Star
-            size={interactive ? 32 : 16}
-            color={isFilled || isHalfFilled ? '#FFD700' : '#E0E0E0'}
-            fill={isFilled ? '#FFD700' : isHalfFilled ? '#FFD700' : 'none'}
-          />
-        </TouchableOpacity>
+        <View key={index} style={[styles.starContainer, interactive && styles.interactiveStarContainer]}>
+          {/* Base star (outline or background) */}
+          <View style={styles.starBase}>
+            <Star
+              size={starSize}
+              color={starColor}
+              fill="none"
+              strokeWidth={1.5}
+            />
+          </View>
+          
+          {/* Filled portion of the star */}
+          {fillPercentage > 0 && (
+            <View style={[styles.starFill, { width: `${fillPercentage * 100}%` }]}>
+              <Star
+                size={starSize}
+                color={starColor}
+                fill={starColor}
+                strokeWidth={1.5}
+              />
+            </View>
+          )}
+        </View>
       );
     });
+  };
+  
+  const renderStarsForDisplay = (rating: number) => {
+    return renderStars(rating, true);
   };
 
   const renderRatingModal = () => (
@@ -229,39 +272,46 @@ export default function CheeseDetailScreen() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {cheeseBoxEntry ? 'Edit your tasting' : 'Add to cheese box'}
-            </Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setShowEditModal(false)}
-            >
-              <X size={24} color={Colors.text} />
-            </TouchableOpacity>
-          </View>
+          {/* Floating close button positioned at top-right corner */}
+          <TouchableOpacity
+            style={styles.floatingCloseButton}
+            onPress={() => setShowEditModal(false)}
+          >
+            <X size={18} color={Colors.subtleText} strokeWidth={2} />
+          </TouchableOpacity>
+          
+          <Text style={styles.modalTitle}>
+            {cheeseBoxEntry ? 'Edit your tasting' : 'Add to cheese box'}
+          </Text>
+          
+          <View style={styles.modalDivider} />
 
           <View style={styles.modalSection}>
             <Text style={styles.modalSectionTitle}>Your rating</Text>
             <View style={styles.ratingContainer}>
-              {renderStars(editRating, true, setEditRating)}
+              {renderDecimalRating()}
             </View>
-            <Text style={styles.ratingText}>
-              {editRating > 0 ? `${editRating}/5 stars` : 'Tap to rate'}
-            </Text>
+            <View style={styles.ratingBadge}>
+              <Text style={styles.ratingText}>
+                {editRating > 0 ? `${editRating.toFixed(1)}/5` : 'Slide to rate'}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.modalSection}>
             <Text style={styles.modalSectionTitle}>Tasting notes</Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="Share your thoughts about this cheese..."
-              value={editNotes}
-              onChangeText={setEditNotes}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
+            <View style={styles.textInputContainer}>
+              <TextInput
+                style={styles.notesInput}
+                placeholder="Share your thoughts about this cheese..."
+                placeholderTextColor={Colors.subtleText}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
           </View>
 
           <View style={styles.modalActions}>
@@ -270,16 +320,25 @@ export default function CheeseDetailScreen() {
                 style={styles.removeButton}
                 onPress={handleRemoveFromCheeseBox}
               >
-                <Text style={styles.removeButtonText}>Remove from box</Text>
+                <Trash2 size={18} color={Colors.error} strokeWidth={2} />
+                <Text style={styles.removeButtonText}>Remove</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={styles.saveButton}
               onPress={handleSaveEntry}
             >
-              <Text style={styles.saveButtonText}>
-                {cheeseBoxEntry ? 'Update' : 'Add to box'}
-              </Text>
+              {cheeseBoxEntry ? (
+                <>
+                  <Edit3 size={18} color={Colors.background} strokeWidth={2} />
+                  <Text style={styles.saveButtonText}>Update</Text>
+                </>
+              ) : (
+                <>
+                  <Plus size={18} color={Colors.background} strokeWidth={2.5} />
+                  <Text style={styles.saveButtonText}>Add to box</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -302,7 +361,7 @@ export default function CheeseDetailScreen() {
   if (!cheese) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+        <StatusBar style="dark" translucent />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Cheese not found</Text>
           <TouchableOpacity 
@@ -392,18 +451,20 @@ export default function CheeseDetailScreen() {
                   style={styles.editButton}
                   onPress={handleEditEntry}
                 >
-                  <Heart size={20} color={Colors.success} fill={Colors.success} />
+                  <Heart size={18} color={Colors.primary} fill={Colors.primary} strokeWidth={2} />
                   <Text style={styles.editButtonText}>In your cheese box</Text>
-                  <Edit3 size={16} color={Colors.success} />
+                  <Edit3 size={16} color={Colors.subtleText} strokeWidth={1.5} />
                 </TouchableOpacity>
 
                 {cheeseBoxEntry?.rating && (
                   <View style={styles.userRatingDisplay}>
                     <Text style={styles.userRatingLabel}>Your rating:</Text>
-                    <View style={styles.starsContainer}>
-                      {renderStars(cheeseBoxEntry.rating)}
+                    <View style={styles.ratingContainer}>
+                      {renderStars(cheeseBoxEntry?.rating || 0)}
+                      <Text style={styles.inBoxRating}>
+                        {cheeseBoxEntry?.rating ? `${cheeseBoxEntry.rating.toFixed(1)}/5` : 'Not rated'}
+                      </Text>
                     </View>
-                    <Text style={styles.userRatingValue}>{cheeseBoxEntry.rating}/5</Text>
                   </View>
                 )}
 
@@ -419,7 +480,7 @@ export default function CheeseDetailScreen() {
                 style={styles.addButton}
                 onPress={handleAddToCheeseBox}
               >
-                <Plus size={20} color={Colors.background} />
+                <Plus size={18} color={Colors.background} strokeWidth={2.5} />
                 <Text style={styles.addButtonText}>Add to cheese box</Text>
               </TouchableOpacity>
             )}
@@ -658,9 +719,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.primary,
     paddingVertical: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
-    gap: Layout.spacing.s,
-    ...Layout.shadow.medium,
+    gap: Layout.spacing.m,
+    ...Layout.shadow.small,
   },
   addButtonText: {
     color: Colors.background,
@@ -673,19 +735,19 @@ const styles = StyleSheet.create({
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E8F8F0',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
     paddingVertical: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.l,
     borderRadius: Layout.borderRadius.large,
-    gap: Layout.spacing.s,
     ...Layout.shadow.small,
   },
   editButtonText: {
-    color: Colors.success,
+    color: Colors.text,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
-    flex: 1,
-    textAlign: 'center',
   },
   userRatingDisplay: {
     flexDirection: 'row',
@@ -860,32 +922,49 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
+    position: 'relative',
     backgroundColor: Colors.background,
-    borderTopLeftRadius: Layout.borderRadius.large,
-    borderTopRightRadius: Layout.borderRadius.large,
-    padding: Layout.spacing.l,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: Layout.spacing.xl,
+    paddingTop: Layout.spacing.xl,
     maxHeight: '80%',
+    ...Layout.shadow.large,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  floatingCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.backgroundSecondary,
     alignItems: 'center',
-    marginBottom: Layout.spacing.l,
+    justifyContent: 'center',
+    zIndex: 10,
+    ...Layout.shadow.small,
   },
   modalTitle: {
     fontSize: Typography.sizes.xl,
     fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
+    marginBottom: 4,
+    marginRight: 20,
+    textAlign: 'left',
   },
-  modalCloseButton: {
-    padding: Layout.spacing.s,
+  modalDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginTop: Layout.spacing.m,
+    marginBottom: Layout.spacing.xl,
+    width: '100%',
   },
   modalSection: {
-    marginBottom: Layout.spacing.l,
+    marginBottom: Layout.spacing.xl,
   },
   modalSectionTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: Layout.spacing.m,
   },
@@ -893,38 +972,95 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: Layout.spacing.s,
-    marginBottom: Layout.spacing.s,
+    marginBottom: Layout.spacing.m,
   },
-  interactiveStar: {
-    padding: Layout.spacing.xs,
+  starContainer: {
+    position: 'relative',
+    marginHorizontal: 3,
+  },
+  interactiveStarContainer: {
+    marginHorizontal: 6,
+  },
+  ratingBadge: {
+    alignSelf: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: Layout.spacing.xs,
   },
   ratingText: {
-    fontSize: Typography.sizes.base,
+    fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
-    textAlign: 'center',
+  },
+  textInputContainer: {
+    borderRadius: Layout.borderRadius.large,
+    backgroundColor: Colors.backgroundSecondary,
+    ...Layout.shadow.small,
+    overflow: 'hidden',
   },
   notesInput: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Layout.borderRadius.medium,
-    padding: Layout.spacing.m,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.body,
     color: Colors.text,
     minHeight: 100,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.m,
     textAlignVertical: 'top',
   },
   modalActions: {
     flexDirection: 'row',
     gap: Layout.spacing.m,
+    marginTop: Layout.spacing.m,
+  },
+  decimalRatingContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  starsDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    height: 32,
+    width: '80%',
+  },
+  sliderContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  ratingSlider: {
+    width: '80%',
+    height: 40,
+  },
+  // Slider thumb is styled via thumbTintColor
+  inBoxRating: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.subtleText,
+    marginLeft: Layout.spacing.s,
+  },
+  starBase: {
+    position: 'relative',
+  },
+  starFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    overflow: 'hidden',
   },
   removeButton: {
     flex: 1,
-    backgroundColor: '#FFE8EC',
-    paddingVertical: Layout.spacing.m,
+    flexDirection: 'row',
+    backgroundColor: '#FFF1F0',  // Very light red background
+    paddingVertical: 14,
+    paddingHorizontal: Layout.spacing.s,
     borderRadius: Layout.borderRadius.large,
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
+    ...Layout.shadow.small,
   },
   removeButtonText: {
     color: Colors.error,
@@ -933,10 +1069,14 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 2,
+    flexDirection: 'row',
     backgroundColor: Colors.primary,
-    paddingVertical: Layout.spacing.m,
+    paddingVertical: 14,
     borderRadius: Layout.borderRadius.large,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    ...Layout.shadow.small,
   },
   saveButtonText: {
     color: Colors.background,

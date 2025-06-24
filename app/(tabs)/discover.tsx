@@ -55,7 +55,7 @@ const filterOptions = [
 /* ────────────────────────────── component ───────────────────────────────── */
 export default function DiscoverScreen() {
   const router = useRouter();
-  const { q } = useLocalSearchParams();
+  const { q, type, region, filter } = useLocalSearchParams();
 
   const [items,      setItems]      = useState<DiscoverItem[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -64,7 +64,7 @@ export default function DiscoverScreen() {
   /* ── data fetch ── */
   useEffect(() => {
     fetchDiscoverItems();
-  }, [q, activeFilter]);
+  }, [q, type, region, filter, activeFilter]);
 
   const fetchDiscoverItems = async () => {
     setLoading(true);
@@ -73,11 +73,23 @@ export default function DiscoverScreen() {
 
       /* Cheeses */
       if (activeFilter === 'all' || activeFilter === 'cheese') {
-        const { data: cheeses } = await supabase
+        let query = supabase
           .from('cheeses')
-          .select('id, name, description, image_url, type, origin_country')
+          .select('id, name, description, image_url, type, origin_country');
+        
+        // Apply type filter if present
+        if (type && typeof type === 'string') {
+          query = query.eq('type', type);
+        }
+        
+        // Apply region/country filter if present
+        if (region && typeof region === 'string') {
+          query = query.eq('origin_country', region);
+        }
+        
+        const { data: cheeses } = await query
           .order('created_at', { ascending: false })
-          .limit(20);
+          .limit(filter === 'types' || filter === 'regions' ? 50 : 20);
 
         if (cheeses) {
           all.push(
@@ -151,6 +163,54 @@ export default function DiscoverScreen() {
   const getItemIcon = (t: DiscoverItem['type']) =>
     t === 'cheese' ? '🧀' : t === 'recipe' ? '👨‍🍳' : '📝';
 
+  const renderFilterInfo = () => {
+    if (type && typeof type === 'string') {
+      return (
+        <View style={styles.filterInfo}>
+          <Text style={styles.filterInfoText}>Showing cheeses of type: <Text style={styles.filterHighlight}>{type}</Text></Text>
+          <TouchableOpacity onPress={() => router.push('/discover')} style={styles.clearButton}>
+            <Text style={styles.clearButtonText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    if (region && typeof region === 'string') {
+      return (
+        <View style={styles.filterInfo}>
+          <Text style={styles.filterInfoText}>Showing cheeses from: <Text style={styles.filterHighlight}>{region}</Text></Text>
+          <TouchableOpacity onPress={() => router.push('/discover')} style={styles.clearButton}>
+            <Text style={styles.clearButtonText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    if (filter === 'types') {
+      return (
+        <View style={styles.filterInfo}>
+          <Text style={styles.filterInfoText}>Browse all cheese types</Text>
+          <TouchableOpacity onPress={() => router.push('/discover')} style={styles.clearButton}>
+            <Text style={styles.clearButtonText}>Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    if (filter === 'regions') {
+      return (
+        <View style={styles.filterInfo}>
+          <Text style={styles.filterInfoText}>Browse all cheese regions</Text>
+          <TouchableOpacity onPress={() => router.push('/discover')} style={styles.clearButton}>
+            <Text style={styles.clearButtonText}>Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    return null;
+  };
+
   /* ── render hero card ── */
   const renderHeroCard = (item: DiscoverItem) => (
     <TouchableOpacity key={item.id} style={styles.heroCard} onPress={() => handlePress(item)}>
@@ -214,6 +274,8 @@ export default function DiscoverScreen() {
         onSearch={query => router.push(`/discover?q=${encodeURIComponent(query)}`)}
         onFilter={() => {}}
       />
+
+      {renderFilterInfo()}
 
       {/* ---------- Horizontal filter row ---------- */}
       <ScrollView
@@ -288,6 +350,40 @@ export default function DiscoverScreen() {
 
 /* ─────────────────────────────── styles ─────────────────────────────────── */
 const styles = StyleSheet.create({
+  /* -------- filter info banner -------- */
+  filterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.background,
+    paddingVertical: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.m,
+    marginHorizontal: Layout.spacing.m,
+    marginVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    ...Layout.shadow.small,
+  },
+  filterInfoText: {
+    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.text,
+    flex: 1,
+  },
+  filterHighlight: {
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.primary,
+  },
+  clearButton: {
+    backgroundColor: '#F5F5F5',
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.small,
+  },
+  clearButtonText: {
+    fontFamily: Typography.fonts.bodySemiBold,
+    fontSize: Typography.sizes.xs,
+    color: Colors.primary,
+  },
   /* -------- layout -------- */
   container: {
     flex: 1,

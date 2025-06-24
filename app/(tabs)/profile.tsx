@@ -348,35 +348,30 @@ export default function ProfileScreen() {
                 
                 // Determine badge color based on category
                 let badgeColor = '#FFF7E6';
-                let iconDisplay = '🏆';
                 
+                // Use the icon from the badge data
+                const iconDisplay = badge.icon || '🏆';
+                
+                // Set background color based on category
                 switch (badge.category) {
                   case 'quantity':
                     badgeColor = '#FFF0E6';
-                    iconDisplay = '🧀';
                     break;
                   case 'specialty':
                     badgeColor = '#F0E6FF';
-                    iconDisplay = '⭐';
                     break;
                   case 'type':
                     badgeColor = '#E8FFFD';
-                    iconDisplay = '🥪';
                     break;
                   case 'origin':
                     badgeColor = '#E8F4FF';
-                    iconDisplay = '🌍';
                     break;
                   case 'pairing':
                     badgeColor = '#E8F8F0';
-                    iconDisplay = '🍷';
                     break;
                   case 'engagement':
                     badgeColor = '#F0E6FF';
-                    iconDisplay = '👍';
                     break;
-                  default:
-                    iconDisplay = '🏆';
                 }
                 
                 if (badge.completed) {
