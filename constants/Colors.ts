@@ -28,6 +28,7 @@ const Colors = {
   white: '#FFFFFF',
   black: '#000000',
   gray: '#BDC3C7',
+  accent: '#4A90E2',
   lightGray: '#ECF0F1',
 };
 

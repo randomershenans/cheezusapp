@@ -3,7 +3,6 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, Scro
 import { useRouter } from 'expo-router';
 import { X, Search, Plus, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { cheeses, type Cheese } from '@/constants/cheeseData';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -49,7 +48,7 @@ function calculateSimilarity(str1: string, str2: string): number {
 
 export default function AddCheeseScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState(name as string || '');
+  const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,20 +180,33 @@ export default function AddCheeseScreen() {
                     </View>
                   </TouchableOpacity>
                 ))}
+                
+                {query.trim().length >= 2 && (
+                  <Text style={styles.resultsNote}>
+                    Don't see what you're looking for? You can add a new cheese below.
+                  </Text>
+                )}
               </View>
-            ) : showSuggestions ? (
-              <TouchableOpacity
-                style={styles.addNewButton}
-                onPress={handleAddNewCheese}
-              >
-                <Plus size={20} color={Colors.primary} />
-                <Text style={styles.addNewText}>
-                  Add "{query}" as a new cheese
-                </Text>
-              </TouchableOpacity>
+            ) : query.trim().length >= 2 ? (
+              <View style={styles.noResultsContainer}>
+                <View style={styles.messageContainer}>
+                  <AlertCircle size={24} color={Colors.subtleText} style={styles.noResultsIcon} />
+                  <Text style={styles.messageText}>No matching cheeses found</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.addNewButton}
+                  onPress={handleAddNewCheese}
+                >
+                  <Plus size={20} color={Colors.primary} />
+                  <Text style={styles.addNewText}>
+                    Add "{query}" as a new cheese
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={styles.messageContainer}>
-                <Text style={styles.messageText}>No matching cheeses found</Text>
+                <Text style={styles.messageText}>Type at least 2 characters to search</Text>
               </View>
             )}
           </View>
@@ -217,8 +229,8 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 40,
     height: 40,
-    borderRadius: Layout.borderRadius.large,
-    backgroundColor: '#F0F0F0',
+    borderRadius: 20,
+    backgroundColor: Colors.lightGray,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -229,59 +241,77 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: Layout.borderRadius.large,
-    paddingHorizontal: Layout.spacing.m,
-    height: 48,
-    marginBottom: Layout.spacing.l,
+    backgroundColor: Colors.white,
+    borderRadius: Layout.borderRadius.medium,
+    padding: Layout.spacing.s,
+    marginVertical: Layout.spacing.m,
+    elevation: 2,
+    shadowColor: Colors.gray,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchIcon: {
-    marginRight: Layout.spacing.s,
+    marginHorizontal: Layout.spacing.s,
   },
   searchInput: {
     flex: 1,
+    height: 40,
     fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontFamily: Typography.fonts.body,
     color: Colors.text,
+    marginLeft: Layout.spacing.xs,
   },
   searchResultsContainer: {
-    padding: Layout.spacing.m,
-  },
-  resultItem: {
-    paddingVertical: Layout.spacing.m,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8E8E8',
-  },
-  resultContent: {
+    marginTop: Layout.spacing.m,
     flex: 1,
   },
+  searchResults: {
+    flex: 1,
+  },
+  resultItem: {
+    backgroundColor: Colors.white,
+    borderRadius: Layout.borderRadius.medium,
+    padding: Layout.spacing.m,
+    marginBottom: Layout.spacing.s,
+    elevation: 1,
+    shadowColor: Colors.gray,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  resultContent: {
+    flexDirection: 'column',
+  },
   resultName: {
-    fontSize: Typography.sizes.base,
+    fontSize: Typography.sizes.lg,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: Layout.spacing.xs,
   },
   resultOrigin: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginBottom: Layout.spacing.xs,
   },
   similarityBadge: {
-    backgroundColor: '#FFF0DB',
+    marginTop: Layout.spacing.xs,
+    backgroundColor: Colors.primaryLight,
     paddingHorizontal: Layout.spacing.s,
-    paddingVertical: 2,
-    borderRadius: Layout.borderRadius.large,
+    paddingVertical: Layout.spacing.xs,
+    borderRadius: Layout.borderRadius.small,
     alignSelf: 'flex-start',
   },
   similarityText: {
     fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontFamily: Typography.fonts.body,
     color: Colors.primary,
   },
   messageContainer: {
-    padding: Layout.spacing.xl,
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: Layout.spacing.l,
   },
   messageText: {
     fontSize: Typography.sizes.base,
@@ -295,13 +325,31 @@ const styles = StyleSheet.create({
     color: Colors.error,
     textAlign: 'center',
   },
+  resultsNote: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginTop: Layout.spacing.m,
+    marginBottom: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    padding: Layout.spacing.m, 
+  },
+  noResultsIcon: {
+    marginBottom: Layout.spacing.s,
+  },
   addNewButton: {
     marginTop: Layout.spacing.l,
     padding: Layout.spacing.m,
     backgroundColor: '#FFF0DB',
     borderRadius: Layout.borderRadius.medium,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
   },
   addNewText: {
     marginLeft: Layout.spacing.s,

@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, ScrollView, Platform, Modal, Alert, Image, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter, router } from 'expo-router';
-import { X, Camera, Upload, ImagePlus, Brain, ArrowLeft } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, ScrollView, Platform, Modal, Alert, Image } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { X, Camera, Upload, ImagePlus, Brain } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
-import { takeCameraPhoto, pickImageFromGallery, analyzeImageWithAI, ensureStorageBucket } from '@/lib/storage';
-import { saveCheeseEntry, CheeseData, CheeseType, MilkType } from '@/lib/cheese-service';
-import { supabase } from '@/lib/supabase';
 
-// Using types from cheese-service.ts instead of redefining them here
+type CheeseType = 'Hard' | 'Soft' | 'Semi-soft' | 'Fresh' | 'Blue' | 'Processed';
+type MilkType = 'Cow' | 'Goat' | 'Sheep' | 'Mixed' | 'Buffalo';
 
 const cheeseTypes: CheeseType[] = ['Hard', 'Soft', 'Semi-soft', 'Fresh', 'Blue', 'Processed'];
 const milkTypes: MilkType[] = ['Cow', 'Goat', 'Sheep', 'Mixed', 'Buffalo'];
@@ -21,15 +19,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    paddingHorizontal: Layout.spacing.xl,
-    paddingVertical: Layout.spacing.l,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  backButton: {
-    marginRight: Layout.spacing.m,
+    justifyContent: 'space-between',
+    padding: Layout.spacing.m,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   closeButton: {
     width: 40,
@@ -58,31 +53,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Layout.spacing.l,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cheeseImage: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  changePhotoButton: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: Layout.spacing.s,
-    alignItems: 'center',
-  },
-  changePhotoText: {
-    color: '#FFFFFF',
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
   },
   imageUploadText: {
     marginTop: Layout.spacing.s,
@@ -191,36 +161,16 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: Colors.primary,
-    borderRadius: Layout.borderRadius.medium,
     paddingVertical: Layout.spacing.m,
-    alignItems: 'center',
-    marginTop: Layout.spacing.xl,
+    borderRadius: Layout.borderRadius.medium,
+    marginTop: Layout.spacing.l,
+    marginBottom: Layout.spacing.xl,
   },
-  submitButtonDisabled: {
-    backgroundColor: Colors.subtleText,
-    opacity: 0.7,
-  },
-  errorContainer: {
-    marginTop: Layout.spacing.m,
-    padding: Layout.spacing.m,
-    backgroundColor: '#FFEEEE',
-    borderRadius: Layout.borderRadius.small,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF6666',
-  },
-  errorText: {
-    color: '#DD3333',
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-    marginBottom: Layout.spacing.xs,
-  },
-  cancelButtonText: {
+  submitButtonText: {
+    color: Colors.background,
     fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.body,
-    color: Colors.text,
-  },
-  formContainer: {
-    padding: Layout.spacing.m,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textAlign: 'center',
   },
   // Modal styles
   modalOverlay: {
@@ -265,11 +215,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: Layout.spacing.s,
   },
-  submitButtonText: {
-    color: Colors.background,
+  cancelButtonText: {
     fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    textAlign: 'center',
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
   },
 });
 
@@ -287,31 +236,6 @@ export default function NewCheeseScreen() {
   const [newFlavorTag, setNewFlavorTag] = useState('');
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [photoSource, setPhotoSource] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  // Ensure storage bucket exists on component mount
-  useEffect(() => {
-    ensureStorageBucket().catch(err => 
-      console.error('Failed to ensure storage bucket exists:', err)
-    );
-  }, []);
-
-  // Authentication check on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session) {
-        Alert.alert(
-          'Authentication Required', 
-          'Please sign in to add a new cheese.',
-          [{ text: 'OK', onPress: () => router.push('/') }]
-        );
-      }
-    };
-    checkAuth();
-  }, []);
 
   const handleAddFlavorTag = () => {
     if (newFlavorTag.trim() && !flavorTags.includes(newFlavorTag.trim())) {
@@ -323,128 +247,42 @@ export default function NewCheeseScreen() {
   const handleRemoveFlavorTag = (tag: string) => {
     setFlavorTags(flavorTags.filter(t => t !== tag));
   };
-
-  const handlePhotoOptionSelect = async (option: 'camera' | 'gallery' | 'ai') => {
+  
+  const handlePhotoOptionSelect = (option: 'camera' | 'gallery' | 'ai') => {
     // Close the photo options modal
     setPhotoModalVisible(false);
-    setIsUploading(true);
     
-    try {
-      // Check authentication first
-      const { data: session } = await supabase.auth.getSession();
-      
-      if (!session.session) {
-        Alert.alert(
-          'Authentication Required', 
-          'Please sign in to upload photos.',
-          [{ text: 'OK', onPress: () => router.push('/') }]
-        );
-        return;
-      }
-      
-      let photoUri: string | null = null;
-      
-      if (option === 'camera') {
-        photoUri = await takeCameraPhoto();
-      } else if (option === 'gallery') {
-        photoUri = await pickImageFromGallery();
-      } else if (option === 'ai') {
-        // For now, AI analysis is a placeholder that uses gallery selection
-        Alert.alert(
-          'AI Analysis', 
-          'The AI will analyze your cheese photo to help identify it. Please select an image.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Continue', onPress: async () => {
-                setIsUploading(true);
-                const aiUri = await analyzeImageWithAI();
-                if (aiUri) {
-                  setPhotoSource(aiUri);
-                  Alert.alert('AI Analysis Complete', 'The cheese appears to be a fine quality artisanal cheese.');
-                } else {
-                  Alert.alert('Analysis Failed', 'Could not analyze the photo. Please try again.');
-                }
-                setIsUploading(false);
-              }
-            }
-          ]
-        );
-        setIsUploading(false);
-        return;
-      }
-      
-      if (photoUri) {
-        setPhotoSource(photoUri);
-      } else {
-        Alert.alert('Upload Failed', 'Could not upload the photo. Please check your permissions and try again.');
-      }
-    } catch (error) {
-      console.error(`Error with photo option: ${option}`, error);
-      Alert.alert(
-        'Upload Error', 
-        `Failed to ${option === 'camera' ? 'take' : option === 'gallery' ? 'select' : 'analyze'} photo. Please try again.`
-      );
-    } finally {
-      setIsUploading(false);
+    // In a real app, these would use the appropriate API
+    switch (option) {
+      case 'camera':
+        Alert.alert('Camera', 'Taking photo with camera (implementation pending)');
+        // Would use something like ImagePicker.launchCameraAsync
+        break;
+      case 'gallery':
+        Alert.alert('Gallery', 'Selecting from gallery (implementation pending)');
+        // Would use something like ImagePicker.launchImageLibraryAsync
+        break;
+      case 'ai':
+        Alert.alert('AI Analysis', 'Using AI to analyze cheese (implementation pending)');
+        // Would implement AI analysis functionality
+        break;
     }
   };
 
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
+  const handleSubmit = () => {
+    // Here you would typically submit to your backend
+    console.log({
+      name: cheeseName,
+      type: selectedType,
+      milk: selectedMilk,
+      origin,
+      description,
+      ageingPeriod,
+      flavorTags,
+      photoSource
+    });
     
-    if (!cheeseName.trim()) errors.name = 'Name is required';
-    if (!selectedType) errors.type = 'Cheese type is required';
-    if (!selectedMilk) errors.milk = 'Milk type is required';
-    if (!origin.country.trim()) errors.originCountry = 'Country of origin is required';
-    if (!description.trim()) errors.description = 'Description is required';
-    if (!photoSource) errors.image = 'A cheese photo is required';
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('Missing Information', 'Please fill in all required fields.');
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
-    try {
-      // Prepare data for saving
-      const cheeseData: CheeseData = {
-        name: cheeseName,
-        type: selectedType as CheeseType, // We validated this isn't null
-        milk: selectedMilk as MilkType, // We validated this isn't null
-        origin_country: origin.country,
-        origin_region: origin.region || undefined,
-        description,
-        ageing_period: ageingPeriod || undefined,
-        image_url: photoSource as string, // We validated this isn't null
-        flavor_tags: flavorTags
-      };
-      
-      // Save to database
-      const cheeseId = await saveCheeseEntry(cheeseData);
-      
-      if (cheeseId) {
-        // Show notification
-        Alert.alert('Success', 'Cheese added successfully!');
-        
-        // Automatically redirect to the cheese details page after a short delay
-        setTimeout(() => {
-          router.replace('/cheese/' + cheeseId);
-        }, 1000); // 1 second delay for the alert to be seen
-      } else {
-        throw new Error('Failed to save cheese');
-      }
-    } catch (error) {
-      console.error('Error saving cheese:', error);
-      Alert.alert('Error', 'Failed to save cheese. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    router.back();
   };
 
   return (
@@ -464,28 +302,9 @@ export default function NewCheeseScreen() {
         <TouchableOpacity 
           style={styles.imageUpload}
           onPress={() => setPhotoModalVisible(true)}
-          disabled={isUploading}
         >
-          {isUploading ? (
-            <>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.imageUploadText}>Uploading...</Text>
-            </>
-          ) : photoSource ? (
-            <>
-              <Image 
-                source={{ uri: photoSource }} 
-                style={styles.cheeseImage} 
-                resizeMode="cover"
-                onError={(e) => console.log('Image loading error:', e.nativeEvent.error)}
-              />
-              <TouchableOpacity 
-                style={styles.changePhotoButton}
-                onPress={() => setPhotoModalVisible(true)}
-              >
-                <Text style={styles.changePhotoText}>Change Photo</Text>
-              </TouchableOpacity>
-            </>
+          {photoSource ? (
+            <Text style={styles.imageUploadText}>Photo selected</Text>
           ) : (
             <>
               <ImagePlus size={32} color={Colors.subtleText} />
@@ -665,27 +484,12 @@ export default function NewCheeseScreen() {
           </View>
         </View>
         
-        <View style={styles.formContainer}>
-          <TouchableOpacity 
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.submitButtonText}>Add Cheese</Text>
-            )}
-          </TouchableOpacity>
-          
-          {Object.keys(formErrors).length > 0 && (
-            <View style={styles.errorContainer}>
-              {Object.values(formErrors).map((error, index) => (
-                <Text key={index} style={styles.errorText}>{error}</Text>
-              ))}
-            </View>
-          )}
-        </View>
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={handleSubmit}
+        >
+          <Text style={styles.submitButtonText}>Save Cheese</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
