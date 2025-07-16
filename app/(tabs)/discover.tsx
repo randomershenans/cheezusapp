@@ -212,50 +212,52 @@ export default function DiscoverScreen() {
   };
 
   /* ── render hero card ── */
-  const renderHeroCard = (item: DiscoverItem) => (
-    <TouchableOpacity key={item.id} style={styles.heroCard} onPress={() => handlePress(item)}>
-      <Image source={{ uri: item.image_url }} style={styles.heroImage} />
-      <View style={styles.heroOverlay}>
-        <View style={styles.heroContent}>
-          <View style={styles.heroMeta}>
-            <View style={styles.typeBadge}>
-              <Text style={styles.typeIcon}>{getItemIcon(item.type)}</Text>
-              <Text style={styles.typeBadgeText}>{item.type}</Text>
+  const renderHeroCard = (item: DiscoverItem) => {
+    return (
+      <TouchableOpacity key={item.id} style={styles.heroCard} onPress={() => handlePress(item)}>
+        <View style={[styles.heroImage, { backgroundColor: '#F8D775' }]} />
+        <View style={styles.heroOverlay}>
+          <View style={styles.heroContent}>
+            <View style={styles.heroMeta}>
+              <View style={styles.typeBadge}>
+                <Text style={styles.typeIcon}>{getItemIcon(item.type)}</Text>
+                <Text style={styles.typeBadgeText}>{item.type}</Text>
+              </View>
+              
+              {item.metadata?.reading_time && (
+                <View style={styles.timeBadge}>
+                  <Clock size={14} color={Colors.background} />
+                  <Text style={styles.timeBadgeText}>{item.metadata.reading_time} min</Text>
+                </View>
+              )}
+
+              {item.type === 'cheese' && (
+                <View style={styles.ratingBadge}>
+                  <Star size={14} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
+                </View>
+              )}
             </View>
 
-            {item.metadata?.reading_time && (
-              <View style={styles.timeBadge}>
-                <Clock size={14} color={Colors.background} />
-                <Text style={styles.timeBadgeText}>{item.metadata.reading_time} min</Text>
+            <Text style={styles.heroTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+
+            {item.metadata?.origin_country && (
+              <View style={styles.heroLocation}>
+                <MapPin size={16} color="rgba(255, 255, 255, 0.9)" />
+                <Text style={styles.heroLocationText}>{item.metadata.origin_country}</Text>
               </View>
             )}
 
-            {item.type === 'cheese' && (
-              <View style={styles.ratingBadge}>
-                <Star size={14} color="#FFD700" fill="#FFD700" />
-                <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
-              </View>
-            )}
+            <Text style={styles.heroDescription} numberOfLines={3}>
+              {item.description}
+            </Text>
           </View>
-
-          <Text style={styles.heroTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-
-          {item.metadata?.origin_country && (
-            <View style={styles.heroLocation}>
-              <MapPin size={16} color="rgba(255, 255, 255, 0.9)" />
-              <Text style={styles.heroLocationText}>{item.metadata.origin_country}</Text>
-            </View>
-          )}
-
-          <Text style={styles.heroDescription} numberOfLines={3}>
-            {item.description}
-          </Text>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  }
 
   /* ── UI ── */
   return (
