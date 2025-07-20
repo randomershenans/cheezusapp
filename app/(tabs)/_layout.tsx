@@ -92,7 +92,7 @@ export default function TabLayout() {
         onPress={() => router.push('/add-cheese')}
         activeOpacity={0.8}
       >
-        <Plus size={28} color="#FFF" />
+        <Plus size={28} color="#2C3E50" />
       </TouchableOpacity>
     </View>
   );
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     marginLeft: -28, // half of width (56 / 2)
     width: 56,
     height: 56,
-    backgroundColor: '#E67E22',
+    backgroundColor: '#FCD95B',
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',

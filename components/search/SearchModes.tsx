@@ -64,8 +64,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeModeButton: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: '#FCD95B',
+    borderColor: '#FCD95B',
   },
   modeText: {
     fontSize: Typography.sizes.sm,

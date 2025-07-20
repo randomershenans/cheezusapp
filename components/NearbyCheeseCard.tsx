@@ -49,7 +49,7 @@ export default function NearbyCheeseCard() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.iconContainer}>
-            <MapPin size={18} color={Colors.primary} />
+            <MapPin size={18} color="#FCD95B" />
           </View>
           <Text style={styles.headerText}>Cheese near you</Text>
         </View>
@@ -92,9 +92,9 @@ export default function NearbyCheeseCard() {
             <>
               <View style={styles.locationIcon}>
                 {locationStatus === 'requesting' ? (
-                  <Navigation size={28} color={Colors.primary} />
+                  <Navigation size={28} color="#FCD95B" />
                 ) : (
-                  <MapPin size={28} color={Colors.primary} />
+                  <MapPin size={28} color="#FCD95B" />
                 )}
               </View>
               <Text style={styles.enableText}>Discover cheese near you</Text>
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.spacing.s,
   },
   permissionButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     paddingVertical: Layout.spacing.m,
     paddingHorizontal: Layout.spacing.xl,
     borderRadius: Layout.borderRadius.large,
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
   },
   nearbyText: {
     fontSize: Typography.sizes.sm,

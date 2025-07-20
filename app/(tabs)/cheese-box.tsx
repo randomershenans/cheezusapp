@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Plus, Star, Trash2, CreditCard as Edit3, TrendingUp, Award, Heart } from 'lucide-react-native';
+import { Plus, Star, Trash2, Pen, TrendingUp, Award, Heart } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
@@ -181,7 +181,7 @@ export default function CheeseBoxScreen() {
           style={styles.addButton}
           onPress={() => router.push('/add-cheese')}
         >
-          <Plus size={20} color={Colors.background} />
+          <Plus size={20} color={Colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -279,7 +279,7 @@ export default function CheeseBoxScreen() {
                     style={styles.actionButton}
                     onPress={() => router.push(`/cheese/${entry.cheese.id}/edit`)}
                   >
-                    <Edit3 size={16} color={Colors.primary} />
+                    <Pen size={16} color={Colors.subtleText} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.deleteButton]}
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     width: 48,
     height: 48,
     borderRadius: 24,

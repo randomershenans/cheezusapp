@@ -138,7 +138,6 @@ export default function HomeScreen() {
           <View style={styles.cheeseContent}>
             <View style={styles.cheeseMeta}>
               <View style={styles.cheeseBadge}>
-                <ChefHat size={14} color={Colors.background} />
                 <Text style={styles.cheeseBadgeText}>{cheese.type}</Text>
               </View>
               <View style={styles.ratingBadge}>
@@ -362,7 +361,7 @@ const styles = StyleSheet.create({
   cheeseBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(230, 126, 34, 0.95)',
+    backgroundColor: '#FCD95B',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
     borderRadius: Layout.borderRadius.medium,

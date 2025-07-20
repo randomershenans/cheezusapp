@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Star, Heart, Calendar, MapPin, Info, Award, Edit3, Plus, X, Trash2, ArrowLeft, Share2, Clock, Users } from 'lucide-react-native';
 import { formatDistanceToNow } from 'date-fns';
-import Slider from '@react-native-community/slider';
+// Removed problematic slider import to fix findDOMNode error
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -208,24 +208,44 @@ export default function CheeseDetailScreen() {
     return (
       <View style={styles.decimalRatingContainer}>
         <View style={styles.starsDisplay}>
-          {renderStarsForDisplay(editRating)}
+          {renderInteractiveStars()}
         </View>
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={styles.ratingSlider}
-            minimumValue={0}
-            maximumValue={5}
-            step={0.1}
-            value={editRating}
-            minimumTrackTintColor={Colors.primary}
-            maximumTrackTintColor="#E0E0E0"
-            thumbTintColor={Colors.primary}
-            // Thumb styling is controlled via thumbTintColor
-            onValueChange={value => setEditRating(parseFloat(value.toFixed(1)))}
-          />
-        </View>
+        <Text style={styles.ratingHint}>Tap stars to rate</Text>
       </View>
     );
+  };
+
+  const renderInteractiveStars = () => {
+    return Array.from({ length: 5 }, (_, index) => {
+      const starValue = index + 1;
+      const isHalfFilled = editRating >= starValue - 0.5 && editRating < starValue;
+      const isFilled = editRating >= starValue;
+      
+      return (
+        <View key={index} style={styles.interactiveStarWrapper}>
+          <TouchableOpacity
+            style={styles.starTouchArea}
+            onPress={() => setEditRating(starValue)}
+            activeOpacity={0.7}
+          >
+            <Star
+              size={32}
+              color={isFilled || isHalfFilled ? '#FFD700' : '#E0E0E0'}
+              fill={isFilled ? '#FFD700' : (isHalfFilled ? '#FFD700' : 'none')}
+              strokeWidth={1.5}
+            />
+          </TouchableOpacity>
+          {/* Half star touch area */}
+          <TouchableOpacity
+            style={styles.halfStarTouchArea}
+            onPress={() => setEditRating(starValue - 0.5)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.halfStarOverlay} />
+          </TouchableOpacity>
+        </View>
+      );
+    });
   };
 
   const renderStars = (rating: number, interactive: boolean = false) => {
@@ -455,7 +475,7 @@ export default function CheeseDetailScreen() {
                   style={styles.editButton}
                   onPress={handleEditEntry}
                 >
-                  <Heart size={18} color={Colors.primary} fill={Colors.primary} strokeWidth={2} />
+                  <Heart size={18} color="#FCD95B" fill="#FCD95B" strokeWidth={2} />
                   <Text style={styles.editButtonText}>In your cheese box</Text>
                   <Edit3 size={16} color={Colors.subtleText} strokeWidth={1.5} />
                 </TouchableOpacity>
@@ -651,7 +671,7 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.m,
   },
   typeBadge: {
-    backgroundColor: 'rgba(230, 126, 34, 0.95)',
+    backgroundColor: '#FCD95B',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
     borderRadius: Layout.borderRadius.medium,
@@ -729,7 +749,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     paddingVertical: Layout.spacing.m,
     paddingHorizontal: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
@@ -1082,7 +1102,7 @@ const styles = StyleSheet.create({
   saveButton: {
     flex: 2,
     flexDirection: 'row',
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     paddingVertical: 14,
     borderRadius: Layout.borderRadius.large,
     alignItems: 'center',
@@ -1094,5 +1114,31 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
+  },
+  ratingHint: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginTop: Layout.spacing.s,
+  },
+  interactiveStarWrapper: {
+    position: 'relative',
+    marginHorizontal: 4,
+  },
+  starTouchArea: {
+    padding: 4,
+  },
+  halfStarTouchArea: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: '50%',
+    height: '100%',
+    zIndex: 1,
+  },
+  halfStarOverlay: {
+    width: '100%',
+    height: '100%',
   },
 });

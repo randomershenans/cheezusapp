@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Trophy } from 'lucide-react-native';
+import { TouchableOpacity } from 'react-native';
+import { Trophy, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
 import Typography from '@/constants/Typography';
@@ -128,14 +129,15 @@ export default function BadgeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
-      {/* Header with stats */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Badges</Text>
-          <Text style={styles.subtitle}>
-            Track your cheese journey achievements
-          </Text>
-        </View>
+      {/* Simple header with back button */}
+      <View style={styles.simpleHeader}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.pageTitle}>Badges</Text>
       </View>
       
       {/* Progress summary */}
@@ -210,6 +212,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  simpleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.m,
+    paddingTop: Layout.spacing.l,
+  },
+  backButton: {
+    padding: Layout.spacing.s,
+    marginRight: Layout.spacing.m,
+  },
+  pageTitle: {
+    fontFamily: Typography.fonts.headingMedium,
+    fontSize: Typography.sizes.xl,
+    color: Colors.text,
   },
   title: {
     fontFamily: Typography.fonts.heading,

@@ -271,10 +271,10 @@ export default function ProfileScreen() {
       <View style={styles.profileHeaderClean}>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerActionButton} onPress={() => setIsEditing(!isEditing)}>
-            <Pencil size={20} color={Colors.primary} />
+            <Pencil size={20} color="#666666" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerActionButton}>
-            <Settings size={20} color={Colors.text} />
+            <Settings size={20} color="#666666" />
           </TouchableOpacity>
         </View>
         <View style={styles.profileMainRow}>
@@ -675,14 +675,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     position: 'absolute',
-    top: 0,
+    top: 20,
     right: 0,
   },
   headerActionButton: {
     padding: 8,
     marginLeft: 12,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
   },
   profileAvatarContainer: {
     position: 'relative',
@@ -699,7 +698,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 5,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     borderRadius: 14,
     width: 28,
     height: 28,
@@ -1126,12 +1125,6 @@ const styles = StyleSheet.create({
     marginLeft: Layout.spacing.m,
     fontFamily: Typography.fonts.bodyMedium,
     fontSize: Typography.sizes.base,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Layout.spacing.m,
   },
   viewAllButton: {
     flexDirection: 'row',

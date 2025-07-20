@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontSize: Typography.sizes.base,
-    color: Colors.primary,
+    color: '#FCD95B',
     fontFamily: Typography.fonts.body,
   },
   messageContainer: {
