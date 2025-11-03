@@ -1,5 +1,13 @@
 # Cheezus App - Update Documentation
 
+## Discover Section Image Display Fix (November 3, 2025)
+
+### Fixed Tile Display Issues
+- Fixed discover section tiles showing blank colors instead of actual images
+- Replaced placeholder View component with proper Image component
+- Now discover section tiles display correctly like homepage/news feed tiles
+- Images now properly load from database image_url field
+
 ## Profile UI and Stats Enhancement (June 25, 2025)
 
 ### Modernized Profile Interface

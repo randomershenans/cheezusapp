@@ -215,7 +215,10 @@ export default function DiscoverScreen() {
   const renderHeroCard = (item: DiscoverItem) => {
     return (
       <TouchableOpacity key={item.id} style={styles.heroCard} onPress={() => handlePress(item)}>
-        <View style={[styles.heroImage, { backgroundColor: '#F8D775' }]} />
+        <Image 
+          source={{ uri: item.image_url }} 
+          style={styles.heroImage}
+        />
         <View style={styles.heroOverlay}>
           <View style={styles.heroContent}>
             <View style={styles.heroMeta}>
