@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, SafeAreaVi
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Clock, Bookmark, Share2 } from 'lucide-react-native';
+import Markdown from 'react-native-markdown-display';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
@@ -187,7 +188,9 @@ export default function CheezeEntryScreen() {
               )}
             </View>
           ) : (
-            <Text style={styles.content}>{entry.content}</Text>
+            <View>
+              <Markdown style={markdownStyles}>{entry.content || ''}</Markdown>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -391,3 +394,175 @@ const styles = StyleSheet.create({
     lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
   },
 });
+
+const markdownStyles = {
+  body: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: Typography.lineHeights.relaxed * Typography.sizes.base,
+  },
+  heading1: {
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.heading,
+    color: Colors.text,
+    marginTop: Layout.spacing.l,
+    marginBottom: Layout.spacing.m,
+    lineHeight: Typography.lineHeights.tight * Typography.sizes['2xl'],
+  },
+  heading2: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.headingMedium,
+    color: Colors.text,
+    marginTop: Layout.spacing.l,
+    marginBottom: Layout.spacing.m,
+    lineHeight: Typography.lineHeights.tight * Typography.sizes.xl,
+  },
+  heading3: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.headingMedium,
+    color: Colors.text,
+    marginTop: Layout.spacing.m,
+    marginBottom: Layout.spacing.s,
+    lineHeight: Typography.lineHeights.tight * Typography.sizes.lg,
+  },
+  heading4: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+    marginTop: Layout.spacing.m,
+    marginBottom: Layout.spacing.s,
+  },
+  heading5: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+    marginTop: Layout.spacing.s,
+    marginBottom: Layout.spacing.xs,
+  },
+  heading6: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.subtleText,
+    marginTop: Layout.spacing.s,
+    marginBottom: Layout.spacing.xs,
+  },
+  paragraph: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    marginBottom: Layout.spacing.m,
+    lineHeight: Typography.lineHeights.relaxed * Typography.sizes.base,
+  },
+  strong: {
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  em: {
+    fontFamily: Typography.fonts.body,
+    fontStyle: 'italic' as 'italic',
+    color: Colors.text,
+  },
+  link: {
+    color: Colors.primary,
+    textDecorationLine: 'underline' as 'underline',
+  },
+  blockquote: {
+    backgroundColor: '#F5F5F5',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    marginVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.small,
+  },
+  code_inline: {
+    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
+    backgroundColor: '#F5F5F5',
+    color: '#D73A49',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: Typography.sizes.sm,
+  },
+  code_block: {
+    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
+    backgroundColor: '#1A1A1A',
+    color: '#F8F8F2',
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+    marginVertical: Layout.spacing.m,
+    fontSize: Typography.sizes.sm,
+  },
+  fence: {
+    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
+    backgroundColor: '#1A1A1A',
+    color: '#F8F8F2',
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+    marginVertical: Layout.spacing.m,
+    fontSize: Typography.sizes.sm,
+  },
+  bullet_list: {
+    marginVertical: Layout.spacing.s,
+  },
+  ordered_list: {
+    marginVertical: Layout.spacing.s,
+  },
+  list_item: {
+    marginBottom: Layout.spacing.xs,
+  },
+  bullet_list_icon: {
+    fontSize: Typography.sizes.base,
+    lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
+    marginRight: Layout.spacing.s,
+    color: Colors.primary,
+  },
+  bullet_list_content: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
+  },
+  ordered_list_icon: {
+    fontSize: Typography.sizes.base,
+    lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
+    marginRight: Layout.spacing.s,
+    color: Colors.text,
+    fontFamily: Typography.fonts.bodyMedium,
+  },
+  ordered_list_content: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: Typography.lineHeights.normal * Typography.sizes.base,
+  },
+  hr: {
+    backgroundColor: '#E0E0E0',
+    height: 1,
+    marginVertical: Layout.spacing.l,
+  },
+  table: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: Layout.borderRadius.small,
+    marginVertical: Layout.spacing.m,
+  },
+  thead: {
+    backgroundColor: '#F5F5F5',
+  },
+  tbody: {},
+  th: {
+    padding: Layout.spacing.s,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  tr: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  td: {
+    padding: Layout.spacing.s,
+  },
+};
