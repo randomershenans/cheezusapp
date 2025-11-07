@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Plus, Star, Trash2, Pen, TrendingUp, Award, Heart } from 'lucide-react-native';
+import { Plus, Star, Trash2, Pen, TrendingUp, Award, Heart, BarChart3 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
@@ -210,6 +210,21 @@ export default function CheeseBoxScreen() {
           </View>
         </View>
 
+        {entries.length > 0 && (
+          <TouchableOpacity
+            style={styles.analyticsButton}
+            onPress={() => router.push('/analytics')}
+          >
+            <View style={styles.analyticsButtonContent}>
+              <BarChart3 size={20} color={Colors.primary} />
+              <Text style={styles.analyticsButtonText}>Elite Analytics</Text>
+            </View>
+            <Text style={styles.analyticsButtonSubtext}>
+              Deep dive into your cheese stats
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {loading ? (
           <View style={styles.loadingContainer}>
             <View style={styles.loadingSpinner} />
@@ -370,6 +385,32 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
     textAlign: 'center',
+  },
+  analyticsButton: {
+    marginHorizontal: Layout.spacing.m,
+    marginBottom: Layout.spacing.l,
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.large,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    padding: Layout.spacing.m,
+    ...Layout.shadow.small,
+  },
+  analyticsButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+    marginBottom: 4,
+  },
+  analyticsButtonText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  analyticsButtonSubtext: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
   },
   authPrompt: {
     flex: 1,
