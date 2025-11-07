@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, SafeAreaView, Platform, Share, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Clock, Bookmark, Share2 } from 'lucide-react-native';
@@ -53,6 +53,29 @@ export default function CheezeEntryScreen() {
       console.error('Error fetching entry:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!entry) return;
+
+    try {
+      const result = await Share.share({
+        message: `Check out this ${entry.content_type}: ${entry.title}\n\n${entry.description}`,
+        title: entry.title,
+      });
+
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // Shared with activity type of result.activityType
+        } else {
+          // Shared successfully
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // Dismissed
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
     }
   };
 
@@ -113,7 +136,7 @@ export default function CheezeEntryScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={() => {/* Handle share */}}
+              onPress={handleShare}
             >
               <Share2 size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -124,7 +147,7 @@ export default function CheezeEntryScreen() {
           <View style={styles.metaContainer}>
             <View style={styles.typeBadge}>
               <Text style={styles.typeBadgeText}>
-                {entry.content_type.charAt(0).toUpperCase() + entry.content_type.slice(1)}
+                {entry.content_type.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
               </Text>
             </View>
             
