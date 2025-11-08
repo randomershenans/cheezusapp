@@ -1,16 +1,16 @@
-import React from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, Platform, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, Platform, TextInput, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import ProfilePictureUpload from '../../components/ProfilePictureUpload';
 import { useRouter } from 'expo-router';
-import { User, ChevronRight, Heart, BookOpen, ChefHat, Settings, LogOut, Award, Star, Crown, Pencil, Trophy } from 'lucide-react-native';
-import { useState, useEffect } from 'react';
+import { User, ChevronRight, Settings, Pencil, Trophy, Award, Star, Sparkles, Target } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { Session } from '@supabase/supabase-js';
+import ProfilePictureUpload from '../../components/ProfilePictureUpload';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 type Badge = {
   id: string;
@@ -36,32 +36,37 @@ type Profile = {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  
-  const navigateToSignup = () => {
-    router.push('/auth/signup');
-  };
-  
   const { user, signOut } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
   
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedLocation, setEditedLocation] = useState('');
   const [editedTagline, setEditedTagline] = useState('');
+  
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [stats, setStats] = useState({
+    cheesesTried: 0,
+    reviews: 0,
+    badgesEarned: 0,
+  });
+  const [savedCounts, setSavedCounts] = useState({
+    articles: 0,
+    recipes: 0,
+    pairings: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  // Handle successful profile picture upload
-  const handleProfilePictureSuccess = (avatarUrl: string) => {
-    if (profile) {
-      setProfile({
-        ...profile,
-        avatar_url: avatarUrl
-      });
-    }
-    setShowUploadModal(false);
-  };
+  useEffect(() => {
+    if (!user) return;
+    fetchProfile();
+    fetchStats();
+    fetchBadges();
+    fetchSavedCounts();
+    fetchRecentActivity();
+  }, [user]);
 
   useEffect(() => {
     if (isEditing && profile) {
@@ -69,194 +74,207 @@ export default function ProfileScreen() {
       setEditedLocation(profile.location || '');
       setEditedTagline(profile.tagline || '');
     }
-  }, [isEditing, profile]);
+  }, [isEditing]);
 
-  const [badges, setBadges] = useState<Badge[]>([]);
-  const [stats, setStats] = useState({
-    cheesesTried: 0,
-    reviews: 0,
-    following: 0,
-    badgesEarned: 0
-  });
-
-  useEffect(() => {
+  const fetchProfile = async () => {
     if (!user) return;
-    const fetchProfile = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      if (data) {
-        setProfile(data);
-        setEditedName(data.name || '');
-        setEditedTagline(data.tagline || '');
-        setEditedLocation(data.location || '');
-      }
-      setLoading(false);
-    };
-    fetchProfile();
-  }, [user]);
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    if (data) setProfile(data);
+    setLoading(false);
+  };
 
-  useEffect(() => {
-    if (!user) return;
-    const fetchBadges = async () => {
-      try {
-        const { data: userBadges, error: badgesError } = await supabase
-          .from('user_badges')
-          .select('*')
-          .eq('user_id', user.id);
-        if (badgesError) throw badgesError;
-
-        const { data, error } = await supabase
-          .rpc('get_user_badges_with_progress', { user_id: user.id });
-        if (error) throw error;
-
-        if (data && Array.isArray(data)) {
-          const sortedBadges = data.sort((a, b) => {
-            if (a.completed && !b.completed) return -1;
-            if (!a.completed && b.completed) return 1;
-            return (b.progress / b.threshold) - (a.progress / a.threshold);
-          });
-          setBadges(sortedBadges.slice(0, 5));
-        } else {
-          setBadges([]);
-        }
-      } catch (error) {
-        console.error('Error fetching badges:', error);
-        setBadges([]);
-      }
-    };
-    fetchBadges();
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchStats = async () => {
-      try {
-        const { data: cheeseBoxData, count: cheesesCount, error: cheesesError } = await supabase
-          .from('cheese_box_entries')
-          .select('*', { count: 'exact' })
-          .eq('user_id', user.id);
-        if (cheesesError) throw cheesesError;
-
-        const { count: reviewsCount, error: reviewsError } = await supabase
-          .from('cheese_box_entries')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .not('notes', 'is', null);
-        if (reviewsError) throw reviewsError;
-
-        const followingCount = 0; // placeholder
-
-        const { data: badgesData, count: badgesCount, error: badgesError } = await supabase
-          .from('user_badges')
-          .select('*', { count: 'exact' })
-          .eq('user_id', user.id)
-          .eq('completed', true);
-        if (badgesError) throw badgesError;
-
-        const actualCheesesCount = cheesesCount ?? (cheeseBoxData?.length ?? 0);
-        const actualBadgesCount = badgesCount ?? (badgesData?.length ?? 0);
-
-        setStats({
-          cheesesTried: actualCheesesCount,
-          reviews: reviewsCount ?? 0,
-          following: followingCount,
-          badgesEarned: actualBadgesCount
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-        setStats({
-          cheesesTried: 0,
-          reviews: 0,
-          following: 0,
-          badgesEarned: 0
-        });
-      }
-    };
-    fetchStats();
-  }, [user]);
-
-  const handleSaveProfile = async () => {
+  const fetchStats = async () => {
     if (!user) return;
     try {
-      setIsEditing(false);
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          name: editedName || profile?.name,
-          tagline: editedTagline || profile?.tagline,
-          location: editedLocation || profile?.location,
-        })
-        .eq('id', user.id);
-      if (error) throw error;
-      setProfile({
-        ...profile,
-        name: editedName || profile?.name,
-        tagline: editedTagline || profile?.tagline,
-        location: editedLocation || profile?.location,
-      } as Profile);
+      const { count: cheesesCount } = await supabase
+        .from('cheese_box_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      const { count: reviewsCount } = await supabase
+        .from('cheese_box_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .not('notes', 'is', null);
+
+      const { count: badgesCount } = await supabase
+        .from('user_badges')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('completed', true);
+
+      setStats({
+        cheesesTried: cheesesCount ?? 0,
+        reviews: reviewsCount ?? 0,
+        badgesEarned: badgesCount ?? 0,
+      });
     } catch (error) {
-      console.error('Error updating profile:', error);
-      alert('Error updating profile. Please try again.');
+      console.error('Error fetching stats:', error);
     }
   };
 
+  const fetchBadges = async () => {
+    if (!user) return;
+    try {
+      const { data } = await supabase
+        .rpc('get_user_badges_with_progress', { user_id: user.id });
+
+      if (data && Array.isArray(data)) {
+        const sortedBadges = data.sort((a, b) => {
+          if (a.completed && !b.completed) return -1;
+          if (!a.completed && b.completed) return 1;
+          return (b.progress / b.threshold) - (a.progress / a.threshold);
+        });
+        setBadges(sortedBadges.slice(0, 4));
+      }
+    } catch (error) {
+      console.error('Error fetching badges:', error);
+    }
+  };
+
+  const fetchSavedCounts = async () => {
+    if (!user) return;
+    try {
+      const { count: articlesCount } = await supabase
+        .from('saved_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('item_type', 'article');
+
+      const { count: recipesCount } = await supabase
+        .from('saved_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('item_type', 'recipe');
+
+      const { count: pairingsCount } = await supabase
+        .from('saved_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('item_type', 'pairing');
+
+      setSavedCounts({
+        articles: articlesCount ?? 0,
+        recipes: recipesCount ?? 0,
+        pairings: pairingsCount ?? 0,
+      });
+    } catch (error) {
+      console.error('Error fetching saved counts:', error);
+    }
+  };
+
+  const fetchRecentActivity = async () => {
+    if (!user) return;
+    try {
+      const { data } = await supabase
+        .from('cheese_box_entries')
+        .select(`
+          id,
+          created_at,
+          rating,
+          notes,
+          cheese:cheeses(name, type)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (data) {
+        setRecentActivity(data);
+      }
+    } catch (error) {
+      console.error('Error fetching recent activity:', error);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user || !profile) return;
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name: editedName || null,
+          tagline: editedTagline || null,
+          location: editedLocation || null,
+        })
+        .eq('id', user.id);
+
+      if (!error) {
+        setProfile({
+          ...profile,
+          name: editedName || null,
+          tagline: editedTagline || null,
+          location: editedLocation || null,
+        });
+        setIsEditing(false);
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+    }
+  };
+
+  const handleProfilePictureSuccess = (avatarUrl: string) => {
+    if (profile) {
+      setProfile({ ...profile, avatar_url: avatarUrl });
+    }
+    setShowUploadModal(false);
+  };
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Not logged in view
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView style={styles.content}>
-          <View style={styles.heroSection}>
-            <View style={styles.avatarPlaceholder}>
-              <User size={40} color={Colors.subtleText} />
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          <View style={styles.loginHero}>
+            <View style={styles.loginIconContainer}>
+              <User size={48} color={Colors.primary} />
             </View>
-            <Text style={styles.welcomeTitle}>Welcome to Cheezus</Text>
-            <Text style={styles.welcomeText}>
-              Join our community of cheese enthusiasts to track your tastings, share recommendations, and discover new cheeses.
+            <Text style={styles.loginTitle}>Join Cheezus</Text>
+            <Text style={styles.loginSubtitle}>
+              Track your cheese journey, earn badges, and discover new favorites
             </Text>
           </View>
-          <View style={styles.featuresSection}>
-            <Text style={styles.featuresTitle}>What you're missing out on</Text>
-            <View style={styles.featuresList}>
-              <View style={styles.featureItem}>
-                <View style={[styles.featureIcon, { backgroundColor: '#FFF0DB' }]}>
-                  <ChefHat size={24} color={Colors.primary} />
+
+          <View style={styles.loginFeatures}>
+            {[
+              { icon: '🧀', title: 'Personal Cheese Box', desc: 'Track & rate every cheese' },
+              { icon: '🏆', title: 'Earn Achievements', desc: 'Unlock badges & rewards' },
+              { icon: '📚', title: 'Learn & Discover', desc: 'Expert pairings & guides' },
+            ].map((feature, index) => (
+              <View key={index} style={styles.loginFeatureCard}>
+                <Text style={styles.loginFeatureIcon}>{feature.icon}</Text>
+                <View style={styles.loginFeatureText}>
+                  <Text style={styles.loginFeatureTitle}>{feature.title}</Text>
+                  <Text style={styles.loginFeatureDesc}>{feature.desc}</Text>
                 </View>
-                <View style={styles.featureContent}>
-                  <Text style={styles.featureTitle}>Personal Cheese Box</Text>
-                  <Text style={styles.featureDescription}>Track and rate your cheese tastings</Text>
-                </View>
-                <ChevronRight size={20} color={Colors.subtleText} />
               </View>
-              <View style={styles.featureItem}>
-                <View style={[styles.featureIcon, { backgroundColor: '#E8F4FF' }]}>
-                  <BookOpen size={24} color="#0066CC" />
-                </View>
-                <View style={styles.featureContent}>
-                  <Text style={styles.featureTitle}>Save Articles</Text>
-                  <Text style={styles.featureDescription}>Build your cheese knowledge</Text>
-                </View>
-                <ChevronRight size={20} color={Colors.subtleText} />
-              </View>
-              <View style={styles.featureItem}>
-                <View style={[styles.featureIcon, { backgroundColor: '#FFE8EC' }]}>
-                  <Heart size={24} color="#FF4D6A" />
-                </View>
-                <View style={styles.featureContent}>
-                  <Text style={styles.featureTitle}>Favorite Recipes</Text>
-                  <Text style={styles.featureDescription}>Save recipes for later</Text>
-                </View>
-                <ChevronRight size={20} color={Colors.subtleText} />
-              </View>
-            </View>
+            ))}
           </View>
-          <View style={styles.actionSection}>
-            <TouchableOpacity style={styles.signupButton} onPress={navigateToSignup}>
-              <Text style={styles.signupButtonText}>Create Account</Text>
+
+          <View style={styles.loginActions}>
+            <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/auth/signup')}>
+              <Text style={styles.loginButtonText}>Create Account</Text>
             </TouchableOpacity>
-            <TouchableOpacity>
-              <Text>Login</Text>
+            <TouchableOpacity style={styles.loginButtonSecondary} onPress={() => router.push('/auth/login')}>
+              <Text style={styles.loginButtonSecondaryText}>Sign In</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -264,185 +282,349 @@ export default function ProfileScreen() {
     );
   }
 
-  // Logged-in profile view
+  // Logged in view
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      <View style={styles.profileHeaderClean}>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerActionButton} onPress={() => setIsEditing(!isEditing)}>
-            <Pencil size={20} color="#666666" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerActionButton}>
-            <Settings size={20} color="#666666" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.profileMainRow}>
-          <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: profile?.avatar_url || 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg' }}
-              style={styles.profileImage}
-            />
-            <TouchableOpacity style={styles.avatarEditButton} onPress={() => setShowUploadModal(true)}>
-              <Pencil size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            {profile?.premium && (
-              <View style={styles.premiumIndicator}>
-                <Crown size={14} color={Colors.primary} />
-              </View>
-            )}
-          </View>
-          {isEditing ? (
-            <View style={styles.editProfileContainer}>
-              <TextInput
-                style={styles.editNameInput}
-                value={editedName}
-                onChangeText={setEditedName}
-                placeholder="Your name"
-              />
-              <TextInput
-                style={styles.editLocationInput}
-                value={editedLocation}
-                onChangeText={setEditedLocation}
-                placeholder="Your location"
-              />
-              <TextInput
-                style={styles.editTaglineInput}
-                value={editedTagline}
-                onChangeText={setEditedTagline}
-                placeholder="Your tagline"
-                multiline
-              />
-              <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.actionCancelButton} onPress={() => setIsEditing(false)}>
-                  <Text style={styles.actionCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionSaveButton} onPress={handleSaveProfile}>
-                  <Text style={styles.actionSaveText}>Save</Text>
-                </TouchableOpacity>
-              </View>
+      
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity 
+                style={styles.avatarWrapper}
+                onPress={() => setShowUploadModal(true)}
+              >
+                <Image
+                  source={{ uri: profile?.avatar_url || 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg' }}
+                  style={styles.avatar}
+                />
+                <View style={styles.avatarEditBadge}>
+                  <Pencil size={12} color={Colors.background} />
+                </View>
+              </TouchableOpacity>
+              
+              {isEditing ? (
+                <View style={styles.profileEditForm}>
+                  <TextInput
+                    style={styles.editInput}
+                    value={editedName}
+                    onChangeText={setEditedName}
+                    placeholder="Your name"
+                    placeholderTextColor={Colors.subtleText}
+                  />
+                  <TextInput
+                    style={[styles.editInput, styles.editInputSmall]}
+                    value={editedLocation}
+                    onChangeText={setEditedLocation}
+                    placeholder="Location"
+                    placeholderTextColor={Colors.subtleText}
+                  />
+                  <TextInput
+                    style={[styles.editInput, styles.editInputMulti]}
+                    value={editedTagline}
+                    onChangeText={setEditedTagline}
+                    placeholder="Tell us about your cheese journey..."
+                    placeholderTextColor={Colors.subtleText}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </View>
+              ) : (
+                <View style={styles.profileInfo}>
+                  <Text style={styles.profileName}>{profile?.name || 'Cheese Lover'}</Text>
+                  {profile?.location && (
+                    <Text style={styles.profileLocation}>📍 {profile.location}</Text>
+                  )}
+                  {profile?.tagline && (
+                    <Text style={styles.profileTagline}>{profile.tagline}</Text>
+                  )}
+                </View>
+              )}
             </View>
-          ) : (
-            <View style={styles.profileInfoBox}>
-              <Text style={styles.profileName}>{profile?.name || 'Add your name'}</Text>
-              <Text style={styles.profileLocation}>{profile?.location || 'Alsace, France'}</Text>
-              <Text style={styles.profileBio}>{profile?.tagline || 'Cheese enthusiast'}</Text>
+
+            <View style={styles.headerActions}>
+              {isEditing ? (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.iconButton, styles.cancelButton]}
+                    onPress={() => setIsEditing(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.iconButton, styles.saveButton]}
+                    onPress={handleSaveProfile}
+                  >
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={styles.iconButton}
+                    onPress={() => setIsEditing(true)}
+                  >
+                    <Pencil size={20} color={Colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.iconButton}>
+                    <Settings size={20} color={Colors.text} />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.statsCardContainer}>
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{safeNumber(stats.cheesesTried)}</Text>
-            <Text style={styles.statLabel}>Cheeses Tried</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{safeNumber(stats.badgesEarned)}</Text>
-            <Text style={styles.statLabel}>Badges Earned</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{safeNumber(stats.following)}</Text>
-            <Text style={styles.statLabel}>Following</Text>
           </View>
         </View>
-      </View>
 
-      <ScrollView style={styles.profileContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.badgesSection}>
-          <View style={styles.achievementHeader}>
-            <Text style={styles.achievementTitle}>Achievements</Text>
-            <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/badges')}>
+        {/* Stats Cards */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.cheesesTried}</Text>
+            <Text style={styles.statLabel}>Cheeses</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.reviews}</Text>
+            <Text style={styles.statLabel}>Reviews</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.badgesEarned}</Text>
+            <Text style={styles.statLabel}>Badges</Text>
+          </View>
+        </View>
+
+        {/* Achievements Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => router.push('/badges')}
+            >
               <Text style={styles.viewAllText}>View All</Text>
               <ChevronRight size={16} color={Colors.primary} />
             </TouchableOpacity>
           </View>
+
           {badges.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgesContainer}>
+            <View style={styles.badgesGrid}>
               {badges.map((badge) => {
-                const percentComplete = Math.min(100, (badge.progress / badge.threshold) * 100);
-                let badgeColor = badge.completed ? '#FFF8D6' : '#FFF7E6';
-                switch (badge.category) {
-                  case 'quantity': badgeColor = '#FFF0E6'; break;
-                  case 'specialty': badgeColor = '#F0E6FF'; break;
-                  case 'type': badgeColor = '#E8FFFD'; break;
-                  case 'origin': badgeColor = '#E8F4FF'; break;
-                  case 'pairing': badgeColor = '#E8F8F0'; break;
-                  case 'engagement': badgeColor = '#F0E6FF'; break;
-                }
+                const progress = Math.min(100, (badge.progress / badge.threshold) * 100);
+                const categoryColors = {
+                  quantity: ['#FFE5E5', '#FF6B6B'],
+                  specialty: ['#F0E5FF', '#9B59B6'],
+                  type: ['#E5F9FF', '#3498DB'],
+                  origin: ['#FFF5E5', '#F39C12'],
+                  pairing: ['#E5FFE9', '#27AE60'],
+                  engagement: ['#FFE5F5', '#E91E63'],
+                };
+                const [bgColor, accentColor] = categoryColors[badge.category as keyof typeof categoryColors] || ['#F5F5F5', '#666'];
+
                 return (
-                  <TouchableOpacity key={badge.id} style={[styles.badgeCard, { backgroundColor: badgeColor }]} onPress={() => router.push('/badges')}>
-                    <View style={styles.badgeIcon}>
-                      <Text style={styles.badgeEmoji}>{badge.icon || '🏆'}</Text>
-                    </View>
-                    <Text style={styles.badgeName}>{badge.name}</Text>
-                    <Text style={styles.badgeDescription}>{badge.description}</Text>
-                    <View style={styles.badgeProgressContainer}>
-                      <View style={styles.badgeProgressBar}>
-                        <View style={[styles.badgeProgressFill, { width: `${percentComplete}%`, backgroundColor: badge.completed ? '#FFD700' : '#3B82F6' }]} />
+                  <TouchableOpacity 
+                    key={badge.id} 
+                    style={[styles.badgeCard, { backgroundColor: bgColor }]}
+                    onPress={() => router.push('/badges')}
+                  >
+                    <View style={styles.badgeTop}>
+                      <View style={[styles.badgeIconCircle, { backgroundColor: accentColor }]}>
+                        <Text style={styles.badgeEmoji}>{badge.icon || '🏆'}</Text>
                       </View>
-                      <Text style={styles.badgeProgressText}>{badge.progress}/{badge.threshold}</Text>
+                      {badge.completed && (
+                        <View style={styles.completedBadge}>
+                          <Sparkles size={12} color="#FFD700" fill="#FFD700" />
+                        </View>
+                      )}
                     </View>
+                    <Text style={styles.badgeName} numberOfLines={1}>{badge.name}</Text>
+                    <Text style={styles.badgeDesc} numberOfLines={2}>{badge.description}</Text>
+                    
+                    {!badge.completed && (
+                      <View style={styles.badgeProgress}>
+                        <View style={styles.progressBar}>
+                          <View 
+                            style={[styles.progressFill, { 
+                              width: `${progress}%`,
+                              backgroundColor: accentColor 
+                            }]} 
+                          />
+                        </View>
+                        <Text style={styles.progressText}>
+                          {badge.progress}/{badge.threshold}
+                        </Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </View>
           ) : (
-            <View style={styles.emptyBadges}>
-              <Trophy size={40} color={Colors.subtleText} />
-              <Text style={styles.emptyBadgesText}>Start your cheese journey to earn badges!</Text>
+            <View style={styles.emptyState}>
+              <Trophy size={48} color={Colors.subtleText} />
+              <Text style={styles.emptyStateText}>Start tasting to unlock badges!</Text>
             </View>
           )}
         </View>
 
-        {/* Leaderboard Section */}
+        {/* Saved Collection */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Leaderboard</Text>
+            <Text style={styles.sectionTitle}>Saved Collection</Text>
             <TouchableOpacity style={styles.viewAllButton}>
               <Text style={styles.viewAllText}>View All</Text>
               <ChevronRight size={16} color={Colors.primary} />
             </TouchableOpacity>
           </View>
-          <View style={[styles.card, { width: '100%' }]}>
-            <View style={styles.achievementHeader}>
-              <Trophy size={16} color={Colors.accent} />
-              <Text style={styles.achievementTitle}>You're in the top 10 French cheese tasters!</Text>
+          
+          <View style={styles.collectionGrid}>
+            <View style={styles.collectionCard}>
+              <View style={[styles.collectionIcon, { backgroundColor: '#FFF5E5' }]}>
+                <Text style={styles.collectionEmoji}>📚</Text>
+              </View>
+              <Text style={styles.collectionNumber}>{savedCounts.articles}</Text>
+              <Text style={styles.collectionLabel}>Articles</Text>
             </View>
-            {/* ... leaderboard rows ... */}
+            <View style={styles.collectionCard}>
+              <View style={[styles.collectionIcon, { backgroundColor: '#FFE5F5' }]}>
+                <Text style={styles.collectionEmoji}>🍽️</Text>
+              </View>
+              <Text style={styles.collectionNumber}>{savedCounts.recipes}</Text>
+              <Text style={styles.collectionLabel}>Recipes</Text>
+            </View>
+            <View style={styles.collectionCard}>
+              <View style={[styles.collectionIcon, { backgroundColor: '#E5F9FF' }]}>
+                <Text style={styles.collectionEmoji}>🍷</Text>
+              </View>
+              <Text style={styles.collectionNumber}>{savedCounts.pairings}</Text>
+              <Text style={styles.collectionLabel}>Pairings</Text>
+            </View>
           </View>
-          <View style={[styles.card, { width: '100%' }]}>
-            <Text style={styles.achievementTitle}>Most Cheeses Logged This Month</Text>
-            {/* ... monthly leaderboard ... */}
+          <Text style={styles.collectionHint}>
+            💡 Tap the bookmark icon on articles and recipes to save them here
+          </Text>
+        </View>
+
+        {/* Recent Activity */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => router.push('/(tabs)/cheese-box')}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <ChevronRight size={16} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          {recentActivity.length > 0 ? (
+            <View style={styles.activityList}>
+              {recentActivity.map((activity, index) => {
+                const cheese = activity.cheese as any;
+                const date = new Date(activity.created_at);
+                const timeAgo = formatTimeAgo(date);
+                
+                return (
+                  <View key={activity.id} style={styles.activityItem}>
+                    <View style={styles.activityIconCircle}>
+                      <Text style={styles.activityEmoji}>🧀</Text>
+                    </View>
+                    <View style={styles.activityContent}>
+                      <Text style={styles.activityTitle}>
+                        Tried {cheese?.name || 'a cheese'}
+                      </Text>
+                      <Text style={styles.activityDate}>
+                        {activity.rating ? `⭐ ${activity.rating}/5 • ` : ''}{timeAgo}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+              {stats.badgesEarned > 0 && (
+                <View style={styles.activityItem}>
+                  <View style={styles.activityIconCircle}>
+                    <Text style={styles.activityEmoji}>🏆</Text>
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>Achievement unlocked!</Text>
+                    <Text style={styles.activityDate}>
+                      {stats.badgesEarned} {stats.badgesEarned === 1 ? 'badge' : 'badges'} earned
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>Start tasting to see your activity!</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Settings & Account */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Settings & Account</Text>
+          
+          <View style={styles.settingsList}>
+            <TouchableOpacity 
+              style={styles.settingsItem}
+              onPress={() => router.push('/settings/account')}
+            >
+              <View style={styles.settingsLeft}>
+                <View style={[styles.settingsIcon, { backgroundColor: '#E5F9FF' }]}>
+                  <User size={20} color="#3498DB" />
+                </View>
+                <Text style={styles.settingsText}>Account Details</Text>
+              </View>
+              <ChevronRight size={20} color={Colors.subtleText} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingsItem}>
+              <View style={styles.settingsLeft}>
+                <View style={[styles.settingsIcon, { backgroundColor: '#FFF5E5' }]}>
+                  <Settings size={20} color="#F39C12" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsText}>Preferences</Text>
+                  <Text style={styles.settingsSubtext}>Coming Soon</Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color={Colors.subtleText} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingsItem}>
+              <View style={styles.settingsLeft}>
+                <View style={[styles.settingsIcon, { backgroundColor: '#FFE5E5' }]}>
+                  <Text style={styles.settingsEmoji}>🔒</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsText}>Privacy & Security</Text>
+                  <Text style={styles.settingsSubtext}>Coming Soon</Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color={Colors.subtleText} />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.settingsItem, styles.settingsItemLast]}
+              onPress={signOut}
+            >
+              <View style={styles.settingsLeft}>
+                <View style={[styles.settingsIcon, { backgroundColor: '#FFF0F0' }]}>
+                  <Text style={styles.settingsEmoji}>👋</Text>
+                </View>
+                <Text style={[styles.settingsText, { color: Colors.error }]}>Sign Out</Text>
+              </View>
+              <ChevronRight size={20} color={Colors.error} />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Refer-a-Friend Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Refer Friends & Earn Rewards</Text>
-          <View style={[styles.card, { width: '100%' }]}>
-            <View style={styles.referralBadgeContainer}>
-              <Text style={styles.referralBadgeEmoji}>🎁</Text>
-            </View>
-            <Text style={styles.achievementTitle}>Share your love for cheese!</Text>
-            <Text style={styles.referralDescription}>
-              When friends sign up with your code and log their first cheese, you'll both earn the exclusive 'Cheese Connector' badge.
-            </Text>
-            <View style={styles.referralCodeContainer}>
-              <Text style={styles.referralCode}>CHEEZ-{user.id.substring(0, 6).toUpperCase()}</Text>
-              <TouchableOpacity style={styles.copyButton}>
-                <Text style={styles.copyButtonText}>Copy</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={styles.shareButton}>
-              <Text style={styles.shareButtonText}>Share Your Invite Link</Text>
-            </TouchableOpacity>
-            <Text style={styles.referralProgress}>🧀 3 friends joined • 2 more for special badge set!</Text>
-          </View>
-        </View>
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       <ProfilePictureUpload
@@ -455,185 +637,247 @@ export default function ProfileScreen() {
   );
 }
 
-// Helper to avoid NaN
-const safeNumber = (value: number | null | undefined): number => {
-  return typeof value === 'number' && !isNaN(value) ? value : 0;
-};
-
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? 30 : 0,
+    backgroundColor: Colors.background,
   },
   content: {
     flex: 1,
   },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingTop: 15,
-    paddingRight: 10,
-    zIndex: 0,
+  contentContainer: {
+    flexGrow: 1,
   },
-  heroSection: {
-    padding: Layout.spacing.xl,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: Layout.spacing.xl,
+  },
+
+  // Login View
+  loginHero: {
+    paddingHorizontal: Layout.spacing.xl,
+    paddingTop: Layout.spacing['2xl'],
+    paddingBottom: Layout.spacing.xl,
     alignItems: 'center',
-    zIndex: 0,
   },
-  welcomeAvatarContainer: {
-    marginBottom: Layout.spacing.l,
-    alignItems: 'center',
-  },
-  avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F5F5F5',
+  loginIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FFF8E7',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-    }),
+    marginBottom: Layout.spacing.l,
   },
-  welcomeTitle: {
+  loginTitle: {
     fontSize: Typography.sizes['3xl'],
-    fontFamily: Typography.fonts.heading,
+    fontFamily: Typography.fonts.bodyBold,
     color: Colors.text,
-    marginBottom: Layout.spacing.m,
-    textAlign: 'center',
-    letterSpacing: Typography.letterSpacing.tight,
+    marginBottom: Layout.spacing.s,
   },
-  welcomeText: {
+  loginSubtitle: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     textAlign: 'center',
-    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
+    lineHeight: 24,
   },
-  featuresSection: {
-    padding: Layout.spacing.xl,
-    backgroundColor: '#F9F9F9',
-  },
-  featuresTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.headingMedium,
-    color: Colors.text,
-    marginBottom: Layout.spacing.l,
-  },
-  featuresList: {
+  loginFeatures: {
+    paddingHorizontal: Layout.spacing.l,
     gap: Layout.spacing.m,
+    marginBottom: Layout.spacing.xl,
   },
-  featureItem: {
+  loginFeatureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    padding: Layout.spacing.m,
-    borderRadius: Layout.borderRadius.medium,
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
-      },
-      default: {
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-    }),
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.l,
+    borderRadius: Layout.borderRadius.large,
+    ...Layout.shadow.small,
   },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+  loginFeatureIcon: {
+    fontSize: 32,
     marginRight: Layout.spacing.m,
   },
-  featureContent: {
+  loginFeatureText: {
     flex: 1,
   },
-  featureTitle: {
+  loginFeatureTitle: {
     fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: 2,
   },
-  featureDescription: {
+  loginFeatureDesc: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
   },
-  actionSection: {
-    padding: Layout.spacing.xl,
+  loginActions: {
+    paddingHorizontal: Layout.spacing.xl,
+    gap: Layout.spacing.m,
   },
   loginButton: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: Colors.primary,
     paddingVertical: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
-    marginBottom: Layout.spacing.m,
+    alignItems: 'center',
+    ...Layout.shadow.medium,
   },
   loginButtonText: {
-    color: Colors.text,
-    fontSize: Typography.sizes.base,
+    fontSize: Typography.sizes.lg,
     fontFamily: Typography.fonts.bodySemiBold,
-    textAlign: 'center',
+    color: Colors.background,
   },
-  signupButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Layout.borderRadius.large,
+  loginButtonSecondary: {
+    backgroundColor: Colors.card,
     paddingVertical: Layout.spacing.m,
-    marginBottom: Layout.spacing.m,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
+    borderRadius: Layout.borderRadius.large,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  signupButtonText: {
-    color: Colors.text,
+  loginButtonSecondaryText: {
     fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    textAlign: 'center',
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
   },
-  profileContent: {
-    flex: 1,
+
+  // Profile Header
+  profileHeader: {
+    paddingHorizontal: Layout.spacing.l,
+    paddingTop: Layout.spacing.xl,
+    paddingBottom: Layout.spacing.l,
   },
-  statsCardContainer: {
-    position: 'relative',
-    zIndex: 50, // Lower z-index to avoid hiding profile content
-    marginTop: 40, // Add more space below profile details
-    marginBottom: 15,
-    paddingHorizontal: Layout.spacing.m,
-  },
-  statsContainer: {
+  headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: Layout.spacing.m,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 4,
+    justifyContent: 'space-between',
   },
-  statItem: {
-    alignItems: 'center',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     flex: 1,
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: Layout.spacing.m,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.card,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
+  },
+  profileInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  profileName: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.bodyBold,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  profileLocation: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+    marginBottom: 4,
+  },
+  profileTagline: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: 20,
+  },
+  profileEditForm: {
+    flex: 1,
+    gap: Layout.spacing.s,
+  },
+  editInput: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    backgroundColor: Colors.card,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editInputSmall: {
+    fontSize: Typography.sizes.sm,
+  },
+  editInputMulti: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: Layout.spacing.s,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Layout.shadow.small,
+  },
+  cancelButton: {
+    paddingHorizontal: Layout.spacing.m,
+    width: 'auto',
+  },
+  cancelButtonText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+  },
+  saveButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.m,
+    width: 'auto',
+  },
+  saveButtonText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.background,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Layout.spacing.l,
+    gap: Layout.spacing.m,
+    marginBottom: Layout.spacing.l,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    alignItems: 'center',
+    ...Layout.shadow.small,
   },
   statNumber: {
-    fontSize: Typography.sizes.xl,
-    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.bodyBold,
     color: Colors.text,
     marginBottom: 4,
   },
@@ -641,462 +885,71 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    textAlign: 'center',
-  },
-  statDivider: {
-    width: 1,
-    height: '70%',
-    backgroundColor: '#EEEEEE',
-  },
-  profileHeaderClean: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 15,
-    paddingTop: 50,
-    paddingBottom: 20,
-    marginBottom: 15,
-    position: 'relative',
-  },
-  profileMainRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 10,
-  },
-  avatarContainer: {
-    width: '30%',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  profileInfoBox: {
-    width: '65%',
-    paddingLeft: 10,
-    justifyContent: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    position: 'absolute',
-    top: 20,
-    right: 0,
-  },
-  headerActionButton: {
-    padding: 8,
-    marginLeft: 12,
-    borderRadius: 20,
-  },
-  profileAvatarContainer: {
-    position: 'relative',
-    marginRight: 15,
-  },
-  profileImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 2,
-    borderColor: '#F5F5F5',
-  },
-  avatarEditButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 5,
-    backgroundColor: '#FCD95B',
-    borderRadius: 14,
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-    zIndex: 10,
-  },
-  premiumIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    width: 22,
-    height: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F5F5F5',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  profileInfoContainer: {
-    marginTop: 15,
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    marginHorizontal: 15,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  profileDetails: {
-    flex: 1,
-    marginTop: 10,
-    paddingHorizontal: 2, // Add slight padding
-    marginBottom: 5,
-  },
-  editProfileContainer: {
-    flex: 1,
-    marginTop: 10,
-  },
-  editNameInput: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-    marginBottom: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  editLocationInput: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-    marginBottom: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  editTaglineInput: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.text,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    minHeight: 60,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionCancelButton: {
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    padding: 12,
-    borderRadius: 8,
-    marginRight: 10,
-    alignItems: 'center',
-  },
-  actionCancelText: {
-    color: '#666666',
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-  },
-  actionSaveButton: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  actionSaveText: {
-    color: '#ffffff',
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-  },
-  profileName: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Platform.OS === 'web' ? Typography.fonts.bodyBold : 'System',
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 5,
-    textAlign: 'left',
-  },
-  profileLocation: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Platform.OS === 'web' ? Typography.fonts.bodyMedium : 'System',
-    fontWeight: '600',
-    color: '#666666',
-    marginBottom: 5,
-    textAlign: 'left',
-  },
-  profileBio: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Platform.OS === 'web' ? Typography.fonts.body : 'System',
-    color: '#2C3E50', // Force explicit color instead of using Colors.text
-    marginTop: 2,
-    textAlign: 'left',
   },
 
-  badgesSection: {
-    marginVertical: 20,
-  },
-  achievementHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-    paddingHorizontal: 20,
-  },
-  achievementTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.headingMedium,
-    color: Colors.text,
-  },
-  accountSection: {
-    padding: 20,
-    marginTop: 15,
-  },
-  settingsItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  iconContainer: {
-    width: 40, 
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  settingsItemText: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-  },
-  badgesContainer: {
-    paddingVertical: Layout.spacing.m,
-    paddingHorizontal: Layout.spacing.s,
-    gap: Layout.spacing.m,
-  },
-  // Section Styles
+  // Sections
   section: {
-    padding: 15,
-    marginBottom: 15,
+    paddingHorizontal: Layout.spacing.l,
+    marginBottom: Layout.spacing.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: Layout.spacing.m,
   },
   sectionTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.headingMedium,
-    color: Colors.text,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-      },
-    }),
-  },
-  cardTitle: {
-    fontSize: Typography.sizes.base,
+    fontSize: Typography.sizes.xl,
     fontFamily: Typography.fonts.bodyBold,
     color: Colors.text,
-    marginBottom: 15,
-    textAlign: 'center',
   },
-  achievementBanner: {
-    backgroundColor: '#F0F8FF',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
+  viewAllButton: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    gap: 4,
   },
-  achievementText: {
+  viewAllText: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.accent,
-    textAlign: 'center',
-  },
-  
-  // Leaderboard Styles
-  leaderboardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  highlightedRow: {
-    backgroundColor: 'rgba(240, 248, 255, 0.5)',
-    borderRadius: 8,
-    borderBottomWidth: 0,
-  },
-  leaderboardPosition: {
-    width: 30,
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: '#888',
-    textAlign: 'center',
-  },
-  highlightedPosition: {
     color: Colors.primary,
   },
-  leaderboardUser: {
-    flex: 1,
-    paddingLeft: 10,
-  },
-  leaderboardName: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-  },
-  highlightedName: {
-    color: Colors.primary,
-    fontFamily: Typography.fonts.bodyBold,
-  },
-  leaderboardDetail: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    marginTop: 2,
-  },
-  
-  // Referral Styles
-  referralContent: {
-    alignItems: 'center',
-  },
-  referralBadgeContainer: {
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  referralBadgeEmoji: {
-    fontSize: 48,
-    marginBottom: 10,
-  },
-  referralDescription: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  referralCodeContainer: {
+
+  // Badges Grid
+  badgesGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.lightGray,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 15,
-    width: '100%',
-    justifyContent: 'space-between',
-  },
-  referralCode: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-    letterSpacing: 1,
-  },
-  referralCopyButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  referralCopyButtonText: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyBold,
-    color: '#FFFFFF',
-  },
-  referralShareButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  referralShareButtonText: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyBold,
-    color: '#FFFFFF',
-  },
-  referralProgress: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.accent,
-    textAlign: 'center',
-  },
-  // Copy and Share buttons
-  copyButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  copyButtonText: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyBold,
-    color: '#FFFFFF',
-  },
-  shareButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  shareButtonText: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyBold,
-    color: '#FFFFFF',
+    flexWrap: 'wrap',
+    gap: Layout.spacing.m,
   },
   badgeCard: {
-    width: 160,
+    width: (screenWidth - Layout.spacing.l * 2 - Layout.spacing.m) / 2,
     padding: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-      },
-      default: {
-        elevation: 2,
-      },
-    }),
+    ...Layout.shadow.small,
   },
-  badgeIcon: {
+  badgeTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Layout.spacing.s,
+  },
+  badgeIconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Layout.spacing.s,
+  },
+  badgeEmoji: {
+    fontSize: 24,
+  },
+  completedBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Layout.shadow.small,
   },
   badgeName: {
     fontSize: Typography.sizes.base,
@@ -1104,73 +957,168 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 4,
   },
-  badgeDescription: {
+  badgeDesc: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
+    lineHeight: 16,
+    marginBottom: Layout.spacing.s,
   },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Layout.spacing.m,
-    marginVertical: Layout.spacing.l,
-    marginHorizontal: Layout.spacing.m,
-    borderRadius: Layout.borderRadius.medium,
-    borderWidth: 1,
-    borderColor: Colors.error,
-  },
-  logoutText: {
-    color: Colors.error,
-    marginLeft: Layout.spacing.m,
-    fontFamily: Typography.fonts.bodyMedium,
-    fontSize: Typography.sizes.base,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllText: {
-    color: Colors.primary,
-    fontFamily: Typography.fonts.bodyMedium,
-    fontSize: Typography.sizes.sm,
-    marginRight: 4,
-  },
-  badgeEmoji: {
-    fontSize: 24,
-    textAlign: 'center',
-  },
-  badgeProgressContainer: {
+  badgeProgress: {
     marginTop: Layout.spacing.s,
-    width: '100%',
   },
-  badgeProgressBar: {
+  progressBar: {
     height: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 3,
-    marginBottom: 4,
     overflow: 'hidden',
+    marginBottom: 4,
   },
-  badgeProgressFill: {
+  progressFill: {
     height: '100%',
     borderRadius: 3,
   },
-  badgeProgressText: {
+  progressText: {
     fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
-    fontFamily: Typography.fonts.body,
     textAlign: 'right',
   },
-  emptyBadges: {
-    padding: Layout.spacing.xl,
+  emptyState: {
+    paddingVertical: Layout.spacing['2xl'],
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  emptyBadgesText: {
+  emptyStateText: {
     marginTop: Layout.spacing.m,
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+
+  // Saved Collection
+  collectionGrid: {
+    flexDirection: 'row',
+    gap: Layout.spacing.m,
+    marginBottom: Layout.spacing.m,
+  },
+  collectionCard: {
+    flex: 1,
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    alignItems: 'center',
+    ...Layout.shadow.small,
+  },
+  collectionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Layout.spacing.s,
+  },
+  collectionEmoji: {
+    fontSize: 28,
+  },
+  collectionNumber: {
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.bodyBold,
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  collectionLabel: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+  collectionHint: {
+    fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     textAlign: 'center',
-  }
+    lineHeight: 18,
+  },
+
+  // Recent Activity
+  activityList: {
+    gap: Layout.spacing.m,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    ...Layout.shadow.small,
+  },
+  activityIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF8E7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Layout.spacing.m,
+  },
+  activityEmoji: {
+    fontSize: 24,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  activityDate: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+
+  // Settings
+  settingsList: {
+    gap: Layout.spacing.s,
+  },
+  settingsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+    ...Layout.shadow.small,
+  },
+  settingsItemLast: {
+    marginTop: Layout.spacing.m,
+  },
+  settingsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  settingsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Layout.spacing.m,
+  },
+  settingsEmoji: {
+    fontSize: 20,
+  },
+  settingsText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+  },
+  settingsSubtext: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: 2,
+  },
 });

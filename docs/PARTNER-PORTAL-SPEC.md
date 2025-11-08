@@ -4,6 +4,13 @@
 
 The Partner Portal is a web-based admin interface that allows brand partners to create and manage sponsored content within the Cheezus app. Partners can sponsor **cheese pairings** (products like honey, wine, crackers) and **Cheezopedia articles** (educational content, recipes, guides).
 
+**Technical Architecture:**
+- Built as a web app (React/Next.js recommended)
+- Uses **Supabase client directly** (same as the mobile app)
+- Authentication via **Supabase Auth** with partner role
+- Data access controlled by **Row Level Security (RLS) policies**
+- No custom backend API needed - direct database access
+
 ### Business Model
 
 **Sponsored Pairings:**
@@ -13,6 +20,119 @@ The Partner Portal is a web-based admin interface that allows brand partners to 
 **Sponsored Articles:**
 - **Standard (£8/month)**: Article page only - appears in Cheezopedia search/browse
 - **Featured (£15/month)**: Article page + Homepage feed promotion
+
+---
+
+## Authentication & Security
+
+### Supabase Auth Setup
+
+**Partner Registration:**
+```typescript
+// Sign up a new partner
+const { data, error } = await supabase.auth.signUp({
+  email: 'partner@example.com',
+  password: 'secure_password',
+  options: {
+    data: {
+      role: 'partner',
+      company_name: 'Yorkshire Bees',
+    }
+  }
+});
+
+// After signup, create partner record
+await supabase.from('partners').insert({
+  id: data.user.id,  // Same as auth.users.id
+  company_name: 'Yorkshire Bees',
+  contact_email: 'partner@example.com',
+  subscription_tier: 'basic',
+  subscription_status: 'active',
+});
+```
+
+**Partner Login:**
+```typescript
+const { data, error } = await supabase.auth.signInWithPassword({
+  email: 'partner@example.com',
+  password: 'secure_password',
+});
+```
+
+### Row Level Security (RLS) Policies
+
+**CRITICAL:** Enable RLS on all tables and set up these policies:
+
+#### `partners` Table
+```sql
+-- Partners can only view/edit their own record
+CREATE POLICY "Partners can view own record" ON partners
+  FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Partners can update own record" ON partners
+  FOR UPDATE USING (auth.uid() = id);
+
+-- Admins can view all
+CREATE POLICY "Admins can view all partners" ON partners
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM auth.users 
+      WHERE auth.users.id = auth.uid() 
+      AND auth.users.raw_user_meta_data->>'role' = 'admin'
+    )
+  );
+```
+
+#### `cheese_pairings` Table
+```sql
+-- Partners can only insert if they have active subscription
+CREATE POLICY "Partners can create pairings" ON cheese_pairings
+  FOR INSERT WITH CHECK (
+    auth.uid() = partner_id 
+    AND EXISTS (
+      SELECT 1 FROM partners 
+      WHERE partners.id = auth.uid() 
+      AND partners.subscription_status = 'active'
+    )
+  );
+
+-- Partners can only update their own pairings
+CREATE POLICY "Partners can update own pairings" ON cheese_pairings
+  FOR UPDATE USING (auth.uid() = partner_id);
+
+-- Partners can only view their own pairings
+CREATE POLICY "Partners can view own pairings" ON cheese_pairings
+  FOR SELECT USING (auth.uid() = partner_id);
+
+-- Everyone can view active sponsored pairings (for the app)
+CREATE POLICY "Public can view active sponsored pairings" ON cheese_pairings
+  FOR SELECT USING (
+    is_sponsored = true 
+    AND sponsored_until > NOW()
+  );
+```
+
+#### `cheese_pairing_matches` Table
+```sql
+-- Partners can create matches for their own pairings
+CREATE POLICY "Partners can create matches" ON cheese_pairing_matches
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM cheese_pairings 
+      WHERE cheese_pairings.id = pairing_id 
+      AND cheese_pairings.partner_id = auth.uid()
+    )
+  );
+```
+
+#### `sponsored_placements` Table
+```sql
+-- Partners can only view their own placements
+CREATE POLICY "Partners can view own placements" ON sponsored_placements
+  FOR SELECT USING (auth.uid() = partner_id);
+
+-- System can insert placements (or use service role)
+```
 
 ---
 
@@ -265,57 +385,47 @@ Total: £10/month
 
 ### 3. Code Implementation: Create Pairing
 
-**API Endpoint:** `POST /api/partner/pairings`
-
-**Request Body:**
-```json
-{
-  "pairing": "Wildflower Honey",
-  "type": "food",
-  "description": "The delicate floral notes...",
-  "image_url": "https://...",
-  "is_sponsored": true,
-  "brand_name": "Yorkshire Bees",
-  "brand_logo_url": "https://...",
-  "product_name": "Artisan Wildflower Honey - 340g",
-  "featured_image_url": "https://...",
-  "why_it_works": "Our cold-extracted wildflower honey...",
-  "purchase_url": "https://yorkshirebees.com/honey",
-  "price_range": "£8-12",
-  "alternative_generic": "Any local wildflower honey",
-  "alternative_suggestions": ["Manuka honey", "Acacia honey"],
-  "sponsored_until": "2024-12-31T23:59:59Z",
-  "show_in_feed": true,
-  "feed_until": "2024-12-31T23:59:59Z",
-  "cheese_ids": ["uuid1", "uuid2", "uuid3"]
-}
-```
-
-**Backend Logic:**
+**Using Supabase Client Directly:**
 
 ```typescript
-async function createSponsoredPairing(data: SponsoredPairingData, partnerId: string) {
-  // 1. Validate partner subscription
-  const partner = await db.partners.findUnique({ where: { id: partnerId } });
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function createSponsoredPairing(data: SponsoredPairingData) {
+  // 1. Get current user (partner)
+  const { data: { user } } = await supabase.auth.getUser();
   
-  if (partner.subscription_status !== 'active') {
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+  
+  // 2. Get partner record (with their tier info)
+  const { data: partner, error: partnerError } = await supabase
+    .from('partners')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+  
+  if (partnerError || partner.subscription_status !== 'active') {
     throw new Error('Subscription inactive');
   }
   
-  // 2. Check tier permissions
+  // 3. Check tier permissions
   if (data.show_in_feed && !['premium', 'featured'].includes(partner.subscription_tier)) {
     throw new Error('Feed promotion requires Premium tier');
   }
   
-  // 3. Insert pairing
-  const pairing = await db.cheese_pairings.create({
-    data: {
+  // 4. Insert pairing (RLS will automatically set partner_id)
+  const { data: pairing, error: pairingError } = await supabase
+    .from('cheese_pairings')
+    .insert({
       pairing: data.pairing,
       type: data.type,
       description: data.description,
       image_url: data.image_url,
       is_sponsored: true,
-      partner_id: partnerId,
+      partner_id: user.id,
       brand_name: data.brand_name,
       brand_logo_url: data.brand_logo_url,
       product_name: data.product_name,
@@ -328,32 +438,39 @@ async function createSponsoredPairing(data: SponsoredPairingData, partnerId: str
       sponsored_until: data.sponsored_until,
       show_in_feed: data.show_in_feed,
       feed_until: data.feed_until,
-    }
-  });
+    })
+    .select()
+    .single();
   
-  // 4. Create cheese relationships in junction table
-  for (const cheeseId of data.cheese_ids) {
-    await db.cheese_pairing_matches.create({
-      data: {
-        cheese_id: cheeseId,
-        pairing_id: pairing.id,
-      }
-    });
-  }
+  if (pairingError) throw pairingError;
   
-  // 5. Create placement record (for tracking/billing)
-  await db.sponsored_placements.create({
-    data: {
-      partner_id: partnerId,
+  // 5. Create cheese relationships in junction table
+  const matchInserts = data.cheese_ids.map(cheeseId => ({
+    cheese_id: cheeseId,
+    pairing_id: pairing.id,
+  }));
+  
+  const { error: matchError } = await supabase
+    .from('cheese_pairing_matches')
+    .insert(matchInserts);
+  
+  if (matchError) throw matchError;
+  
+  // 6. Create placement record (for tracking/billing)
+  const { error: placementError } = await supabase
+    .from('sponsored_placements')
+    .insert({
+      partner_id: user.id,
       content_type: 'pairing',
       content_id: pairing.id,
       placement_type: data.show_in_feed ? 'page_and_feed' : 'page_only',
-      start_date: new Date(),
+      start_date: new Date().toISOString(),
       end_date: data.sponsored_until,
       monthly_cost: data.show_in_feed ? 10.00 : 5.00,
       status: 'active',
-    }
-  });
+    });
+  
+  if (placementError) throw placementError;
   
   return pairing;
 }
@@ -544,44 +661,124 @@ async function checkExpiredSponsorship() {
 
 ---
 
-## API Endpoints Summary
+## Common Supabase Queries
 
-### Partner Portal Endpoints
+### Authentication
 
+```typescript
+// Login
+const { data, error } = await supabase.auth.signInWithPassword({
+  email: email,
+  password: password,
+});
+
+// Logout
+await supabase.auth.signOut();
+
+// Get current user
+const { data: { user } } = await supabase.auth.getUser();
 ```
-Authentication:
-POST   /api/partner/login
-POST   /api/partner/register
-POST   /api/partner/reset-password
 
-Dashboard:
-GET    /api/partner/dashboard
-GET    /api/partner/analytics
+### Dashboard Data
 
-Pairings:
-GET    /api/partner/pairings
-POST   /api/partner/pairings
-GET    /api/partner/pairings/:id
-PUT    /api/partner/pairings/:id
-DELETE /api/partner/pairings/:id
-POST   /api/partner/pairings/:id/pause
-POST   /api/partner/pairings/:id/renew
-POST   /api/partner/pairings/:id/upgrade
+```typescript
+// Get partner info + stats
+const { data: partner } = await supabase
+  .from('partners')
+  .select('*')
+  .eq('id', user.id)
+  .single();
 
-Articles:
-GET    /api/partner/articles
-POST   /api/partner/articles
-PUT    /api/partner/articles/:id
-DELETE /api/partner/articles/:id
+// Get all partner's pairings
+const { data: pairings } = await supabase
+  .from('cheese_pairings')
+  .select('*')
+  .eq('partner_id', user.id)
+  .order('created_at', { ascending: false });
 
-Billing:
-GET    /api/partner/invoices
-GET    /api/partner/subscription
-PUT    /api/partner/subscription
-POST   /api/partner/payment-method
+// Get performance stats
+const { data: placements } = await supabase
+  .from('sponsored_placements')
+  .select('impressions, clicks')
+  .eq('partner_id', user.id);
+```
 
-Assets:
-POST   /api/partner/upload/image
+### List Partner's Pairings
+
+```typescript
+const { data: pairings, error } = await supabase
+  .from('cheese_pairings')
+  .select(`
+    *,
+    cheese_count:cheese_pairing_matches(count)
+  `)
+  .eq('partner_id', user.id)
+  .order('created_at', { ascending: false });
+```
+
+### Update Pairing
+
+```typescript
+const { data, error } = await supabase
+  .from('cheese_pairings')
+  .update({
+    product_name: newName,
+    price_range: newPrice,
+    // ... other fields
+  })
+  .eq('id', pairingId)
+  .eq('partner_id', user.id)  // RLS ensures this
+  .select()
+  .single();
+```
+
+### Pause/Unpause Pairing
+
+```typescript
+// Pause
+await supabase
+  .from('cheese_pairings')
+  .update({ is_sponsored: false })
+  .eq('id', pairingId);
+
+// Unpause
+await supabase
+  .from('cheese_pairings')
+  .update({ 
+    is_sponsored: true,
+    sponsored_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  })
+  .eq('id', pairingId);
+```
+
+### Search Cheeses (for linking)
+
+```typescript
+const { data: cheeses } = await supabase
+  .from('cheeses')
+  .select('id, name, type, origin_country, image_url')
+  .ilike('name', `%${searchTerm}%`)
+  .limit(20);
+```
+
+### Upload Image to Supabase Storage
+
+```typescript
+const file = event.target.files[0];
+
+// Upload to storage bucket
+const { data: uploadData, error: uploadError } = await supabase.storage
+  .from('partner-images')
+  .upload(`${user.id}/${Date.now()}_${file.name}`, file);
+
+if (!uploadError) {
+  // Get public URL
+  const { data } = supabase.storage
+    .from('partner-images')
+    .getPublicUrl(uploadData.path);
+  
+  const imageUrl = data.publicUrl;
+}
 ```
 
 ---
@@ -707,17 +904,40 @@ POST   /api/partner/upload/image
 
 ---
 
-## Questions for Implementation
+## Recommended Tech Stack
 
-Before you start building, clarify:
+### Frontend
+- **Framework:** Next.js 14+ with App Router (React)
+- **Styling:** Tailwind CSS (matches Cheezus brand)
+- **Forms:** React Hook Form + Zod validation
+- **Rich Text:** TipTap or SimpleMDE for markdown editing
+- **UI Components:** shadcn/ui or Radix UI
 
-1. **Tech Stack:** What framework? (Next.js, Django, etc.)
-2. **Authentication:** Auth0, Firebase, custom JWT?
-3. **Payment:** Stripe, PayPal, manual invoicing?
-4. **Hosting:** Where will portal be deployed?
-5. **Analytics:** Google Analytics, Mixpanel, custom?
-6. **Email:** SendGrid, Mailgun, AWS SES?
-7. **Image Storage:** S3, Cloudinary, Supabase Storage?
+### Backend
+- **Database:** Supabase (PostgreSQL)
+- **Authentication:** Supabase Auth
+- **Storage:** Supabase Storage (for image uploads)
+- **Real-time:** Supabase Realtime (optional for live stats)
+
+### Third-Party Services
+- **Payment Processing:** Stripe Checkout + Subscriptions
+- **Email:** Supabase Edge Functions + SendGrid/Resend
+- **Analytics:** Supabase Analytics + Mixpanel (optional)
+
+### Deployment
+- **Hosting:** Vercel (perfect for Next.js)
+- **Domain:** partners.cheezusapp.com
+- **Environment:** Uses same Supabase project as mobile app
+
+### Key Configuration
+
+```env
+# .env.local
+NEXT_PUBLIC_SUPABASE_URL=your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
 
 ---
 

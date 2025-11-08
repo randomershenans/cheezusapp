@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Clock, Bookmark, Share2 } from 'lucide-react-native';
 import Markdown from 'react-native-markdown-display';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -28,13 +29,21 @@ type CheezeEntry = {
 export default function CheezeEntryScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const [entry, setEntry] = useState<CheezeEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [savingBookmark, setSavingBookmark] = useState(false);
 
   useEffect(() => {
     fetchEntry();
   }, [id]);
+
+  useEffect(() => {
+    if (user && entry) {
+      checkBookmarkStatus();
+    }
+  }, [user, entry]);
 
   const fetchEntry = async () => {
     try {
@@ -53,6 +62,67 @@ export default function CheezeEntryScreen() {
       console.error('Error fetching entry:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkBookmarkStatus = async () => {
+    if (!user || !entry) return;
+    
+    try {
+      const itemType = entry.content_type === 'recipe' ? 'recipe' : 'article';
+      const { data, error } = await supabase
+        .from('saved_items')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('item_type', itemType)
+        .eq('item_id', entry.id)
+        .maybeSingle();
+
+      if (!error) {
+        setSaved(!!data);
+      }
+    } catch (error) {
+      console.error('Error checking bookmark:', error);
+    }
+  };
+
+  const toggleBookmark = async () => {
+    if (!user || !entry || savingBookmark) return;
+
+    setSavingBookmark(true);
+    try {
+      const itemType = entry.content_type === 'recipe' ? 'recipe' : 'article';
+      
+      if (saved) {
+        // Remove bookmark
+        const { error } = await supabase
+          .from('saved_items')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('item_type', itemType)
+          .eq('item_id', entry.id);
+
+        if (!error) {
+          setSaved(false);
+        }
+      } else {
+        // Add bookmark
+        const { error } = await supabase
+          .from('saved_items')
+          .insert({
+            user_id: user.id,
+            item_type: itemType,
+            item_id: entry.id,
+          });
+
+        if (!error) {
+          setSaved(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+    } finally {
+      setSavingBookmark(false);
     }
   };
 
@@ -126,12 +196,13 @@ export default function CheezeEntryScreen() {
           <View style={styles.actionButtons}>
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={() => setSaved(!saved)}
+              onPress={toggleBookmark}
+              disabled={!user || savingBookmark}
             >
               <Bookmark 
                 size={24} 
-                color="#FFFFFF"
-                fill={saved ? "#FFFFFF" : "none"}
+                color={saved ? Colors.primary : "#FFFFFF"}
+                fill={saved ? Colors.primary : "none"}
               />
             </TouchableOpacity>
             <TouchableOpacity 

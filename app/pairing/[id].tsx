@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, A
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Sparkles, ShoppingBag, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import BookmarkButton from '@/components/BookmarkButton';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -129,6 +130,11 @@ export default function PairingScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <ArrowLeft size={24} color={Colors.background} />
           </TouchableOpacity>
+
+          {/* Bookmark Button */}
+          <View style={styles.bookmarkButton}>
+            <BookmarkButton itemType="pairing" itemId={pairing.id} />
+          </View>
 
           {/* Hero Content */}
           <View style={styles.heroContent}>
@@ -285,6 +291,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10,
+  },
+  bookmarkButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    right: Layout.spacing.m,
     zIndex: 10,
   },
   heroContent: {
