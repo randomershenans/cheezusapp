@@ -44,7 +44,8 @@
     "react-native-screens": "4.15.4",
     "react-native-svg": "15.12.1",
     "react-native-web": "0.20.0",
-    "victory-native": "^41.20.2"
+    "victory-native": "^41.20.2",
+    "expo-local-authentication": "~16.0.5"
   },
   "devDependencies": {
     "@babel/core": "7.25.2",

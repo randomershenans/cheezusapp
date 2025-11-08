@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, Platform, TextInput, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { User, ChevronRight, Settings, Pencil, Trophy, Award, Star, Sparkles, Target } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -67,6 +67,15 @@ export default function ProfileScreen() {
     fetchSavedCounts();
     fetchRecentActivity();
   }, [user]);
+
+  // Refresh saved counts when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        fetchSavedCounts();
+      }
+    }, [user])
+  );
 
   useEffect(() => {
     if (isEditing && profile) {
@@ -365,17 +374,12 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </>
               ) : (
-                <>
-                  <TouchableOpacity 
-                    style={styles.iconButton}
-                    onPress={() => setIsEditing(true)}
-                  >
-                    <Pencil size={20} color={Colors.text} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.iconButton}>
-                    <Settings size={20} color={Colors.text} />
-                  </TouchableOpacity>
-                </>
+                <TouchableOpacity 
+                  style={styles.iconButton}
+                  onPress={() => setIsEditing(true)}
+                >
+                  <Pencil size={20} color={Colors.text} />
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -474,34 +478,46 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Saved Collection</Text>
-            <TouchableOpacity style={styles.viewAllButton}>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => router.push('/saved-items')}
+            >
               <Text style={styles.viewAllText}>View All</Text>
               <ChevronRight size={16} color={Colors.primary} />
             </TouchableOpacity>
           </View>
           
           <View style={styles.collectionGrid}>
-            <View style={styles.collectionCard}>
+            <TouchableOpacity 
+              style={styles.collectionCard}
+              onPress={() => router.push('/saved-items')}
+            >
               <View style={[styles.collectionIcon, { backgroundColor: '#FFF5E5' }]}>
                 <Text style={styles.collectionEmoji}>📚</Text>
               </View>
               <Text style={styles.collectionNumber}>{savedCounts.articles}</Text>
               <Text style={styles.collectionLabel}>Articles</Text>
-            </View>
-            <View style={styles.collectionCard}>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.collectionCard}
+              onPress={() => router.push('/saved-items')}
+            >
               <View style={[styles.collectionIcon, { backgroundColor: '#FFE5F5' }]}>
                 <Text style={styles.collectionEmoji}>🍽️</Text>
               </View>
               <Text style={styles.collectionNumber}>{savedCounts.recipes}</Text>
               <Text style={styles.collectionLabel}>Recipes</Text>
-            </View>
-            <View style={styles.collectionCard}>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.collectionCard}
+              onPress={() => router.push('/saved-items')}
+            >
               <View style={[styles.collectionIcon, { backgroundColor: '#E5F9FF' }]}>
                 <Text style={styles.collectionEmoji}>🍷</Text>
               </View>
               <Text style={styles.collectionNumber}>{savedCounts.pairings}</Text>
               <Text style={styles.collectionLabel}>Pairings</Text>
-            </View>
+            </TouchableOpacity>
           </View>
           <Text style={styles.collectionHint}>
             💡 Tap the bookmark icon on articles and recipes to save them here
@@ -583,28 +599,28 @@ export default function ProfileScreen() {
               <ChevronRight size={20} color={Colors.subtleText} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingsItem}>
+            <TouchableOpacity 
+              style={styles.settingsItem}
+              onPress={() => router.push('/settings/preferences')}
+            >
               <View style={styles.settingsLeft}>
                 <View style={[styles.settingsIcon, { backgroundColor: '#FFF5E5' }]}>
                   <Settings size={20} color="#F39C12" />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsText}>Preferences</Text>
-                  <Text style={styles.settingsSubtext}>Coming Soon</Text>
-                </View>
+                <Text style={styles.settingsText}>Preferences</Text>
               </View>
               <ChevronRight size={20} color={Colors.subtleText} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.settingsItem}>
+            <TouchableOpacity 
+              style={styles.settingsItem}
+              onPress={() => router.push('/settings/privacy')}
+            >
               <View style={styles.settingsLeft}>
                 <View style={[styles.settingsIcon, { backgroundColor: '#FFE5E5' }]}>
                   <Text style={styles.settingsEmoji}>🔒</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsText}>Privacy & Security</Text>
-                  <Text style={styles.settingsSubtext}>Coming Soon</Text>
-                </View>
+                <Text style={styles.settingsText}>Privacy & Security</Text>
               </View>
               <ChevronRight size={20} color={Colors.subtleText} />
             </TouchableOpacity>
