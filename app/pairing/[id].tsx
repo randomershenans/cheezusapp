@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, Animated, Dimensions, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft } from 'lucide-react-native';
-
+import { ArrowLeft, Sparkles, ShoppingBag, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
-type PairingDetailsProps = {
-  id: string;
-};
+const { width: screenWidth } = Dimensions.get('window');
 
 type Pairing = {
   id: string;
@@ -19,23 +15,33 @@ type Pairing = {
   type: string;
   description?: string;
   image_url?: string;
+  is_sponsored?: boolean;
+  brand_name?: string;
+  brand_logo_url?: string;
+  product_name?: string;
+  featured_image_url?: string;
+  why_it_works?: string;
+  purchase_url?: string;
+  price_range?: string;
+  alternative_generic?: string;
+  alternative_suggestions?: string[];
   cheeses?: {
     id: string;
     name: string;
-    origin_country?: string;
+    type: string;
+    origin_country: string;
     origin_region?: string;
-    image_url?: string;
+    image_url: string;
   }[];
 };
 
-// We no longer have rating functionality, so removed the stars rendering
-
 export default function PairingScreen() {
-  const { id } = useLocalSearchParams<PairingDetailsProps>();
   const router = useRouter();
-  
+  const { id } = useLocalSearchParams();
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const fadeAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     if (id) {
@@ -45,186 +51,187 @@ export default function PairingScreen() {
 
   const fetchPairingDetails = async () => {
     try {
-      setLoading(true);
-      
-      // Check if id is valid
-      if (!id) {
-        console.error('Invalid pairing ID');
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Fetching pairing with ID:', id);
-      
-      // First try to get the pairing details directly by ID
-      const { data: pairingData, error: pairingError } = await supabase
+      const { data, error } = await supabase
         .from('cheese_pairings')
-        .select('*')
+        .select(`
+          *,
+          cheeses:cheese_pairing_matches(
+            cheese:cheeses(
+              id,
+              name,
+              type,
+              origin_country,
+              origin_region,
+              image_url
+            )
+          )
+        `)
         .eq('id', id)
         .single();
 
-      if (pairingError) {
-        console.error('Error fetching pairing:', pairingError);
-        throw pairingError;
-      }
-      
-      if (!pairingData) {
-        console.error('No pairing found with ID:', id);
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Found pairing:', pairingData);
-      
-      // Then fetch all cheeses that pair with this pairing
-      const { data: cheesesData, error: cheesesError } = await supabase
-        .from('cheese_pairings')
-        .select(`
-          cheeses!inner(
-            id,
-            name,
-            origin_country,
-            origin_region,
-            image_url
-          )
-        `)
-        .eq('pairing', pairingData.pairing)
-        .eq('type', pairingData.type);
-      
-      if (cheesesError) {
-        console.error('Error fetching paired cheeses:', cheesesError);
-        throw cheesesError;
-      }
-      
-      // Transform the data to the structure we need
-      const cheese_list = cheesesData.map(item => item.cheeses);
-      
-      // Combine data
-      const pairingWithCheeses = {
-        ...pairingData,
-        cheeses: cheese_list
+      if (error) throw error;
+
+      // Flatten the cheeses array
+      const flattenedData = {
+        ...data,
+        cheeses: data?.cheeses?.map((item: any) => item.cheese) || []
       };
-      
-      setPairing(pairingWithCheeses);
-      
+
+      setPairing(flattenedData);
     } catch (error) {
-      console.error('Error fetching pairing details:', error);
+      console.error('Error fetching pairing:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const navigateToCheese = (cheeseId: string) => {
-    router.push(`/cheese/${cheeseId}`);
+  const handlePurchase = () => {
+    if (pairing?.purchase_url) {
+      Linking.openURL(pairing.purchase_url);
+    }
   };
 
-  // Determine if this is a food or drink pairing and select appropriate header style
-  const isPairingFood = pairing?.type === 'food';
-  const headerEmoji = isPairingFood ? '🍯' : '🍷';
-  const headerColor = isPairingFood ? '#FFC107' : '#9C27B0';
-  
-  // Default image for pairings that don't have one
-  const defaultImage = isPairingFood 
-    ? 'https://images.unsplash.com/photo-1624813686965-da3c240cf794?q=80&w=1000' 
-    : 'https://images.unsplash.com/photo-1568213816046-0ee1c42bd559?q=80&w=1000';
+  const toggleAlternatives = () => {
+    setShowAlternatives(!showAlternatives);
+    Animated.timing(fadeAnim, {
+      toValue: showAlternatives ? 0 : 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
 
-  if (!pairing && loading) {
+  if (loading || !pairing) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" translucent />
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading pairing...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
-  if (!pairing) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" translucent />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Pairing not found</Text>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Determine hero image - use featured for sponsored, otherwise regular
+  const heroImage = pairing.is_sponsored && pairing.featured_image_url 
+    ? pairing.featured_image_url 
+    : pairing.image_url || (pairing.type === 'food' 
+      ? 'https://images.unsplash.com/photo-1587049352846-4a222e784da4?q=80&w=1000'
+      : 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?q=80&w=1000');
 
   return (
     <View style={styles.container}>
-      {/* Hero Image */}
-      <View style={styles.imageContainer}>
-        <Image 
-          source={{ uri: pairing.image_url || defaultImage }}
-          style={styles.heroImage}
-        />
-        <View style={[styles.overlay, { backgroundColor: `${headerColor}99` }]} />
-        
-        {/* Hero Content */}
-        <View style={styles.heroContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#fff" />
-          </TouchableOpacity>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Hero Image Section */}
+        <View style={styles.heroSection}>
+          <Image source={{ uri: heroImage }} style={styles.heroImage} />
+          <View style={styles.heroOverlay} />
           
-          <View style={styles.heroTextContainer}>
-            <View style={styles.titleRow}>
-              <Text style={styles.pairingTypeLabel}>{headerEmoji} {isPairingFood ? 'Food' : 'Drink'} Pairing</Text>
-            </View>
-            <Text style={styles.pairingName}>{pairing.pairing}</Text>
+          {/* Back Button */}
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ArrowLeft size={24} color={Colors.background} />
+          </TouchableOpacity>
+
+          {/* Hero Content */}
+          <View style={styles.heroContent}>
+            {pairing.is_sponsored && (
+              <View style={styles.sponsoredBadge}>
+                <Sparkles size={14} color="#FFD700" fill="#FFD700" />
+                <Text style={styles.sponsoredBadgeText}>Featured Partner</Text>
+              </View>
+            )}
+            
+            <Text style={styles.pairingType}>
+              {pairing.type === 'food' ? '🍯 Food' : '🍷 Drink'} Pairing
+            </Text>
+            
+            {pairing.is_sponsored && pairing.brand_name && (
+              <Text style={styles.brandName}>{pairing.brand_name}</Text>
+            )}
+            
+            <Text style={styles.pairingTitle}>
+              {pairing.is_sponsored && pairing.product_name ? pairing.product_name : pairing.pairing}
+            </Text>
           </View>
         </View>
-      </View>
-      
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.contentContainer}>
-          {pairing.description && (
-            <View style={styles.section}>
+
+        {/* Content Section */}
+        <View style={styles.contentSection}>
+          {/* Description or Why It Works */}
+          {pairing.is_sponsored && pairing.why_it_works ? (
+            <View style={styles.whySection}>
+              <Text style={styles.sectionTitle}>Why this pairs perfectly</Text>
+              <Text style={styles.bodyText}>{pairing.why_it_works}</Text>
+            </View>
+          ) : pairing.description ? (
+            <View style={styles.whySection}>
               <Text style={styles.sectionTitle}>About this pairing</Text>
-              <Text style={styles.description}>{pairing.description}</Text>
+              <Text style={styles.bodyText}>{pairing.description}</Text>
+            </View>
+          ) : null}
+
+          {/* Sponsored: Purchase Section */}
+          {pairing.is_sponsored && pairing.purchase_url && (
+            <View style={styles.purchaseSection}>
+              {pairing.price_range && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Price</Text>
+                  <Text style={styles.priceValue}>{pairing.price_range}</Text>
+                </View>
+              )}
+              
+              <TouchableOpacity style={styles.buyButton} onPress={handlePurchase}>
+                <ShoppingBag size={20} color={Colors.background} />
+                <Text style={styles.buyButtonText}>Shop Now</Text>
+                <ExternalLink size={16} color={Colors.background} />
+              </TouchableOpacity>
+
+              {/* Alternatives */}
+              {(pairing.alternative_generic || pairing.alternative_suggestions?.length) && (
+                <View style={styles.alternativesSection}>
+                  <TouchableOpacity style={styles.alternativesHeader} onPress={toggleAlternatives}>
+                    <Text style={styles.alternativesHeaderText}>Can't get this? See alternatives</Text>
+                    {showAlternatives ? <ChevronUp size={20} color={Colors.primary} /> : <ChevronDown size={20} color={Colors.primary} />}
+                  </TouchableOpacity>
+                  
+                  {showAlternatives && (
+                    <Animated.View style={[styles.alternativesContent, { opacity: fadeAnim }]}>
+                      {pairing.alternative_generic && (
+                        <Text style={styles.alternativeText}>Try any: {pairing.alternative_generic}</Text>
+                      )}
+                      {pairing.alternative_suggestions?.map((alt, index) => (
+                        <Text key={index} style={styles.alternativeItem}>• {alt}</Text>
+                      ))}
+                    </Animated.View>
+                  )}
+                </View>
+              )}
             </View>
           )}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Cheeses that pair well</Text>
-            {pairing.cheeses && pairing.cheeses.length > 0 ? (
+          {/* Cheeses Section */}
+          {pairing.cheeses && pairing.cheeses.length > 0 && (
+            <View style={styles.cheesesSection}>
+              <Text style={styles.sectionTitle}>Cheeses that pair well</Text>
               <View style={styles.cheeseGrid}>
                 {pairing.cheeses.map((cheese, index) => (
                   <TouchableOpacity 
                     key={index} 
                     style={styles.cheeseCard}
-                    onPress={() => navigateToCheese(cheese.id)}
+                    onPress={() => router.push(`/cheese/${cheese.id}`)}
                   >
                     <Image 
-                      source={{ 
-                        uri: cheese.image_url || 'https://images.unsplash.com/photo-1566454825481-9c31a52e2f92?q=80&w=1000' 
-                      }}
+                      source={{ uri: cheese.image_url || 'https://images.unsplash.com/photo-1566454825481-9c31a52e2f92?q=80&w=400' }} 
                       style={styles.cheeseImage}
                     />
                     <View style={styles.cheeseInfo}>
                       <Text style={styles.cheeseName}>{cheese.name}</Text>
-                      {cheese.origin_country && (
-                        <Text style={styles.cheeseCountry}>{cheese.origin_country}</Text>
-                      )}
-                      {cheese.origin_region && (
-                        <Text style={styles.cheeseRegion}>{cheese.origin_region}</Text>
-                      )}
+                      <Text style={styles.cheeseCountry}>{cheese.origin_country}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
               </View>
-            ) : (
-              <Text style={styles.noCheesesMessage}>No cheeses found for this pairing.</Text>
-            )}
-          </View>
-          
-          {/* Spacing at the bottom for better scrolling */}
+            </View>
+          )}
+
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
@@ -244,36 +251,41 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Layout.spacing.xl,
   },
   loadingText: {
-    marginTop: Layout.spacing.m,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
+    color: Colors.subtleText,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Layout.spacing.l,
-  },
-  errorText: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
-    marginBottom: Layout.spacing.m,
-  },
-  imageContainer: {
+  
+  // Hero Section
+  heroSection: {
     position: 'relative',
-    height: 200,
+    height: 400,
   },
   heroImage: {
     width: '100%',
     height: '100%',
-    objectFit: 'cover',
+    ...Platform.select({
+      web: { objectFit: 'cover' },
+    }),
   },
-  overlay: {
+  heroOverlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    left: Layout.spacing.m,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   heroContent: {
     position: 'absolute',
@@ -281,111 +293,179 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: Layout.spacing.l,
+    gap: Layout.spacing.s,
   },
-  backButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 20,
-    padding: Layout.spacing.xs,
+  sponsoredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     alignSelf: 'flex-start',
-    marginBottom: Layout.spacing.m,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  backButtonText: {
+  sponsoredBadgeText: {
+    color: '#FFD700',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  pairingType: {
     color: Colors.background,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodyMedium,
+    opacity: 0.9,
   },
-  heroTextContainer: {
-    marginBottom: Layout.spacing.m,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Layout.spacing.xs,
-  },
-  pairingTypeLabel: {
-    color: Colors.background,
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginRight: Layout.spacing.s,
-    overflow: 'hidden',
-  },
-  pairingName: {
-    color: Colors.background,
-    fontSize: Typography.sizes.xl,
-    fontFamily: Typography.fonts.heading,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+  brandName: {
+    color: '#FFD700',
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  contentContainer: {
-    padding: Layout.spacing.l,
+  pairingTitle: {
+    color: Colors.background,
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.bodyBold,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
-  section: {
-    marginBottom: Layout.spacing.xl,
+
+  // Content Section
+  contentSection: {
+    padding: Layout.spacing.l,
+    gap: Layout.spacing.xl,
+  },
+  whySection: {
+    gap: Layout.spacing.m,
   },
   sectionTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.heading,
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.bodyBold,
     color: Colors.text,
-    marginBottom: Layout.spacing.m,
   },
-  description: {
+  bodyText: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.body,
     color: Colors.text,
-    lineHeight: 22,
+    lineHeight: 24,
+  },
+
+  // Purchase Section
+  purchaseSection: {
+    gap: Layout.spacing.m,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.m,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
+  },
+  priceLabel: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+  },
+  priceValue: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  buyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.s,
+    backgroundColor: Colors.primary,
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    ...Layout.shadow.medium,
+  },
+  buyButtonText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+
+  // Alternatives
+  alternativesSection: {
+    marginTop: Layout.spacing.m,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Layout.borderRadius.medium,
+    overflow: 'hidden',
+  },
+  alternativesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Layout.spacing.m,
+    backgroundColor: Colors.card,
+  },
+  alternativesHeaderText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+  },
+  alternativesContent: {
+    padding: Layout.spacing.m,
+    gap: Layout.spacing.s,
+    backgroundColor: Colors.background,
+  },
+  alternativeText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: 20,
+  },
+  alternativeItem: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: 20,
+    paddingLeft: Layout.spacing.s,
+  },
+
+  // Cheeses Section
+  cheesesSection: {
+    gap: Layout.spacing.m,
   },
   cheeseGrid: {
-    flexDirection: 'column',
-    gap: Layout.spacing.l,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Layout.spacing.m,
   },
   cheeseCard: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    overflow: 'hidden',
+    width: (screenWidth - Layout.spacing.l * 2 - Layout.spacing.m) / 2,
     backgroundColor: Colors.card,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: Layout.borderRadius.medium,
+    overflow: 'hidden',
+    ...Layout.shadow.small,
   },
   cheeseImage: {
-    width: 90,
-    height: 90,
-    objectFit: 'cover',
+    width: '100%',
+    height: 120,
+    ...Platform.select({
+      web: { objectFit: 'cover' },
+    }),
   },
   cheeseInfo: {
-    flex: 1,
     padding: Layout.spacing.m,
-    justifyContent: 'center',
+    gap: 4,
   },
   cheeseName: {
     fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.heading,
+    fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
-    marginBottom: Layout.spacing.xs,
   },
   cheeseCountry: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    marginBottom: Layout.spacing.xs,
-  },
-  cheeseRegion: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    marginBottom: Layout.spacing.s,
-  },
-  noCheesesMessage: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    fontStyle: 'italic',
   },
 });

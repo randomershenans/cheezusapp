@@ -30,6 +30,9 @@ type Cheese = {
     id: string;
     pairing: string;
     type: string;
+    image_url?: string;
+    featured_image_url?: string;
+    is_sponsored?: boolean;
   }[];
 };
 
@@ -63,18 +66,44 @@ export default function CheeseDetailScreen() {
 
   const fetchCheeseDetails = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch cheese details
+      const { data: cheeseData, error: cheeseError } = await supabase
         .from('cheeses')
         .select(`
           *,
-          flavors:cheese_flavors(flavor),
-          pairings:cheese_pairings(id, pairing, type)
+          flavors:cheese_flavors(flavor)
         `)
         .eq('id', id)
         .single();
 
-      if (error) throw error;
-      setCheese(data);
+      if (cheeseError) throw cheeseError;
+
+      // Fetch pairings through junction table
+      const { data: pairingsData, error: pairingsError } = await supabase
+        .from('cheese_pairing_matches')
+        .select(`
+          cheese_pairings!inner(
+            id,
+            pairing,
+            type,
+            image_url,
+            featured_image_url,
+            is_sponsored
+          )
+        `)
+        .eq('cheese_id', id);
+
+      if (pairingsError) {
+        console.error('Error fetching pairings:', pairingsError);
+      }
+
+      // Combine data
+      const cheeseWithPairings = {
+        ...cheeseData,
+        pairings: pairingsData?.map(item => item.cheese_pairings) || []
+      };
+
+      setCheese(cheeseWithPairings);
     } catch (error) {
       console.error('Error fetching cheese details:', error);
     } finally {
@@ -539,10 +568,21 @@ export default function CheeseDetailScreen() {
                     {drinkPairings.map((pairing, index) => (
                       <TouchableOpacity 
                         key={index} 
-                        style={styles.pairingItem}
+                        style={styles.pairingTile}
                         onPress={() => router.push(`/pairing/${pairing.id}`)}
                       >
-                        <Text style={styles.pairingText}>{pairing.pairing}</Text>
+                        <Image 
+                          source={{ uri: pairing.featured_image_url || pairing.image_url || 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?q=80&w=400' }}
+                          style={styles.pairingImage}
+                        />
+                        <View style={styles.pairingOverlay}>
+                          {pairing.is_sponsored && (
+                            <View style={styles.pairingSponsoredBadge}>
+                              <Text style={styles.pairingSponsoredText}>✨</Text>
+                            </View>
+                          )}
+                          <Text style={styles.pairingName}>{pairing.pairing}</Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -556,10 +596,21 @@ export default function CheeseDetailScreen() {
                     {foodPairings.map((pairing, index) => (
                       <TouchableOpacity 
                         key={index} 
-                        style={styles.pairingItem}
+                        style={styles.pairingTile}
                         onPress={() => router.push(`/pairing/${pairing.id}`)}
                       >
-                        <Text style={styles.pairingText}>{pairing.pairing}</Text>
+                        <Image 
+                          source={{ uri: pairing.featured_image_url || pairing.image_url || 'https://images.unsplash.com/photo-1587049352846-4a222e784da4?q=80&w=400' }}
+                          style={styles.pairingImage}
+                        />
+                        <View style={styles.pairingOverlay}>
+                          {pairing.is_sponsored && (
+                            <View style={styles.pairingSponsoredBadge}>
+                              <Text style={styles.pairingSponsoredText}>✨</Text>
+                            </View>
+                          )}
+                          <Text style={styles.pairingName}>{pairing.pairing}</Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -869,18 +920,54 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Layout.spacing.s,
   },
-  pairingItem: {
-    backgroundColor: Colors.card,
-    paddingHorizontal: Layout.spacing.m,
-    paddingVertical: Layout.spacing.s,
+  pairingTile: {
+    width: (screenWidth - Layout.spacing.m * 3) / 2, // 2 tiles per row with gaps
+    height: 120,
     borderRadius: Layout.borderRadius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    overflow: 'hidden',
+    ...Layout.shadow.medium,
   },
-  pairingText: {
+  pairingImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    ...Platform.select({
+      web: {
+        objectFit: 'cover',
+      },
+    }),
+  },
+  pairingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 100%)',
+    justifyContent: 'flex-end',
+    padding: Layout.spacing.m,
+  },
+  pairingSponsoredBadge: {
+    position: 'absolute',
+    top: Layout.spacing.s,
+    right: Layout.spacing.s,
+    backgroundColor: 'rgba(255, 215, 0, 0.9)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pairingSponsoredText: {
+    fontSize: 12,
+  },
+  pairingName: {
     fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.text,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.background,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   detailsGrid: {
     gap: Layout.spacing.m,

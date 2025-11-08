@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils } from 'lucide-react-native';
+import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
 import NearbyCheeseCard from '@/components/NearbyCheeseCard';
@@ -31,10 +31,23 @@ type TrendingCheese = {
   image_url: string;
 };
 
+type SponsoredPairing = {
+  id: string;
+  pairing: string;
+  type: string;
+  description: string;
+  image_url: string;
+  featured_image_url: string;
+  brand_name: string;
+  brand_logo_url: string;
+  product_name: string;
+  price_range: string;
+};
+
 type FeedItem = {
   id: string;
-  type: 'cheese' | 'featured' | 'nearby';
-  data: TrendingCheese | FeaturedEntry | null;
+  type: 'cheese' | 'featured' | 'nearby' | 'sponsored_pairing';
+  data: TrendingCheese | FeaturedEntry | SponsoredPairing | null;
 };
 
 export default function HomeScreen() {
@@ -65,6 +78,16 @@ export default function HomeScreen() {
         .order('created_at', { ascending: false })
         .limit(8);
 
+      // Fetch sponsored pairings for feed
+      const { data: sponsoredPairings, error: sponsoredError } = await supabase
+        .from('cheese_pairings')
+        .select('id, pairing, type, description, image_url, featured_image_url, brand_name, brand_logo_url, product_name, price_range')
+        .eq('show_in_feed', true)
+        .gte('feed_until', new Date().toISOString())
+        .limit(3);
+
+      console.log('Sponsored pairings query result:', { sponsoredPairings, sponsoredError });
+
       // Create mixed feed items
       const mixedItems: FeedItem[] = [];
 
@@ -86,6 +109,19 @@ export default function HomeScreen() {
             id: `featured-${entry.id}`,
             type: 'featured',
             data: entry
+          });
+        });
+      }
+
+      // Add sponsored pairings near the top (high visibility!)
+      if (sponsoredPairings && sponsoredPairings.length > 0) {
+        sponsoredPairings.forEach((pairing, index) => {
+          // Insert at strategic positions (2nd, 5th, 8th items)
+          const position = (index * 3) + 1;
+          mixedItems.splice(position, 0, {
+            id: `sponsored-${pairing.id}`,
+            type: 'sponsored_pairing',
+            data: pairing
           });
         });
       }
@@ -218,12 +254,63 @@ export default function HomeScreen() {
     );
   };
 
+  const renderSponsoredPairingCard = (pairing: SponsoredPairing) => {
+    const cardHeight = screenWidth * 0.75;
+
+    return (
+      <TouchableOpacity
+        style={[styles.sponsoredCard, { height: cardHeight }]}
+        onPress={() => router.push(`/pairing/${pairing.id}`)}
+      >
+        <Image 
+          source={{ uri: pairing.featured_image_url || pairing.image_url }} 
+          style={styles.sponsoredImage}
+        />
+        <View style={styles.sponsoredOverlay}>
+          {/* Sponsored badge */}
+          <View style={styles.sponsoredBadgeTop}>
+            <Sparkles size={12} color="#FFD700" />
+            <Text style={styles.sponsoredBadgeTopText}>Sponsored</Text>
+          </View>
+          
+          <View style={styles.sponsoredContent}>
+            <View style={styles.sponsoredMeta}>
+              <View style={styles.pairingTypeBadge}>
+                {pairing.type === 'food' ? <Utensils size={14} color={Colors.background} /> : <ChefHat size={14} color={Colors.background} />}
+                <Text style={styles.pairingTypeBadgeText}>{pairing.type === 'food' ? 'Food' : 'Drink'}</Text>
+              </View>
+            </View>
+            
+            <Text style={styles.sponsoredBrandName} numberOfLines={1}>
+              {pairing.brand_name}
+            </Text>
+            
+            <Text style={styles.sponsoredProductTitle} numberOfLines={2}>
+              {pairing.product_name || pairing.pairing}
+            </Text>
+            
+            <Text style={styles.sponsoredDescription} numberOfLines={3}>
+              {pairing.description}
+            </Text>
+            
+            <View style={styles.tapToLearnMore}>
+              <Text style={styles.tapToLearnMoreText}>Tap to learn more</Text>
+              <Sparkles size={14} color="#FFD700" />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderFeedItem = (item: FeedItem) => {
     switch (item.type) {
       case 'cheese':
         return renderCheeseCard(item.data as TrendingCheese);
       case 'featured':
         return renderFeaturedCard(item.data as FeaturedEntry);
+      case 'sponsored_pairing':
+        return renderSponsoredPairingCard(item.data as SponsoredPairing);
       case 'nearby':
         return <NearbyCheeseCard key={item.id} />;
       default:
@@ -506,5 +593,151 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: Layout.spacing.xl,
+  },
+  // Sponsored pairing card styles
+  sponsoredCard: {
+    width: '92%',
+    maxWidth: 600,
+    alignSelf: 'center',
+    marginHorizontal: '4%',
+    borderRadius: Layout.borderRadius.large,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    ...Layout.shadow.large,
+  },
+  sponsoredImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    ...Platform.select({
+      web: {
+        objectFit: 'cover',
+      },
+    }),
+  },
+  sponsoredOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%)',
+    justifyContent: 'space-between',
+  },
+  brandLogoContainer: {
+    position: 'absolute',
+    top: Layout.spacing.m,
+    right: Layout.spacing.m,
+    width: 50,
+    height: 50,
+    borderRadius: Layout.borderRadius.medium,
+    backgroundColor: Colors.background,
+    padding: Layout.spacing.xs,
+    ...Layout.shadow.medium,
+  },
+  brandLogoSmall: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Layout.borderRadius.small,
+  },
+  sponsoredBadgeTop: {
+    position: 'absolute',
+    top: Layout.spacing.m,
+    left: Layout.spacing.m,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.xs,
+    borderRadius: Layout.borderRadius.medium,
+    gap: 6,
+  },
+  sponsoredBadgeTopText: {
+    color: '#FFD700',
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sponsoredContent: {
+    padding: Layout.spacing.l,
+    marginTop: 'auto',
+  },
+  sponsoredMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Layout.spacing.s,
+    gap: Layout.spacing.s,
+  },
+  pairingTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.xs,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
+  },
+  pairingTypeBadgeText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  priceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.xs,
+    borderRadius: Layout.borderRadius.medium,
+    gap: Layout.spacing.xs,
+  },
+  priceBadgeText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  sponsoredBrandName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#FFD700',
+    marginBottom: Layout.spacing.xs,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  sponsoredProductTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.heading,
+    color: Colors.background,
+    marginBottom: Layout.spacing.s,
+    lineHeight: Typography.sizes.xl * Typography.lineHeights.tight,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  sponsoredDescription: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
+    marginBottom: Layout.spacing.m,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  tapToLearnMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.xs,
+  },
+  tapToLearnMoreText: {
+    color: '#FFD700',
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
