@@ -19,8 +19,8 @@ type CheezeEntry = {
   image_url: string;
   reading_time_minutes?: number;
   difficulty_level?: string;
-  ingredients?: string[];
-  instructions?: string[];
+  ingredients?: (string | { item: string; amount: string })[];
+  instructions?: (string | { step: string; description?: string })[];
   serving_size?: string;
   preparation_time?: string;
   tags?: { tag: string }[];
@@ -258,26 +258,38 @@ export default function CheezeEntryScreen() {
               {entry.ingredients && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Ingredients</Text>
-                  {entry.ingredients.map((ingredient, index) => (
-                    <View key={index} style={styles.ingredientItem}>
-                      <View style={styles.bullet} />
-                      <Text style={styles.ingredientText}>{ingredient}</Text>
-                    </View>
-                  ))}
+                  {entry.ingredients.map((ingredient, index) => {
+                    const ingredientText = typeof ingredient === 'string' 
+                      ? ingredient 
+                      : `${ingredient.amount} ${ingredient.item}`;
+                    
+                    return (
+                      <View key={index} style={styles.ingredientItem}>
+                        <View style={styles.bullet} />
+                        <Text style={styles.ingredientText}>{ingredientText}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
               
               {entry.instructions && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Instructions</Text>
-                  {entry.instructions.map((step, index) => (
-                    <View key={index} style={styles.instructionItem}>
-                      <View style={styles.stepNumber}>
-                        <Text style={styles.stepNumberText}>{index + 1}</Text>
+                  {entry.instructions.map((instruction, index) => {
+                    const instructionText = typeof instruction === 'string'
+                      ? instruction
+                      : instruction.step + (instruction.description ? `\n${instruction.description}` : '');
+                    
+                    return (
+                      <View key={index} style={styles.instructionItem}>
+                        <View style={styles.stepNumber}>
+                          <Text style={styles.stepNumberText}>{index + 1}</Text>
+                        </View>
+                        <Text style={styles.instructionText}>{instructionText}</Text>
                       </View>
-                      <Text style={styles.instructionText}>{step}</Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
