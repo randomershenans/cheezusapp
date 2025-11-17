@@ -55,19 +55,128 @@ const filterOptions = [
   { key: 'recipes',  label: 'Recipes',  icon: Utensils, color: '#E74C3C' },
 ];
 
+// Synonym mapping for smart search
+const CHEESE_SYNONYMS: Record<string, string[]> = {
+  'goat': ['goat', 'goats', 'chèvre', 'chevre', "goat's", 'capra'],
+  'blue': ['blue', 'bleu', 'gorgonzola', 'roquefort', 'stilton', 'veined'],
+  'sheep': ['sheep', 'sheeps', 'pecorino', 'manchego', "sheep's", 'ewe', 'ovine'],
+  'cow': ['cow', 'cows', "cow's", 'bovine', 'milk'],
+  'soft': ['soft', 'fresh', 'creamy', 'spreadable'],
+  'hard': ['hard', 'aged', 'mature', 'firm', 'dense'],
+  'french': ['french', 'france'],
+  'italian': ['italian', 'italy', 'italiano'],
+  'swiss': ['swiss', 'switzerland', 'gruyere', 'emmental'],
+  'english': ['english', 'england', 'british'],
+  'spanish': ['spanish', 'spain', 'espana'],
+  'dutch': ['dutch', 'netherlands', 'holland', 'gouda'],
+  'cheddar': ['cheddar', 'cheder', 'cheedar'],
+  'mozzarella': ['mozzarella', 'mozarella', 'mozzerella', 'mozza'],
+  'parmesan': ['parmesan', 'parmigiano', 'reggiano', 'parm'],
+  'brie': ['brie', 'bree'],
+  'feta': ['feta', 'fetta'],
+  'camembert': ['camembert', 'camembear', 'camember'],
+  'ricotta': ['ricotta', 'ricota'],
+  'provolone': ['provolone', 'provoloni'],
+  'gruyere': ['gruyere', 'gruyère', 'gruyer'],
+  'mild': ['mild', 'subtle', 'delicate', 'gentle'],
+  'strong': ['strong', 'sharp', 'pungent', 'intense', 'tangy'],
+  'nutty': ['nutty', 'hazelnut', 'almond'],
+  'creamy': ['creamy', 'smooth', 'buttery', 'rich'],
+};
+
+// Expand search term with synonyms
+function expandSearchTerm(term: string): string[] {
+  const lower = term.toLowerCase().trim();
+  const expanded = [lower];
+  
+  // Check if term matches any synonym group
+  for (const [key, synonyms] of Object.entries(CHEESE_SYNONYMS)) {
+    if (synonyms.some(s => s === lower || lower.includes(s))) {
+      expanded.push(...synonyms);
+      break;
+    }
+  }
+  
+  return [...new Set(expanded)];
+}
+
+// Levenshtein distance for fuzzy matching
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1].toLowerCase() === str2[j - 1].toLowerCase()) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,    // deletion
+          dp[i][j - 1] + 1,    // insertion
+          dp[i - 1][j - 1] + 1 // substitution
+        );
+      }
+    }
+  }
+
+  return dp[m][n];
+}
+
+// Balanced fuzzy match with Levenshtein distance
+function fuzzyMatch(str: string, pattern: string): boolean {
+  if (!str || !pattern) return false;
+  
+  str = str.toLowerCase();
+  pattern = pattern.toLowerCase();
+  
+  // Exact substring match (highest priority)
+  if (str.includes(pattern)) return true;
+  
+  // For very short queries (3 chars or less), be strict
+  if (pattern.length <= 3) {
+    return str.split(/\s+/).some(word => word.startsWith(pattern));
+  }
+  
+  // Check if pattern matches any word in the string
+  const words = str.split(/\s+/);
+  for (const word of words) {
+    // Exact word match
+    if (word === pattern) return true;
+    
+    // Check prefix match with tolerance (for "camam" matching "camembert")
+    const prefix = word.slice(0, pattern.length);
+    const maxPrefixDistance = pattern.length <= 5 ? 1 : Math.ceil(pattern.length * 0.25); // Stricter: 25% or 1 char
+    if (levenshteinDistance(prefix, pattern) <= maxPrefixDistance) return true;
+    
+    // Check full word match with moderate tolerance
+    if (Math.abs(word.length - pattern.length) <= 3) { // Similar length words only
+      const maxDistance = Math.ceil(pattern.length * 0.3); // 30% tolerance
+      const distance = levenshteinDistance(word, pattern);
+      if (distance <= maxDistance) return true;
+    }
+  }
+  
+  return false;
+}
+
 /* ────────────────────────────── component ───────────────────────────────── */
 export default function DiscoverScreen() {
   const router = useRouter();
-  const { q, type, region, filter } = useLocalSearchParams();
+  const { type, region, filter } = useLocalSearchParams();
 
   const [items,      setItems]      = useState<DiscoverItem[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [activeFilter, setActive]   = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   /* ── data fetch ── */
   useEffect(() => {
     fetchDiscoverItems();
-  }, [q, type, region, filter, activeFilter]);
+  }, [searchQuery, type, region, filter, activeFilter]);
 
   const fetchDiscoverItems = async () => {
     setLoading(true);
@@ -76,10 +185,10 @@ export default function DiscoverScreen() {
 
       /* Cheeses - Show both producer cheeses and cheese types */
       if (activeFilter === 'all' || activeFilter === 'cheese') {
-        // Fetch producer cheeses
+        // Fetch producer cheeses - if searching, get more for fuzzy matching
         let producerQuery = supabase
           .from('producer_cheese_stats')
-          .select('id, full_name, description, image_url, cheese_type_name, producer_name, origin_country, average_rating, rating_count');
+          .select('id, full_name, description, image_url, cheese_type_name, producer_name, origin_country, average_rating, rating_count, cheese_family, flavor_profile');
         
         // Apply type filter if present
         if (type && typeof type === 'string') {
@@ -91,8 +200,9 @@ export default function DiscoverScreen() {
           producerQuery = producerQuery.eq('origin_country', region);
         }
         
-        const { data: producerCheeses } = await producerQuery
-          .limit(50);
+        // If searching, get more results for fuzzy matching; otherwise limit
+        const limit = searchQuery && searchQuery.trim() ? 200 : 50;
+        const { data: producerCheeses } = await producerQuery.limit(limit);
 
         if (producerCheeses) {
           all.push(
@@ -129,7 +239,7 @@ export default function DiscoverScreen() {
           .select('id, title, description, image_url, content_type, reading_time_minutes')
           .eq('visible_in_feed', true)
           .order('published_at', { ascending: false })
-          .limit(20);
+          .limit(50);
 
         if (entries) {
           all.push(
@@ -151,17 +261,38 @@ export default function DiscoverScreen() {
         }
       }
 
-      /* Search filter */
-      if (q && typeof q === 'string') {
-        const term = q.toLowerCase();
-        all = all.filter(i =>
-          i.title.toLowerCase().includes(term) ||
-          i.description.toLowerCase().includes(term)
-        );
+      /* Client-side aggressive fuzzy filter */
+      if (searchQuery && searchQuery.trim()) {
+        const searchTerms = expandSearchTerm(searchQuery);
+        
+        // Score each item by relevance
+        const scoredItems = all.map(i => {
+          let score = 0;
+          
+          searchTerms.forEach(term => {
+            // Title matches score highest
+            if (fuzzyMatch(i.title, term)) score += 10;
+            if (i.description && fuzzyMatch(i.description, term)) score += 5;
+            if (i.metadata?.cheese_type && fuzzyMatch(i.metadata.cheese_type, term)) score += 8;
+            if (i.metadata?.origin_country && fuzzyMatch(i.metadata.origin_country, term)) score += 3;
+            if (i.metadata?.producer_name && fuzzyMatch(i.metadata.producer_name, term)) score += 4;
+          });
+          
+          return { item: i, score };
+        });
+        
+        // Filter items with any score and sort by relevance
+        all = scoredItems
+          .filter(({ score }) => score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map(({ item }) => item);
+      } else {
+        // No search - shuffle for discovery
+        all = all.sort(() => Math.random() - 0.5);
       }
 
-      /* Shuffle and trim */
-      all = all.sort(() => Math.random() - 0.5).slice(0, 20);
+      // Trim results
+      all = all.slice(0, 30);
       setItems(all);
     } catch (err) {
       console.error('Error fetching discover items:', err);
@@ -297,7 +428,7 @@ export default function DiscoverScreen() {
 
       <SearchBar
         placeholder="Search everything..."
-        onSearch={query => router.push(`/discover?q=${encodeURIComponent(query)}`)}
+        onSearch={setSearchQuery}
         onFilter={() => {}}
       />
 

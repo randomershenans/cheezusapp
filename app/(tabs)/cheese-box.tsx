@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Alert, TextInput, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Plus, Star, Trash2, Pen, TrendingUp, Award, Heart, BarChart3 } from 'lucide-react-native';
+import { Plus, Star, Trash2, Pen, TrendingUp, Award, Heart, BarChart3, Search, Filter, X, Grid, List } from 'lucide-react-native';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
@@ -29,11 +31,18 @@ type CheeseBoxEntry = {
   };
 };
 
+type FilterType = 'all' | 'rated' | 'unrated' | string;
+type ViewMode = 'grid' | 'list';
+
 export default function CheeseBoxScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [entries, setEntries] = useState<CheeseBoxEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [stats, setStats] = useState({
     totalCheeses: 0,
     averageRating: 0,
@@ -84,6 +93,39 @@ export default function CheeseBoxScreen() {
       setLoading(false);
     }
   };
+
+  // Get unique cheese types for filters
+  const cheeseTypes = useMemo(() => {
+    const types = new Set(entries.map(e => e.producer_cheese.cheese_type.type));
+    return Array.from(types).sort();
+  }, [entries]);
+
+  // Filter and search logic
+  const filteredEntries = useMemo(() => {
+    let filtered = entries;
+
+    // Apply search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(entry => 
+        entry.producer_cheese.full_name.toLowerCase().includes(query) ||
+        entry.producer_cheese.cheese_type.name.toLowerCase().includes(query) ||
+        entry.producer_cheese.cheese_type.type.toLowerCase().includes(query) ||
+        entry.notes?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply filters
+    if (selectedFilter === 'rated') {
+      filtered = filtered.filter(e => e.rating && e.rating > 0);
+    } else if (selectedFilter === 'unrated') {
+      filtered = filtered.filter(e => !e.rating);
+    } else if (selectedFilter !== 'all') {
+      filtered = filtered.filter(e => e.producer_cheese.cheese_type.type === selectedFilter);
+    }
+
+    return filtered;
+  }, [entries, searchQuery, selectedFilter]);
 
   const calculateStats = (entries: CheeseBoxEntry[]) => {
     const totalCheeses = entries.length;
@@ -221,18 +263,99 @@ export default function CheeseBoxScreen() {
         </View>
 
         {entries.length > 0 && (
-          <TouchableOpacity
-            style={styles.analyticsButton}
-            onPress={() => router.push('/analytics')}
-          >
-            <View style={styles.analyticsButtonContent}>
-              <BarChart3 size={20} color={Colors.primary} />
-              <Text style={styles.analyticsButtonText}>Elite Analytics</Text>
+          <>
+            <TouchableOpacity
+              style={styles.analyticsButton}
+              onPress={() => router.push('/analytics')}
+            >
+              <View style={styles.analyticsButtonContent}>
+                <BarChart3 size={20} color={Colors.primary} />
+                <Text style={styles.analyticsButtonText}>Elite Analytics</Text>
+              </View>
+              <Text style={styles.analyticsButtonSubtext}>
+                Deep dive into your cheese stats
+              </Text>
+            </TouchableOpacity>
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputWrapper}>
+                <Search size={18} color={Colors.subtleText} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search your collection..."
+                  placeholderTextColor={Colors.subtleText}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <X size={18} color={Colors.subtleText} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <TouchableOpacity
+                style={[styles.filterButton, showFilters && styles.filterButtonActive]}
+                onPress={() => setShowFilters(!showFilters)}
+              >
+                <Filter size={18} color={showFilters ? Colors.primary : Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+              >
+                {viewMode === 'grid' ? 
+                  <List size={18} color={Colors.text} /> : 
+                  <Grid size={18} color={Colors.text} />
+                }
+              </TouchableOpacity>
             </View>
-            <Text style={styles.analyticsButtonSubtext}>
-              Deep dive into your cheese stats
-            </Text>
-          </TouchableOpacity>
+
+            {/* Filter Chips */}
+            {showFilters && (
+              <View style={styles.filtersContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.filterChips}>
+                    <TouchableOpacity
+                      style={[styles.filterChip, selectedFilter === 'all' && styles.filterChipActive]}
+                      onPress={() => setSelectedFilter('all')}
+                    >
+                      <Text style={[styles.filterChipText, selectedFilter === 'all' && styles.filterChipTextActive]}>
+                        All
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.filterChip, selectedFilter === 'rated' && styles.filterChipActive]}
+                      onPress={() => setSelectedFilter('rated')}
+                    >
+                      <Text style={[styles.filterChipText, selectedFilter === 'rated' && styles.filterChipTextActive]}>
+                        Rated
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.filterChip, selectedFilter === 'unrated' && styles.filterChipActive]}
+                      onPress={() => setSelectedFilter('unrated')}
+                    >
+                      <Text style={[styles.filterChipText, selectedFilter === 'unrated' && styles.filterChipTextActive]}>
+                        Unrated
+                      </Text>
+                    </TouchableOpacity>
+                    {cheeseTypes.map(type => (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.filterChip, selectedFilter === type && styles.filterChipActive]}
+                        onPress={() => setSelectedFilter(type)}
+                      >
+                        <Text style={[styles.filterChipText, selectedFilter === type && styles.filterChipTextActive]}>
+                          {type}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+          </>
         )}
 
         {loading ? (
@@ -262,22 +385,39 @@ export default function CheeseBoxScreen() {
           <View style={styles.entriesContainer}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Your Collection</Text>
-              <Text style={styles.sectionCount}>{entries.length} cheeses</Text>
+              <Text style={styles.sectionCount}>
+                {filteredEntries.length} {filteredEntries.length === entries.length ? '' : `of ${entries.length} `}cheeses
+              </Text>
             </View>
-            {entries.map((entry) => (
-              <View key={entry.id} style={styles.entryCard}>
+            <View style={viewMode === 'grid' ? styles.gridContainer : styles.listContainer}>
+            {filteredEntries.map((entry) => {
+              // Hide generic/unknown producers
+              const isGeneric = entry.producer_cheese.producer_name?.toLowerCase().includes('generic') || 
+                                entry.producer_cheese.producer_name?.toLowerCase().includes('unknown');
+              const displayName = isGeneric ? entry.producer_cheese.cheese_type.name : entry.producer_cheese.full_name;
+              
+              return (
+              <View key={entry.id} style={viewMode === 'grid' ? styles.entryCard : styles.entryCardList}>
                 <TouchableOpacity
                   style={styles.entryContent}
                   onPress={() => router.push(`/producer-cheese/${entry.producer_cheese.id}`)}
                 >
-                  <Image 
-                    source={{ 
-                      uri: entry.producer_cheese.image_url || 'https://via.placeholder.com/90?text=Cheese'
-                    }} 
-                    style={styles.entryImage}
-                  />
+                  <View style={styles.imageWrapper}>
+                    <Image 
+                      source={{ 
+                        uri: entry.producer_cheese.image_url || 'https://via.placeholder.com/90?text=Cheese'
+                      }} 
+                      style={viewMode === 'grid' ? styles.entryImage : styles.entryImageList}
+                    />
+                    <TouchableOpacity
+                      style={styles.deleteButtonOverlay}
+                      onPress={() => handleDeleteEntry(entry.id)}
+                    >
+                      <Trash2 size={16} color={Colors.background} />
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.entryInfo}>
-                    <Text style={styles.entryName}>{entry.producer_cheese.full_name}</Text>
+                    <Text style={styles.entryName} numberOfLines={2}>{displayName}</Text>
                     <Text style={styles.entryType}>
                       {entry.producer_cheese.cheese_type.name} • {entry.producer_cheese.cheese_type.type}
                     </Text>
@@ -306,16 +446,10 @@ export default function CheeseBoxScreen() {
                     </Text>
                   </View>
                 </TouchableOpacity>
-                <View style={styles.entryActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDeleteEntry(entry.id)}
-                  >
-                    <Trash2 size={16} color={Colors.error} />
-                  </TouchableOpacity>
-                </View>
               </View>
-            ))}
+            );
+            })}
+            </View>
           </View>
         )}
 
@@ -566,37 +700,65 @@ const styles = StyleSheet.create({
   entryCard: {
     backgroundColor: Colors.card,
     borderRadius: Layout.borderRadius.large,
-    marginBottom: Layout.spacing.m,
+    width: (SCREEN_WIDTH - Layout.spacing.m * 3) / 2,
     overflow: 'hidden',
     ...Layout.shadow.medium,
   },
+  entryCardList: {
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.large,
+    overflow: 'hidden',
+    marginBottom: Layout.spacing.m,
+    ...Layout.shadow.medium,
+  },
   entryContent: {
-    flexDirection: 'row',
-    padding: Layout.spacing.m,
+    flex: 1,
+  },
+  imageWrapper: {
+    position: 'relative',
   },
   entryImage: {
-    width: 90,
-    height: 90,
-    borderRadius: Layout.borderRadius.medium,
-    marginRight: Layout.spacing.m,
+    width: '100%',
+    height: 140,
     ...Platform.select({
       web: {
         objectFit: 'cover',
       },
     }),
   },
+  entryImageList: {
+    width: '100%',
+    height: 180,
+    ...Platform.select({
+      web: {
+        objectFit: 'cover',
+      },
+    }),
+  },
+  deleteButtonOverlay: {
+    position: 'absolute',
+    top: Layout.spacing.s,
+    right: Layout.spacing.s,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Layout.shadow.medium,
+  },
   entryInfo: {
-    flex: 1,
+    padding: Layout.spacing.m,
   },
   entryName: {
-    fontSize: Typography.sizes.lg,
+    fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginBottom: 4,
-    lineHeight: Typography.sizes.lg * Typography.lineHeights.tight,
+    lineHeight: Typography.sizes.base * Typography.lineHeights.tight,
   },
   entryType: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginBottom: Layout.spacing.xs,
@@ -645,6 +807,78 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: '#FFE8EC',
+  },
+  // Search & Filter styles
+  searchContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: Layout.spacing.m,
+    marginBottom: Layout.spacing.m,
+    gap: Layout.spacing.s,
+  },
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.large,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    gap: Layout.spacing.s,
+    ...Layout.shadow.small,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    paddingVertical: 4,
+  },
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: Layout.borderRadius.large,
+    backgroundColor: Colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Layout.shadow.small,
+  },
+  filterButtonActive: {
+    backgroundColor: '#FFF0DB',
+  },
+  filtersContainer: {
+    marginBottom: Layout.spacing.m,
+  },
+  filterChips: {
+    flexDirection: 'row',
+    paddingHorizontal: Layout.spacing.m,
+    gap: Layout.spacing.s,
+  },
+  filterChip: {
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.large,
+    backgroundColor: Colors.card,
+    ...Layout.shadow.small,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterChipText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+  },
+  filterChipTextActive: {
+    color: Colors.background,
+  },
+  // Grid layout
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Layout.spacing.m,
+  },
+  listContainer: {
+    flexDirection: 'column',
   },
   bottomSpacing: {
     height: Layout.spacing.xl,

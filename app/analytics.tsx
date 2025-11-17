@@ -140,24 +140,51 @@ export default function AnalyticsScreen() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // Fetch cheese box entries with producer cheese data
+      const { data: boxEntries, error } = await supabase
         .from('cheese_box_entries')
-        .select(`
-          id,
-          rating,
-          created_at,
-          cheese:cheeses (
-            id,
-            name,
-            type,
-            origin_country,
-            flavors:cheese_flavors(flavor)
-          )
-        `)
+        .select('id, rating, created_at, cheese_id')
         .eq('user_id', user.id);
 
       if (error) throw error;
-      setEntries(data || []);
+
+      // Fetch producer cheese details for each entry
+      const cheeseIds = boxEntries?.map(e => e.cheese_id) || [];
+      const { data: producerCheeses } = await supabase
+        .from('producer_cheese_stats')
+        .select('id, full_name, cheese_type_name, producer_name, cheese_family, origin_country, flavor_profile')
+        .in('id', cheeseIds);
+
+      // Map entries to include cheese data
+      const entriesWithCheese: CheeseEntry[] = boxEntries?.map(entry => {
+        const cheese = producerCheeses?.find(c => c.id === entry.cheese_id);
+        
+        // Hide generic/unknown producers - just show cheese type name
+        const isGeneric = (cheese as any)?.producer_name?.toLowerCase().includes('generic') || 
+                          (cheese as any)?.producer_name?.toLowerCase().includes('unknown');
+        const displayName = isGeneric ? (cheese as any)?.cheese_type_name : cheese?.full_name;
+        
+        // Parse flavor_profile string into array of flavor objects
+        const flavorProfile = (cheese as any)?.flavor_profile || '';
+        const flavors = flavorProfile
+          ? flavorProfile.split(',').map((f: string) => ({ flavor: f.trim() }))
+          : [];
+        
+        return {
+          id: entry.id,
+          rating: entry.rating,
+          created_at: entry.created_at,
+          cheese: {
+            id: cheese?.id || '',
+            name: displayName || '',
+            type: (cheese as any)?.cheese_family || 'Unknown',
+            origin_country: cheese?.origin_country || '',
+            flavors: flavors,
+          },
+        };
+      }) || [];
+
+      setEntries(entriesWithCheese);
     } catch (error) {
       console.error('Error fetching analytics data:', error);
     } finally {
