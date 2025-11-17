@@ -37,11 +37,14 @@ type DiscoverItem = {
   title: string;
   description: string;
   image_url: string;
-  type: 'cheese' | 'article' | 'recipe';
+  type: 'cheese' | 'producer-cheese' | 'article' | 'recipe';
   metadata?: {
     origin_country?: string;
     cheese_type?: string;
+    producer_name?: string;
     reading_time?: number;
+    average_rating?: number;
+    rating_count?: number;
   };
 };
 
@@ -71,41 +74,52 @@ export default function DiscoverScreen() {
     try {
       let all: DiscoverItem[] = [];
 
-      /* Cheeses */
+      /* Cheeses - Show both producer cheeses and cheese types */
       if (activeFilter === 'all' || activeFilter === 'cheese') {
-        let query = supabase
-          .from('cheeses')
-          .select('id, name, description, image_url, type, origin_country');
+        // Fetch producer cheeses
+        let producerQuery = supabase
+          .from('producer_cheese_stats')
+          .select('id, full_name, description, image_url, cheese_type_name, producer_name, origin_country, average_rating, rating_count');
         
         // Apply type filter if present
         if (type && typeof type === 'string') {
-          query = query.eq('type', type);
+          producerQuery = producerQuery.eq('cheese_type_name', type);
         }
         
-        // Apply region/country filter if present
+        // Apply region filter if present
         if (region && typeof region === 'string') {
-          query = query.eq('origin_country', region);
+          producerQuery = producerQuery.eq('origin_country', region);
         }
         
-        const { data: cheeses } = await query
-          .order('created_at', { ascending: false })
-          .limit(filter === 'types' || filter === 'regions' ? 50 : 20);
+        const { data: producerCheeses } = await producerQuery
+          .limit(50);
 
-        if (cheeses) {
+        if (producerCheeses) {
           all.push(
-            ...cheeses.map(c => ({
-              id: c.id,
-              title: c.name,
-              description: c.description,
-              image_url: c.image_url,
-              type: 'cheese' as const,
-              metadata: {
-                origin_country: c.origin_country,
-                cheese_type:    c.type,
-              },
-            }))
+            ...producerCheeses.map(c => {
+              // Hide "Generic" producer - just show cheese type name
+              const isGeneric = c.producer_name?.toLowerCase().includes('generic') || 
+                                c.producer_name?.toLowerCase().includes('unknown');
+              const displayTitle = isGeneric ? c.cheese_type_name : c.full_name;
+              
+              return {
+                id: c.id,
+                title: displayTitle,
+                description: c.description || `${c.producer_name} ${c.cheese_type_name}`,
+                image_url: c.image_url || 'https://via.placeholder.com/400?text=Cheese',
+                type: 'producer-cheese' as const,
+                metadata: {
+                  origin_country: c.origin_country,
+                  cheese_type: c.cheese_type_name,
+                  producer_name: c.producer_name,
+                  average_rating: c.average_rating,
+                  rating_count: c.rating_count,
+                },
+              };
+            })
           );
         }
+
       }
 
       /* Articles & Recipes */
@@ -157,8 +171,15 @@ export default function DiscoverScreen() {
   };
 
   /* ── helpers ── */
-  const handlePress = (item: DiscoverItem) =>
-    router.push(item.type === 'cheese' ? `/cheese/${item.id}` : `/cheezopedia/${item.id}`);
+  const handlePress = (item: DiscoverItem) => {
+    if (item.type === 'producer-cheese') {
+      router.push(`/producer-cheese/${item.id}`);
+    } else if (item.type === 'cheese') {
+      router.push(`/cheese/${item.id}`);
+    } else {
+      router.push(`/cheezopedia/${item.id}`);
+    }
+  };
 
   const getItemIcon = (t: DiscoverItem['type']) =>
     t === 'cheese' ? '🧀' : t === 'recipe' ? '👨‍🍳' : '📝';

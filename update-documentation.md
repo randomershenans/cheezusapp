@@ -1,5 +1,29 @@
 # Cheezus App - Update Documentation
 
+## Expo SDK 54 Upgrade (November 10, 2025)
+
+### Updated Expo SDK Version
+- Upgraded from Expo SDK 53 to Expo SDK 54
+- Updated all Expo packages to SDK 54 compatible versions:
+  - expo-router: upgraded to ~6.0.14 (from 5.1.4)
+  - expo-camera: upgraded to ~17.0.9 (from 16.1.11)
+  - expo-image-picker: upgraded to ~17.0.8 (from 16.1.4)
+  - expo-auth-session: upgraded to ~7.0.8 (from 6.2.1)
+  - expo-constants: upgraded to ~18.0.10 (from 17.1.7)
+  - expo-crypto: upgraded to ~15.0.7 (from 14.1.5)
+  - expo-font: upgraded to ~14.0.9 (from 13.3.2)
+  - expo-linking: upgraded to ~8.0.8 (from 7.1.7)
+  - expo-location: upgraded to ~19.0.7 (from 18.1.6)
+  - expo-splash-screen: upgraded to ~31.0.10 (from 0.30.10)
+  - expo-status-bar: upgraded to ~3.0.8 (from 2.2.3)
+  - expo-system-ui: upgraded to ~6.0.8 (from 5.0.10)
+  - expo-web-browser: upgraded to ~15.0.9 (from 14.2.0)
+  - expo-local-authentication: upgraded to ~17.0.7 (from ~16.0.5)
+- Updated React Native to version 0.81.5 (from 0.79.6)
+- Updated react-native-reanimated to ~4.1.1 (from 3.19.1)
+- Cleared bundler cache for fresh start
+- App successfully running on SDK 54
+
 ## Discover Section Image Display Fix (November 3, 2025)
 
 ### Fixed Tile Display Issues

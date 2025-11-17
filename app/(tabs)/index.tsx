@@ -29,6 +29,11 @@ type TrendingCheese = {
   origin_region?: string;
   description: string;
   image_url: string;
+  producer_name?: string;
+  cheese_type_name?: string;
+  average_rating?: number;
+  rating_count?: number;
+  is_producer_cheese?: boolean;
 };
 
 type SponsoredPairing = {
@@ -46,7 +51,7 @@ type SponsoredPairing = {
 
 type FeedItem = {
   id: string;
-  type: 'cheese' | 'featured' | 'nearby' | 'sponsored_pairing';
+  type: 'cheese' | 'producer-cheese' | 'featured' | 'nearby' | 'sponsored_pairing';
   data: TrendingCheese | FeaturedEntry | SponsoredPairing | null;
 };
 
@@ -71,12 +76,38 @@ export default function HomeScreen() {
         .order('published_at', { ascending: false })
         .limit(4);
 
-      // Fetch trending cheeses
-      const { data: cheeses } = await supabase
-        .from('cheeses')
-        .select('id, name, type, origin_country, origin_region, description, image_url')
-        .order('created_at', { ascending: false })
-        .limit(8);
+      // Fetch trending producer cheeses
+      const { data: producerCheeses } = await supabase
+        .from('producer_cheese_stats')
+        .select('id, full_name, cheese_type_name, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count')
+        .limit(20);
+
+      // Map producer cheeses to feed format
+      const cheeses: TrendingCheese[] = [];
+      
+      if (producerCheeses) {
+        producerCheeses.forEach(pc => {
+          // Hide "Generic" producer - just show cheese type name
+          const isGeneric = pc.producer_name?.toLowerCase().includes('generic') || 
+                            pc.producer_name?.toLowerCase().includes('unknown');
+          const displayName = isGeneric ? pc.cheese_type_name : pc.full_name;
+          
+          cheeses.push({
+            id: pc.id,
+            name: displayName,
+            type: pc.cheese_type_name,
+            origin_country: pc.origin_country,
+            origin_region: pc.origin_region,
+            description: pc.description || `${pc.producer_name} ${pc.cheese_type_name}`,
+            image_url: pc.image_url || 'https://via.placeholder.com/400?text=Cheese',
+            producer_name: pc.producer_name,
+            cheese_type_name: pc.cheese_type_name,
+            average_rating: pc.average_rating,
+            rating_count: pc.rating_count,
+            is_producer_cheese: true,
+          });
+        });
+      }
 
       // Fetch sponsored pairings for feed
       const { data: sponsoredPairings, error: sponsoredError } = await supabase
@@ -92,11 +123,11 @@ export default function HomeScreen() {
       const mixedItems: FeedItem[] = [];
 
       // Add cheese items
-      if (cheeses) {
+      if (cheeses && cheeses.length > 0) {
         cheeses.forEach(cheese => {
           mixedItems.push({
-            id: `cheese-${cheese.id}`,
-            type: 'cheese',
+            id: `${cheese.is_producer_cheese ? 'producer-cheese' : 'cheese'}-${cheese.id}`,
+            type: cheese.is_producer_cheese ? 'producer-cheese' : 'cheese',
             data: cheese
           });
         });
@@ -161,10 +192,18 @@ export default function HomeScreen() {
     // Calculate responsive height based on screen width
     const cardHeight = screenWidth * 0.75; // 75% of screen width for better aspect ratio
 
+    const handlePress = () => {
+      if (cheese.is_producer_cheese) {
+        router.push(`/producer-cheese/${cheese.id}`);
+      } else {
+        router.push(`/cheese/${cheese.id}`);
+      }
+    };
+
     return (
       <TouchableOpacity
         style={[styles.cheeseCard, { height: cardHeight }]}
-        onPress={() => router.push(`/cheese/${cheese.id}`)}
+        onPress={handlePress}
       >
         <Image 
           source={{ uri: cheese.image_url }} 
@@ -174,12 +213,14 @@ export default function HomeScreen() {
           <View style={styles.cheeseContent}>
             <View style={styles.cheeseMeta}>
               <View style={styles.cheeseBadge}>
-                <Text style={styles.cheeseBadgeText}>{cheese.type}</Text>
+                <Text style={styles.cheeseBadgeText}>Cheese</Text>
               </View>
-              <View style={styles.ratingBadge}>
-                <Star size={14} color="#FFD700" fill="#FFD700" />
-                <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
-              </View>
+              {cheese.average_rating && cheese.rating_count ? (
+                <View style={styles.ratingBadge}>
+                  <Star size={14} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingText}>{cheese.average_rating.toFixed(1)}</Text>
+                </View>
+              ) : null}
             </View>
             
             <Text style={styles.cheeseTitle} numberOfLines={2}>
@@ -306,6 +347,7 @@ export default function HomeScreen() {
   const renderFeedItem = (item: FeedItem) => {
     switch (item.type) {
       case 'cheese':
+      case 'producer-cheese':
         return renderCheeseCard(item.data as TrendingCheese);
       case 'featured':
         return renderFeaturedCard(item.data as FeaturedEntry);

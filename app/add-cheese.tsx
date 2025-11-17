@@ -1,217 +1,198 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, SafeAreaView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { X, Search, Plus, CircleAlert as AlertCircle } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import {
+  CheeseTypeWithStats,
+  CreateCheeseTypeInput,
+  createCheeseType,
+  createProducerCheese,
+  updateFlavorTagsForProducerCheese,
+  addProducerCheeseToBox,
+} from '@/lib';
+import { uploadImageToStorage } from '@/lib/storage';
+import { CheeseTypeSelector } from '@/components/add-cheese/CheeseTypeSelector';
+import { ProducerCheeseForm, ProducerCheeseFormData } from '@/components/add-cheese/ProducerCheeseForm';
+import { CreateCheeseTypeModal } from '@/components/add-cheese/CreateCheeseTypeModal';
 import Colors from '@/constants/Colors';
-import Layout from '@/constants/Layout';
-import Typography from '@/constants/Typography';
 
-type SearchResult = {
-  id: string;
-  name: string;
-  type: string;
-  origin_country: string;
-  origin_region?: string;
-  similarity: number;
-};
-
-// Levenshtein distance for "did you mean?" suggestions
-function levenshteinDistance(str1: string, str2: string): number {
-  const track = Array(str2.length + 1).fill(null).map(() =>
-    Array(str1.length + 1).fill(null));
-  for (let i = 0; i <= str1.length; i += 1) {
-    track[0][i] = i;
-  }
-  for (let j = 0; j <= str2.length; j += 1) {
-    track[j][0] = j;
-  }
-  for (let j = 1; j <= str2.length; j += 1) {
-    for (let i = 1; i <= str1.length; i += 1) {
-      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      track[j][i] = Math.min(
-        track[j][i - 1] + 1,
-        track[j - 1][i] + 1,
-        track[j - 1][i - 1] + indicator
-      );
-    }
-  }
-  return track[str2.length][str1.length];
-}
-
-// Calculate similarity score (0-1) where 1 is exact match
-function calculateSimilarity(str1: string, str2: string): number {
-  const maxLength = Math.max(str1.length, str2.length);
-  const distance = levenshteinDistance(str1.toLowerCase(), str2.toLowerCase());
-  return 1 - (distance / maxLength);
-}
+type Step = 'select-type' | 'enter-details';
 
 export default function AddCheeseScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [step, setStep] = useState<Step>('select-type');
+  const [selectedCheeseType, setSelectedCheeseType] = useState<CheeseTypeWithStats | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingType, setIsCreatingType] = useState(false);
 
-  const handleSearch = async (searchQuery: string) => {
-    setQuery(searchQuery);
-    setError(null);
+  // Handle cheese type selection
+  const handleSelectCheeseType = (cheeseType: CheeseTypeWithStats) => {
+    setSelectedCheeseType(cheeseType);
+    setStep('enter-details');
+  };
 
-    if (searchQuery.length < 2) {
-      setResults([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    setLoading(true);
-
+  // Handle creating new cheese type
+  const handleCreateCheeseType = async (data: CreateCheeseTypeInput) => {
+    setIsCreatingType(true);
     try {
-      // Get all cheeses for searching
-      const { data: cheeses, error: cheeseError } = await supabase
-        .from('cheeses')
-        .select('id, name, type, origin_country, origin_region');
-
-      if (cheeseError) throw cheeseError;
-
-      // Process results with fuzzy matching
-      const processedResults = cheeses!.map(cheese => ({
-        ...cheese,
-        similarity: calculateSimilarity(searchQuery, cheese.name)
-      }));
-
-      // Find exact matches (substring)
-      const exactMatches = processedResults.filter(cheese => 
-        cheese.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-
-      // Find fuzzy matches
-      const fuzzyMatches = processedResults
-        .filter(cheese => !exactMatches.find(m => m.id === cheese.id))
-        .filter(cheese => cheese.similarity > 0.6)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 3);
-
-      const combinedResults = [
-        ...exactMatches.map(r => ({ ...r, similarity: 1 })),
-        ...fuzzyMatches
-      ].sort((a, b) => b.similarity - a.similarity);
-
-      setResults(combinedResults);
-      setShowSuggestions(combinedResults.length > 0);
+      const cheeseTypeId = await createCheeseType(data);
       
-      // If no results but query is long enough, show add new option
-      if (combinedResults.length === 0 && searchQuery.length >= 3) {
-        setShowSuggestions(true);
+      if (cheeseTypeId) {
+        // Create a CheeseTypeWithStats object for the newly created type
+        const newCheeseType: CheeseTypeWithStats = {
+          id: cheeseTypeId,
+          name: data.name,
+          type: data.type,
+          milk_type: data.milk_type,
+          origin_country: data.origin_country,
+          origin_region: data.origin_region,
+          description: data.description,
+          producer_count: 0,
+          total_ratings: 0,
+          average_rating: 0,
+          unique_raters: 0,
+        };
+        
+        setShowCreateModal(false);
+        setSelectedCheeseType(newCheeseType);
+        setStep('enter-details');
+        Alert.alert('Success', 'Cheese type created!');
+      } else {
+        Alert.alert('Error', 'Failed to create cheese type');
       }
-    } catch (err) {
-      console.error('Search error:', err);
-      setError('Failed to search cheeses');
+    } catch (error) {
+      console.error('Error creating cheese type:', error);
+      Alert.alert('Error', 'Failed to create cheese type');
     } finally {
-      setLoading(false);
+      setIsCreatingType(false);
     }
   };
 
-  const handleAddNewCheese = () => {
-    if (!query.trim()) {
-      Alert.alert('Please enter a cheese name');
-      return;
+  // Handle producer cheese form submission
+  const handleSubmitProducerCheese = async (formData: ProducerCheeseFormData) => {
+    if (!selectedCheeseType) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Upload image if provided
+      let imageUrl: string | undefined;
+      if (formData.imageUri) {
+        try {
+          // Convert URI to base64
+          const response = await fetch(formData.imageUri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          
+          const base64 = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                resolve(reader.result);
+              } else {
+                reject(new Error('Failed to convert image'));
+              }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          
+          // Upload to storage
+          const uploadedUrl = await uploadImageToStorage(base64, 'jpg');
+          if (uploadedUrl) {
+            imageUrl = uploadedUrl;
+          }
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          // Continue without image
+        }
+      }
+
+      // Create producer cheese
+      const producerCheeseId = await createProducerCheese({
+        cheese_type_id: selectedCheeseType.id,
+        producer_name: formData.producerName,
+        product_name: formData.productName || undefined,
+        origin_country: formData.originCountry || undefined,
+        origin_region: formData.originRegion || undefined,
+        price_range: formData.priceRange,
+        description: formData.description || undefined,
+        image_url: imageUrl,
+      });
+
+      if (!producerCheeseId) {
+        Alert.alert('Error', 'Failed to create producer cheese');
+        return;
+      }
+
+      // Add flavor tags
+      if (formData.flavorTagIds.length > 0) {
+        await updateFlavorTagsForProducerCheese(producerCheeseId, formData.flavorTagIds);
+      }
+
+      // Add to cheese box with rating
+      const added = await addProducerCheeseToBox(
+        producerCheeseId,
+        formData.rating,
+        formData.notes || undefined
+      );
+
+      if (added) {
+        Alert.alert(
+          'Success! 🧀',
+          `${formData.producerName} ${selectedCheeseType.name} added to your cheese box`,
+          [
+            {
+              text: 'View Cheese',
+              onPress: () => router.replace(`/producer-cheese/${producerCheeseId}`),
+            },
+            {
+              text: 'Back to Box',
+              onPress: () => router.replace('/(tabs)/cheese-box'),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to add to cheese box');
+      }
+    } catch (error) {
+      console.error('Error submitting producer cheese:', error);
+      Alert.alert('Error', 'Something went wrong');
+    } finally {
+      setIsSubmitting(false);
     }
-    // Navigate to new cheese form with the entered name
-    router.push({
-      pathname: '/cheese/new',
-      params: { name: query }
-    });
+  };
+
+  // Handle back navigation
+  const handleBack = () => {
+    if (step === 'enter-details') {
+      setStep('select-type');
+      setSelectedCheeseType(null);
+    } else {
+      router.back();
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => router.back()}
-        >
-          <X size={24} color={Colors.text} />
-        </TouchableOpacity>
-      </View>
+      {step === 'select-type' ? (
+        <CheeseTypeSelector
+          onSelect={handleSelectCheeseType}
+          onCreateNew={() => setShowCreateModal(true)}
+        />
+      ) : selectedCheeseType ? (
+        <ProducerCheeseForm
+          cheeseType={selectedCheeseType}
+          onSubmit={handleSubmitProducerCheese}
+          onBack={handleBack}
+          isSubmitting={isSubmitting}
+        />
+      ) : null}
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.searchContainer}>
-          <Search size={20} color="#888" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search existing cheeses..."
-            value={query}
-            onChangeText={handleSearch}
-          />
-        </View>
-
-        {query.length >= 2 && (
-          <View style={styles.searchResultsContainer}>
-            {loading ? (
-              <View style={styles.messageContainer}>
-                <Text style={styles.messageText}>Searching...</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.messageContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : results.length > 0 ? (
-              <View style={styles.searchResults}>
-                {results.map((cheese) => (
-                  <TouchableOpacity
-                    key={cheese.id}
-                    style={styles.resultItem}
-                    onPress={() => router.push(`/cheese/${cheese.id}`)}
-                  >
-                    <View style={styles.resultContent}>
-                      <Text style={styles.resultName}>{cheese.name}</Text>
-                      <Text style={styles.resultOrigin}>
-                        {cheese.origin_country}
-                        {cheese.origin_region ? `, ${cheese.origin_region}` : ''}
-                      </Text>
-                      {cheese.similarity < 1 && (
-                        <View style={styles.similarityBadge}>
-                          <Text style={styles.similarityText}>
-                            Similar match ({Math.round(cheese.similarity * 100)}%)
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                
-                {query.trim().length >= 2 && (
-                  <Text style={styles.resultsNote}>
-                    Don't see what you're looking for? You can add a new cheese below.
-                  </Text>
-                )}
-              </View>
-            ) : query.trim().length >= 2 ? (
-              <View style={styles.noResultsContainer}>
-                <View style={styles.messageContainer}>
-                  <AlertCircle size={24} color={Colors.subtleText} style={styles.noResultsIcon} />
-                  <Text style={styles.messageText}>No matching cheeses found</Text>
-                </View>
-                
-                <TouchableOpacity
-                  style={styles.addNewButton}
-                  onPress={handleAddNewCheese}
-                >
-                  <Plus size={20} color={Colors.primary} />
-                  <Text style={styles.addNewText}>
-                    Add "{query}" as a new cheese
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.messageContainer}>
-                <Text style={styles.messageText}>Type at least 2 characters to search</Text>
-              </View>
-            )}
-          </View>
-        )}
-      </ScrollView>
+      <CreateCheeseTypeModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={handleCreateCheeseType}
+        isCreating={isCreatingType}
+      />
     </SafeAreaView>
   );
 }
@@ -221,140 +202,4 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    padding: Layout.spacing.m,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: Layout.spacing.m,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Layout.borderRadius.medium,
-    padding: Layout.spacing.s,
-    marginVertical: Layout.spacing.m,
-    elevation: 2,
-    shadowColor: Colors.gray,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  searchIcon: {
-    marginHorizontal: Layout.spacing.s,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.body,
-    color: Colors.text,
-    marginLeft: Layout.spacing.xs,
-  },
-  searchResultsContainer: {
-    marginTop: Layout.spacing.m,
-    flex: 1,
-  },
-  searchResults: {
-    flex: 1,
-  },
-  resultItem: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.borderRadius.medium,
-    padding: Layout.spacing.m,
-    marginBottom: Layout.spacing.s,
-    elevation: 1,
-    shadowColor: Colors.gray,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  resultContent: {
-    flexDirection: 'column',
-  },
-  resultName: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
-    marginBottom: Layout.spacing.xs,
-  },
-  resultOrigin: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    marginBottom: Layout.spacing.xs,
-  },
-  similarityBadge: {
-    marginTop: Layout.spacing.xs,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: Layout.spacing.s,
-    paddingVertical: Layout.spacing.xs,
-    borderRadius: Layout.borderRadius.small,
-    alignSelf: 'flex-start',
-  },
-  similarityText: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.primary,
-  },
-  messageContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Layout.spacing.l,
-  },
-  messageText: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.subtleText,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.error,
-    textAlign: 'center',
-  },
-  resultsNote: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.subtleText,
-    textAlign: 'center',
-    marginTop: Layout.spacing.m,
-    marginBottom: Layout.spacing.m,
-    paddingHorizontal: Layout.spacing.m,
-  },
-  noResultsContainer: {
-    alignItems: 'center',
-    padding: Layout.spacing.m, 
-  },
-  noResultsIcon: {
-    marginBottom: Layout.spacing.s,
-  },
-  addNewButton: {
-    marginTop: Layout.spacing.l,
-    padding: Layout.spacing.m,
-    backgroundColor: '#FFF0DB',
-    borderRadius: Layout.borderRadius.medium,
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    justifyContent: 'center',
-  },
-  addNewText: {
-    marginLeft: Layout.spacing.s,
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.primary
-  }
 });

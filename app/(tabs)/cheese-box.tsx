@@ -14,13 +14,18 @@ type CheeseBoxEntry = {
   rating?: number;
   notes?: string;
   created_at: string;
-  cheese: {
+  producer_cheese: {
     id: string;
-    name: string;
-    type: string;
-    origin_country: string;
-    image_url: string;
-    description: string;
+    full_name: string;
+    producer_name: string;
+    product_name?: string;
+    image_url?: string;
+    cheese_type: {
+      id: string;
+      name: string;
+      type: string;
+      origin_country?: string;
+    };
   };
 };
 
@@ -52,13 +57,18 @@ export default function CheeseBoxScreen() {
           rating,
           notes,
           created_at,
-          cheese:cheeses (
+          producer_cheese:producer_cheeses!cheese_id (
             id,
-            name,
-            type,
-            origin_country,
+            full_name,
+            producer_name,
+            product_name,
             image_url,
-            description
+            cheese_type:cheese_types!cheese_type_id (
+              id,
+              name,
+              type,
+              origin_country
+            )
           )
         `)
         .eq('user_id', user.id)
@@ -82,7 +92,7 @@ export default function CheeseBoxScreen() {
     
     // Find most common cheese type
     const typeCounts = entries.reduce((acc, entry) => {
-      const type = entry.cheese.type;
+      const type = entry.producer_cheese.cheese_type.type;
       acc[type] = (acc[type] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -258,17 +268,24 @@ export default function CheeseBoxScreen() {
               <View key={entry.id} style={styles.entryCard}>
                 <TouchableOpacity
                   style={styles.entryContent}
-                  onPress={() => router.push(`/cheese/${entry.cheese.id}`)}
+                  onPress={() => router.push(`/producer-cheese/${entry.producer_cheese.id}`)}
                 >
                   <Image 
-                    source={{ uri: entry.cheese.image_url }} 
+                    source={{ 
+                      uri: entry.producer_cheese.image_url || 'https://via.placeholder.com/90?text=Cheese'
+                    }} 
                     style={styles.entryImage}
                   />
                   <View style={styles.entryInfo}>
-                    <Text style={styles.entryName}>{entry.cheese.name}</Text>
+                    <Text style={styles.entryName}>{entry.producer_cheese.full_name}</Text>
                     <Text style={styles.entryType}>
-                      {entry.cheese.type} • {entry.cheese.origin_country}
+                      {entry.producer_cheese.cheese_type.name} • {entry.producer_cheese.cheese_type.type}
                     </Text>
+                    {entry.producer_cheese.cheese_type.origin_country && (
+                      <Text style={styles.entryOrigin}>
+                        📍 {entry.producer_cheese.cheese_type.origin_country}
+                      </Text>
+                    )}
                     {entry.rating && (
                       <View style={styles.ratingContainer}>
                         {renderStars(entry.rating)}
@@ -290,12 +307,6 @@ export default function CheeseBoxScreen() {
                   </View>
                 </TouchableOpacity>
                 <View style={styles.entryActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => router.push(`/cheese/${entry.cheese.id}/edit`)}
-                  >
-                    <Pen size={16} color={Colors.subtleText} />
-                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.deleteButton]}
                     onPress={() => handleDeleteEntry(entry.id)}
@@ -586,6 +597,12 @@ const styles = StyleSheet.create({
   },
   entryType: {
     fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginBottom: Layout.spacing.xs,
+  },
+  entryOrigin: {
+    fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginBottom: Layout.spacing.xs,

@@ -54,6 +54,7 @@ export default function CheeseDetailScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editRating, setEditRating] = useState<number>(0);
   const [editNotes, setEditNotes] = useState<string>('');
+  const [producerCheeses, setProducerCheeses] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -63,6 +64,12 @@ export default function CheeseDetailScreen() {
       }
     }
   }, [id, user]);
+
+  useEffect(() => {
+    if (cheese) {
+      fetchProducerCheeses();
+    }
+  }, [cheese]);
 
   const fetchCheeseDetails = async () => {
     try {
@@ -108,6 +115,41 @@ export default function CheeseDetailScreen() {
       console.error('Error fetching cheese details:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProducerCheeses = async () => {
+    if (!cheese) return;
+
+    try {
+      // First, find the cheese_type that matches this cheese name
+      const { data: cheeseType, error: typeError } = await supabase
+        .from('cheese_types')
+        .select('id')
+        .ilike('name', cheese.name)
+        .single();
+
+      if (typeError || !cheeseType) {
+        console.log('No matching cheese type found for:', cheese.name);
+        return;
+      }
+
+      // Fetch top rated producer cheeses for this type
+      const { data: producers, error: producersError } = await supabase
+        .from('producer_cheese_stats')
+        .select('*')
+        .eq('cheese_type_id', cheeseType.id)
+        .gte('rating_count', 1) // Only show cheeses with at least 1 rating
+        .not('producer_name', 'ilike', 'generic')
+        .not('producer_name', 'ilike', 'unknown')
+        .order('average_rating', { ascending: false })
+        .limit(6);
+
+      if (!producersError && producers) {
+        setProducerCheeses(producers);
+      }
+    } catch (error) {
+      console.error('Error fetching producer cheeses:', error);
     }
   };
 
@@ -616,6 +658,37 @@ export default function CheeseDetailScreen() {
                   </View>
                 </View>
               )}
+            </View>
+          )}
+
+          {producerCheeses.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Available from these producers</Text>
+              <View style={styles.pairingsGrid}>
+                {producerCheeses.map((producer) => (
+                  <TouchableOpacity
+                    key={producer.id}
+                    style={styles.pairingTile}
+                    onPress={() => router.push(`/producer-cheese/${producer.id}`)}
+                  >
+                    <Image
+                      source={{
+                        uri: producer.image_url || 'https://via.placeholder.com/400?text=Cheese',
+                      }}
+                      style={styles.pairingImage}
+                    />
+                    <View style={styles.pairingOverlay}>
+                      <View style={styles.producerRatingBadge}>
+                        <Star size={12} color="#FFD700" fill="#FFD700" />
+                        <Text style={styles.producerRatingBadgeText}>
+                          {producer.average_rating.toFixed(1)}
+                        </Text>
+                      </View>
+                      <Text style={styles.pairingName}>{producer.full_name}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1227,5 +1300,70 @@ const styles = StyleSheet.create({
   halfStarOverlay: {
     width: '100%',
     height: '100%',
+  },
+  sectionSubtitle: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginBottom: Layout.spacing.m,
+  },
+  producerScrollView: {
+    marginHorizontal: -Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  producerCard: {
+    width: 140,
+    marginRight: Layout.spacing.m,
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.large,
+    overflow: 'hidden',
+    ...Layout.shadow.medium,
+  },
+  producerImage: {
+    width: 140,
+    height: 140,
+    backgroundColor: Colors.lightGray,
+  },
+  producerInfo: {
+    padding: Layout.spacing.m,
+  },
+  producerName: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    marginBottom: Layout.spacing.xs,
+    minHeight: 36,
+  },
+  producerRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  producerRatingText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  producerReviewCount: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+  producerRatingBadge: {
+    position: 'absolute',
+    top: Layout.spacing.s,
+    right: Layout.spacing.s,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: Layout.spacing.s,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  producerRatingBadgeText: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.background,
   },
 });
