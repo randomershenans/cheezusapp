@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
   Platform,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -41,6 +43,7 @@ type DiscoverItem = {
   metadata?: {
     origin_country?: string;
     cheese_type?: string;
+    cheese_family?: string;
     producer_name?: string;
     reading_time?: number;
     average_rating?: number;
@@ -171,6 +174,9 @@ export default function DiscoverScreen() {
   const [items,      setItems]      = useState<DiscoverItem[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [activeFilter, setActive]   = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
+  const [allItems, setAllItems] = useState<DiscoverItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   /* ── data fetch ── */
@@ -221,6 +227,7 @@ export default function DiscoverScreen() {
                 metadata: {
                   origin_country: c.origin_country,
                   cheese_type: c.cheese_type_name,
+                  cheese_family: c.cheese_family,
                   producer_name: c.producer_name,
                   average_rating: c.average_rating,
                   rating_count: c.rating_count,
@@ -291,9 +298,15 @@ export default function DiscoverScreen() {
         all = all.sort(() => Math.random() - 0.5);
       }
 
+      // Store all items before filtering
+      setAllItems(all);
+      
+      // Apply advanced filters
+      const filtered = applyAdvancedFilters(all, selectedFilters);
+      
       // Trim results
-      all = all.slice(0, 30);
-      setItems(all);
+      const trimmed = filtered.slice(0, 30);
+      setItems(trimmed);
     } catch (err) {
       console.error('Error fetching discover items:', err);
     } finally {
@@ -302,6 +315,57 @@ export default function DiscoverScreen() {
   };
 
   /* ── helpers ── */
+  const applyAdvancedFilters = (items: DiscoverItem[], filters: SelectedFilters): DiscoverItem[] => {
+    let filtered = items;
+
+    if (filters.country) {
+      filtered = filtered.filter(item => 
+        item.metadata?.origin_country === filters.country
+      );
+    }
+
+    if (filters.cheeseType) {
+      filtered = filtered.filter(item => 
+        item.metadata?.cheese_family === filters.cheeseType
+      );
+    }
+
+    // Add more filter logic as needed
+    return filtered;
+  };
+
+  const extractFilterOptions = (): FilterOptions => {
+    const countries = [...new Set(
+      allItems
+        .filter(item => item.metadata?.origin_country)
+        .map(item => item.metadata!.origin_country!)
+    )].sort();
+
+    const cheeseTypes = [...new Set(
+      allItems
+        .filter(item => item.metadata?.cheese_family)
+        .map(item => item.metadata!.cheese_family!)
+    )].sort();
+
+    return {
+      countries,
+      milkTypes: ['Cow', 'Goat', 'Sheep', 'Buffalo'],
+      cheeseTypes,
+      pairings: ['Wine', 'Beer', 'Fruit', 'Bread', 'Nuts'],
+    };
+  };
+
+  const handleApplyFilters = (filters: SelectedFilters) => {
+    setSelectedFilters(filters);
+    const filtered = applyAdvancedFilters(allItems, filters);
+    setItems(filtered.slice(0, 30));
+  };
+
+  const formatTypeBadge = (type: string): string => {
+    if (type === 'producer-cheese') return 'Cheese';
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
   const handlePress = (item: DiscoverItem) => {
     if (item.type === 'producer-cheese') {
       router.push(`/producer-cheese/${item.id}`);
@@ -311,9 +375,6 @@ export default function DiscoverScreen() {
       router.push(`/cheezopedia/${item.id}`);
     }
   };
-
-  const getItemIcon = (t: DiscoverItem['type']) =>
-    t === 'cheese' ? '🧀' : t === 'recipe' ? '👨‍🍳' : '📝';
 
   const renderFilterInfo = () => {
     if (type && typeof type === 'string') {
@@ -375,21 +436,22 @@ export default function DiscoverScreen() {
           <View style={styles.heroContent}>
             <View style={styles.heroMeta}>
               <View style={styles.typeBadge}>
-                <Text style={styles.typeIcon}>{getItemIcon(item.type)}</Text>
-                <Text style={styles.typeBadgeText}>{item.type}</Text>
+                <Text style={styles.typeBadgeText}>{formatTypeBadge(item.type)}</Text>
               </View>
               
-              {item.metadata?.reading_time && (
+              {item.metadata?.reading_time && item.metadata.reading_time > 0 && (
                 <View style={styles.timeBadge}>
                   <Clock size={14} color={Colors.background} />
                   <Text style={styles.timeBadgeText}>{item.metadata.reading_time} min</Text>
                 </View>
               )}
 
-              {item.type === 'cheese' && (
+              {(item.type === 'cheese' || item.type === 'producer-cheese') && 
+               (item.metadata?.rating_count ?? 0) > 0 &&
+               parseFloat((item.metadata?.average_rating ?? 0).toString()) > 0 && (
                 <View style={styles.ratingBadge}>
                   <Star size={14} color="#FFD700" fill="#FFD700" />
-                  <Text style={styles.ratingText}>4.{Math.floor(Math.random() * 3) + 6}</Text>
+                  <Text style={styles.ratingText}>{parseFloat(item.metadata.average_rating.toString()).toFixed(1)}</Text>
                 </View>
               )}
             </View>
@@ -429,7 +491,7 @@ export default function DiscoverScreen() {
       <SearchBar
         placeholder="Search everything..."
         onSearch={setSearchQuery}
-        onFilter={() => {}}
+        onFilter={() => setShowFilterPanel(true)}
       />
 
       {renderFilterInfo()}
@@ -442,18 +504,7 @@ export default function DiscoverScreen() {
         contentContainerStyle={styles.filterContent}
       >
         {filterOptions.map(opt => {
-          const active   = activeFilter === opt.key;
-          const Count    =
-            opt.key === 'all'
-              ? items.length
-              : items.filter(i =>
-                  opt.key === 'cheese'
-                    ? i.type === 'cheese'
-                    : opt.key === 'articles'
-                    ? i.type === 'article'
-                    : i.type === 'recipe'
-                ).length;
-
+          const active = activeFilter === opt.key;
           const Icon = opt.icon;
 
           return (
@@ -462,20 +513,10 @@ export default function DiscoverScreen() {
               style={styles.filterItem}
               onPress={() => setActive(opt.key as any)}
             >
-              <Icon size={20} color={active ? opt.color : Colors.subtleText} />
+              <Icon size={24} color={active ? opt.color : Colors.subtleText} />
               <Text style={[styles.filterText, { color: active ? opt.color : Colors.subtleText }]}>
                 {opt.label}
               </Text>
-              {!!Count && (
-                <Text
-                  style={[
-                    styles.filterCount,
-                    { color: active ? opt.color : Colors.subtleText },
-                  ]}
-                >
-                  {Count}
-                </Text>
-              )}
             </TouchableOpacity>
           );
         })}
@@ -501,6 +542,30 @@ export default function DiscoverScreen() {
         )}
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Filter Panel Modal */}
+      <Modal
+        visible={showFilterPanel}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilterPanel(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilterPanel(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <FilterPanel
+              visible={showFilterPanel}
+              onClose={() => setShowFilterPanel(false)}
+              onApply={handleApplyFilters}
+              options={extractFilterOptions()}
+              currentFilters={selectedFilters}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -572,11 +637,9 @@ const styles = StyleSheet.create({
   /* -------- filter bar -------- */
   filterContainer: {
     marginTop: Layout.spacing.s,
-    marginBottom: 2,
-
-    /* ⬇ Prevent the horizontal ScrollView from stretching vertically */
+    marginBottom: Layout.spacing.m,
     flexGrow: 0,
-    maxHeight: 85, // adjust to icon+text height; optional but keeps layout tidy
+    maxHeight: 85,
   },
   filterContent: {
     flexDirection: 'row',
@@ -584,21 +647,21 @@ const styles = StyleSheet.create({
     columnGap: Layout.spacing.xl,
     paddingHorizontal: Layout.spacing.m,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
   },
   filterItem: {
     alignItems: 'center',
-    gap: Layout.spacing.xs,
-    minWidth: 60,
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.s,
   },
   filterText: {
-    fontSize: Typography.sizes.sm,
+    fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.bodySemiBold,
     textAlign: 'center',
-  },
-  filterCount: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.bodyMedium,
-    textAlign: 'center',
+    marginTop: 2,
   },
 
   /* -------- main list -------- */
@@ -644,20 +707,17 @@ const styles = StyleSheet.create({
   typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(230, 126, 34, 0.95)',
+    backgroundColor: '#FCD95B',
     paddingHorizontal: Layout.spacing.m,
-    paddingVertical: Layout.spacing.s,
+    paddingVertical: Layout.spacing.xs,
     borderRadius: Layout.borderRadius.medium,
     gap: Layout.spacing.xs,
   },
-  typeIcon: { fontSize: Typography.sizes.sm },
   typeBadgeText: {
     color: Colors.background,
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
-    textTransform: 'capitalize',
   },
-
   timeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -765,4 +825,11 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacing: { height: Layout.spacing.xl },
+  
+  /* -------- modal -------- */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
 });

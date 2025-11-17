@@ -17,8 +17,8 @@ export default function TabLayout() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const iconColor = '#000000';
-  const activeIconColor = '#000000';
+  const iconColor = '#888888';
+  const activeIconColor = '#FCD95B';
 
   return (
     <View style={styles.container}>

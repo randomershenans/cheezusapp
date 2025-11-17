@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag } from 'lucide-react-native';
+import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag, Grid } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import NearbyCheeseCard from '@/components/NearbyCheeseCard';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
@@ -31,6 +32,7 @@ type TrendingCheese = {
   image_url: string;
   producer_name?: string;
   cheese_type_name?: string;
+  cheese_family?: string;
   average_rating?: number;
   rating_count?: number;
   is_producer_cheese?: boolean;
@@ -58,12 +60,20 @@ type FeedItem = {
 export default function HomeScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+  const [allFeedItems, setAllFeedItems] = useState<FeedItem[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
 
   useEffect(() => {
     fetchHomeData();
   }, []);
+
+  useEffect(() => {
+    filterFeedItems();
+  }, [searchQuery, allFeedItems]);
 
   const fetchHomeData = async () => {
     try {
@@ -79,7 +89,7 @@ export default function HomeScreen() {
       // Fetch trending producer cheeses
       const { data: producerCheeses } = await supabase
         .from('producer_cheese_stats')
-        .select('id, full_name, cheese_type_name, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count')
+        .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count')
         .limit(20);
 
       // Map producer cheeses to feed format
@@ -98,10 +108,11 @@ export default function HomeScreen() {
             type: pc.cheese_type_name,
             origin_country: pc.origin_country,
             origin_region: pc.origin_region,
-            description: pc.description || `${pc.producer_name} ${pc.cheese_type_name}`,
-            image_url: pc.image_url || 'https://via.placeholder.com/400?text=Cheese',
+            description: pc.description,
+            image_url: pc.image_url,
             producer_name: pc.producer_name,
             cheese_type_name: pc.cheese_type_name,
+            cheese_family: pc.cheese_family,
             average_rating: pc.average_rating,
             rating_count: pc.rating_count,
             is_producer_cheese: true,
@@ -119,60 +130,22 @@ export default function HomeScreen() {
 
       console.log('Sponsored pairings query result:', { sponsoredPairings, sponsoredError });
 
-      // Create mixed feed items
-      const mixedItems: FeedItem[] = [];
+      // Build interleaved feed
+      const feed: FeedItem[] = [];
 
-      // Add cheese items
-      if (cheeses && cheeses.length > 0) {
-        cheeses.forEach(cheese => {
-          mixedItems.push({
-            id: `${cheese.is_producer_cheese ? 'producer-cheese' : 'cheese'}-${cheese.id}`,
-            type: cheese.is_producer_cheese ? 'producer-cheese' : 'cheese',
-            data: cheese
-          });
-        });
+      // Add cheese and featured entries in an interleaved pattern
+      const maxItems = Math.max(cheeses.length, entries.length);
+      for (let i = 0; i < maxItems; i++) {
+        if (i < cheeses.length) {
+          feed.push({ id: `cheese-${cheeses[i].id}`, type: 'producer-cheese', data: cheeses[i] });
+        }
+        if (i < entries.length) {
+          feed.push({ id: `featured-${entries[i].id}`, type: 'featured', data: entries[i] });
+        }
       }
 
-      // Add featured items
-      if (entries) {
-        entries.forEach(entry => {
-          mixedItems.push({
-            id: `featured-${entry.id}`,
-            type: 'featured',
-            data: entry
-          });
-        });
-      }
-
-      // Add sponsored pairings near the top (high visibility!)
-      if (sponsoredPairings && sponsoredPairings.length > 0) {
-        sponsoredPairings.forEach((pairing, index) => {
-          // Insert at strategic positions (2nd, 5th, 8th items)
-          const position = (index * 3) + 1;
-          mixedItems.splice(position, 0, {
-            id: `sponsored-${pairing.id}`,
-            type: 'sponsored_pairing',
-            data: pairing
-          });
-        });
-      }
-
-      // Add nearby cheese component at a random position (not first)
-      const nearbyPosition = Math.floor(Math.random() * (mixedItems.length - 1)) + 1;
-      mixedItems.splice(nearbyPosition, 0, {
-        id: 'nearby-cheese',
-        type: 'nearby',
-        data: null
-      });
-
-      // Shuffle the remaining items
-      const shuffled = [...mixedItems];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-
-      setFeedItems(shuffled);
+      setAllFeedItems(feed);
+      setFeedItems(feed);
     } catch (error) {
       console.error('Error fetching home data:', error);
     } finally {
@@ -181,11 +154,156 @@ export default function HomeScreen() {
   };
 
   const handleSearch = (query: string) => {
-    router.push(`/discover?q=${encodeURIComponent(query)}`);
+    setSearchQuery(query);
+  };
+
+  // Fuzzy matching helper (same as discover)
+  const levenshteinDistance = (str1: string, str2: string): number => {
+    const m = str1.length;
+    const n = str2.length;
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (str1[i - 1].toLowerCase() === str2[j - 1].toLowerCase()) {
+          dp[i][j] = dp[i - 1][j - 1];
+        } else {
+          dp[i][j] = Math.min(
+            dp[i - 1][j] + 1,
+            dp[i][j - 1] + 1,
+            dp[i - 1][j - 1] + 1
+          );
+        }
+      }
+    }
+
+    return dp[m][n];
+  };
+
+  const fuzzyMatch = (str: string, pattern: string): boolean => {
+    if (!str || !pattern) return false;
+    
+    str = str.toLowerCase();
+    pattern = pattern.toLowerCase();
+    
+    if (str.includes(pattern)) return true;
+    
+    if (pattern.length <= 3) {
+      return str.split(/\s+/).some(word => word.startsWith(pattern));
+    }
+    
+    const words = str.split(/\s+/);
+    for (const word of words) {
+      if (word === pattern) return true;
+      
+      const prefix = word.slice(0, pattern.length);
+      const maxPrefixDistance = pattern.length <= 5 ? 1 : Math.ceil(pattern.length * 0.25);
+      if (levenshteinDistance(prefix, pattern) <= maxPrefixDistance) return true;
+      
+      if (Math.abs(word.length - pattern.length) <= 3) {
+        const maxDistance = Math.ceil(pattern.length * 0.3);
+        const distance = levenshteinDistance(word, pattern);
+        if (distance <= maxDistance) return true;
+      }
+    }
+    
+    return false;
+  };
+
+  const filterFeedItems = () => {
+    if (!searchQuery || !searchQuery.trim()) {
+      setFeedItems(allFeedItems);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    
+    const filtered = allFeedItems.filter(item => {
+      if (!item.data) return false;
+      
+      if (item.type === 'producer-cheese' || item.type === 'cheese') {
+        const cheese = item.data as TrendingCheese;
+        return (
+          fuzzyMatch(cheese.name, query) ||
+          (cheese.cheese_type_name && fuzzyMatch(cheese.cheese_type_name, query)) ||
+          (cheese.origin_country && fuzzyMatch(cheese.origin_country, query)) ||
+          (cheese.description && fuzzyMatch(cheese.description, query))
+        );
+      } else if (item.type === 'featured') {
+        const featured = item.data as FeaturedEntry;
+        return (
+          fuzzyMatch(featured.title, query) ||
+          fuzzyMatch(featured.description, query)
+        );
+      }
+      
+      return false;
+    });
+
+    setFeedItems(filtered);
   };
 
   const handleFilter = () => {
-    router.push('/discover');
+    setShowFilterPanel(true);
+  };
+
+  const extractFilterOptions = (): FilterOptions => {
+    const countries = [...new Set(
+      allFeedItems
+        .filter(item => item.type === 'producer-cheese' || item.type === 'cheese')
+        .map(item => (item.data as TrendingCheese)?.origin_country)
+        .filter(Boolean)
+    )].sort();
+
+    const cheeseTypes = [...new Set(
+      allFeedItems
+        .filter(item => item.type === 'producer-cheese' || item.type === 'cheese')
+        .map(item => (item.data as TrendingCheese)?.cheese_family)
+        .filter(Boolean)
+    )].sort();
+
+    return {
+      countries: countries as string[],
+      milkTypes: ['Cow', 'Goat', 'Sheep', 'Buffalo'],
+      cheeseTypes: cheeseTypes as string[],
+      pairings: ['Wine', 'Beer', 'Fruit', 'Bread', 'Nuts'],
+    };
+  };
+
+  const handleApplyFilters = (filters: SelectedFilters) => {
+    setSelectedFilters(filters);
+    let filtered = allFeedItems;
+
+    if (filters.country) {
+      filtered = filtered.filter(item => {
+        if (item.type === 'producer-cheese' || item.type === 'cheese') {
+          return (item.data as TrendingCheese).origin_country === filters.country;
+        }
+        return false;
+      });
+    }
+
+    if (filters.cheeseType) {
+      filtered = filtered.filter(item => {
+        if (item.type === 'producer-cheese' || item.type === 'cheese') {
+          return (item.data as TrendingCheese).cheese_family === filters.cheeseType;
+        }
+        return false;
+      });
+    }
+
+    setFeedItems(filtered);
+  };
+
+  // Format content type for display (remove underscores, capitalize words)
+  const formatContentType = (contentType: string): string => {
+    return contentType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
 
   const renderCheeseCard = (cheese: TrendingCheese) => {
@@ -271,7 +389,7 @@ export default function HomeScreen() {
               <View style={styles.featuredBadge}>
                 {getContentIcon(entry.content_type)}
                 <Text style={styles.featuredBadgeText}>
-                  {entry.content_type.charAt(0).toUpperCase() + entry.content_type.slice(1)}
+                  {formatContentType(entry.content_type)}
                 </Text>
               </View>
               {entry.reading_time_minutes && (
@@ -393,6 +511,30 @@ export default function HomeScreen() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Filter Panel Modal */}
+      <Modal
+        visible={showFilterPanel}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilterPanel(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilterPanel(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <FilterPanel
+              visible={showFilterPanel}
+              onClose={() => setShowFilterPanel(false)}
+              onApply={handleApplyFilters}
+              options={extractFilterOptions()}
+              currentFilters={selectedFilters}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -781,5 +923,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  /* -------- modal -------- */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
 });
