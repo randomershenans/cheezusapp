@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions, Modal, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag, Grid } from 'lucide-react-native';
+import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag, Grid, Award } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { getPersonalizedFeed, interleaveFeedItems, getCheeseDisplayName, FeedItem as ApiFeedItem, FeedCheeseItem, FeedArticle, FeedSponsored, UserTasteProfile } from '@/lib/feed-service';
+import { useAuth } from '@/contexts/AuthContext';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import NearbyCheeseCard from '@/components/NearbyCheeseCard';
@@ -59,17 +61,98 @@ type FeedItem = {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [allFeedItems, setAllFeedItems] = useState<FeedItem[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [personalizedFeed, setPersonalizedFeed] = useState<ApiFeedItem[]>([]);
+  const [userProfile, setUserProfile] = useState<UserTasteProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
+  const [seenIds, setSeenIds] = useState<string[]>([]);
 
   useEffect(() => {
-    fetchHomeData();
-  }, []);
+    loadPersonalizedFeed();
+  }, [user]);
+
+  const loadPersonalizedFeed = async () => {
+    setLoading(true);
+    try {
+      const response = await getPersonalizedFeed(user?.id, 20, 0, []);
+      setUserProfile(response.profile);
+      const interleaved = interleaveFeedItems(response);
+      
+      // Convert to legacy format
+      const converted: FeedItem[] = interleaved.map(item => {
+        if ('cheese' in item) {
+          const cheeseItem = item as FeedCheeseItem;
+          return {
+            id: `cheese-${cheeseItem.cheese.id}`,
+            type: 'producer-cheese' as const,
+            data: {
+              id: cheeseItem.cheese.id,
+              name: getCheeseDisplayName(cheeseItem.cheese),
+              type: cheeseItem.cheese.cheese_type_name,
+              origin_country: cheeseItem.cheese.origin_country || '',
+              description: cheeseItem.reason,
+              image_url: cheeseItem.cheese.image_url || '',
+              producer_name: cheeseItem.cheese.producer_name,
+              cheese_type_name: cheeseItem.cheese.cheese_type_name,
+              cheese_family: cheeseItem.cheese.cheese_family,
+              average_rating: cheeseItem.cheese.average_rating,
+              rating_count: cheeseItem.cheese.rating_count,
+              awards_image_url: cheeseItem.cheese.awards_image_url,
+              is_producer_cheese: true,
+              recommendation_type: cheeseItem.type,
+              recommendation_reason: cheeseItem.reason,
+            } as TrendingCheese & { awards_image_url?: string; recommendation_type?: string; recommendation_reason?: string },
+          };
+        } else if (item.type === 'article') {
+          const articleItem = item as FeedArticle;
+          return {
+            id: `featured-${articleItem.id}`,
+            type: 'featured' as const,
+            data: {
+              id: articleItem.id,
+              title: articleItem.title,
+              description: articleItem.description || '',
+              image_url: articleItem.image_url || '',
+              content_type: articleItem.content_type,
+              reading_time_minutes: articleItem.reading_time,
+            } as FeaturedEntry,
+          };
+        } else {
+          const sponsoredItem = item as FeedSponsored;
+          return {
+            id: `sponsored-${sponsoredItem.id}`,
+            type: 'sponsored_pairing' as const,
+            data: {
+              id: sponsoredItem.id,
+              pairing: sponsoredItem.pairing,
+              type: sponsoredItem.pairing_type,
+              description: sponsoredItem.description || '',
+              image_url: sponsoredItem.image_url || '',
+              featured_image_url: sponsoredItem.featured_image_url || '',
+              brand_name: sponsoredItem.brand_name || '',
+              brand_logo_url: sponsoredItem.brand_logo_url || '',
+              product_name: sponsoredItem.product_name || '',
+              price_range: '',
+            } as SponsoredPairing,
+          };
+        }
+      });
+      
+      setAllFeedItems(converted);
+      setFeedItems(converted);
+    } catch (error) {
+      console.error('Error loading feed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (searchQuery && searchQuery.trim()) {
@@ -78,6 +161,76 @@ export default function HomeScreen() {
       setFeedItems(allFeedItems);
     }
   }, [searchQuery, allFeedItems]);
+
+  const convertAndSetFeed = () => {
+    const converted: FeedItem[] = personalizedFeed.map(item => {
+      if ('cheese' in item) {
+        const cheeseItem = item as FeedCheeseItem;
+        return {
+          id: `cheese-${cheeseItem.cheese.id}`,
+          type: 'producer-cheese' as const,
+          data: {
+            id: cheeseItem.cheese.id,
+            name: getCheeseDisplayName(cheeseItem.cheese),
+            type: cheeseItem.cheese.cheese_type_name,
+            origin_country: cheeseItem.cheese.origin_country || '',
+            description: cheeseItem.reason, // Use recommendation reason as description
+            image_url: cheeseItem.cheese.image_url || '',
+            producer_name: cheeseItem.cheese.producer_name,
+            cheese_type_name: cheeseItem.cheese.cheese_type_name,
+            cheese_family: cheeseItem.cheese.cheese_family,
+            average_rating: cheeseItem.cheese.average_rating,
+            rating_count: cheeseItem.cheese.rating_count,
+            awards_image_url: cheeseItem.cheese.awards_image_url,
+            is_producer_cheese: true,
+            recommendation_type: cheeseItem.type,
+            recommendation_reason: cheeseItem.reason,
+          } as TrendingCheese & { awards_image_url?: string; recommendation_type?: string; recommendation_reason?: string },
+        };
+      } else if (item.type === 'article') {
+        const articleItem = item as FeedArticle;
+        return {
+          id: `featured-${articleItem.id}`,
+          type: 'featured' as const,
+          data: {
+            id: articleItem.id,
+            title: articleItem.title,
+            description: articleItem.description || '',
+            image_url: articleItem.image_url || '',
+            content_type: articleItem.content_type,
+            reading_time_minutes: articleItem.reading_time,
+          } as FeaturedEntry,
+        };
+      } else {
+        const sponsoredItem = item as FeedSponsored;
+        return {
+          id: `sponsored-${sponsoredItem.id}`,
+          type: 'sponsored_pairing' as const,
+          data: {
+            id: sponsoredItem.id,
+            pairing: sponsoredItem.pairing,
+            type: sponsoredItem.pairing_type,
+            description: sponsoredItem.description || '',
+            image_url: sponsoredItem.image_url || '',
+            featured_image_url: sponsoredItem.featured_image_url || '',
+            brand_name: sponsoredItem.brand_name || '',
+            brand_logo_url: sponsoredItem.brand_logo_url || '',
+            product_name: sponsoredItem.product_name || '',
+            price_range: '',
+          } as SponsoredPairing,
+        };
+      }
+    });
+    
+    setAllFeedItems(converted);
+    setFeedItems(converted);
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadPersonalizedFeed();
+    setRefreshing(false);
+  }, [user]);
 
   const fetchHomeData = async () => {
     try {
@@ -375,7 +528,7 @@ export default function HomeScreen() {
       .join(' ');
   };
 
-  const renderCheeseCard = (cheese: TrendingCheese) => {
+  const renderCheeseCard = (cheese: TrendingCheese & { awards_image_url?: string; recommendation_type?: string; recommendation_reason?: string }) => {
     // Calculate responsive height based on screen width
     const cardHeight = screenWidth * 0.75; // 75% of screen width for better aspect ratio
 
@@ -387,6 +540,24 @@ export default function HomeScreen() {
       }
     };
 
+    // Get recommendation badge info
+    const getRecommendationBadge = () => {
+      switch (cheese.recommendation_type) {
+        case 'recommendation':
+          return { icon: <Sparkles size={12} color={Colors.background} />, text: 'For You' };
+        case 'trending':
+          return { icon: <TrendingUp size={12} color={Colors.background} />, text: 'Trending' };
+        case 'award_winner':
+          return { icon: <Award size={12} color={Colors.background} />, text: 'Award Winner' };
+        case 'discovery':
+          return { icon: <Search size={12} color={Colors.background} />, text: 'Discover' };
+        default:
+          return null;
+      }
+    };
+
+    const badge = getRecommendationBadge();
+
     return (
       <TouchableOpacity
         style={[styles.cheeseCard, { height: cardHeight }]}
@@ -396,12 +567,31 @@ export default function HomeScreen() {
           source={{ uri: cheese.image_url }} 
           style={styles.cheeseImage}
         />
+        
+        {/* Awards badge overlay */}
+        {cheese.awards_image_url && (
+          <View style={styles.awardsBadgeContainer}>
+            <Image
+              source={{ uri: cheese.awards_image_url }}
+              style={styles.awardsBadge}
+              resizeMode="contain"
+            />
+          </View>
+        )}
+        
         <View style={styles.cheeseOverlay}>
           <View style={styles.cheeseContent}>
             <View style={styles.cheeseMeta}>
-              <View style={styles.cheeseBadge}>
-                <Text style={styles.cheeseBadgeText}>Cheese</Text>
-              </View>
+              {badge ? (
+                <View style={[styles.cheeseBadge, styles.recommendationBadge]}>
+                  {badge.icon}
+                  <Text style={styles.cheeseBadgeText}>{badge.text}</Text>
+                </View>
+              ) : (
+                <View style={styles.cheeseBadge}>
+                  <Text style={styles.cheeseBadgeText}>Cheese</Text>
+                </View>
+              )}
               {cheese.average_rating && cheese.rating_count ? (
                 <View style={styles.ratingBadge}>
                   <Star size={14} color="#FFD700" fill="#FFD700" />
@@ -551,9 +741,22 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
         <View style={styles.header}>
-          <Text style={styles.greeting}>Hello Cheeky Cheese Lovers!</Text>
+          <Text style={styles.greeting}>
+            {userProfile ? `Hey there, cheese ${userProfile.tier}!` : 'Hello Cheeky Cheese Lovers!'}
+          </Text>
           <Text style={styles.title}>Let's Get Cheesy</Text>
         </View>
 
@@ -680,6 +883,16 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  awardsBadgeContainer: {
+    position: 'absolute',
+    top: Layout.spacing.m,
+    right: Layout.spacing.m,
+    zIndex: 10,
+  },
+  awardsBadge: {
+    width: 60,
+    height: 60,
+  },
   cheeseOverlay: {
     position: 'absolute',
     top: 0,
@@ -706,6 +919,9 @@ const styles = StyleSheet.create({
     paddingVertical: Layout.spacing.s,
     borderRadius: Layout.borderRadius.medium,
     gap: Layout.spacing.xs,
+  },
+  recommendationBadge: {
+    backgroundColor: Colors.primary,
   },
   cheeseBadgeText: {
     color: Colors.background,

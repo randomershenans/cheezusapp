@@ -1,5 +1,45 @@
 # Cheezus App - Update Documentation
 
+## Personalized Feed Algorithm (December 2, 2025)
+
+### Added Smart Recommendation Engine
+- Created `lib/feed-service.ts` with personalized feed management:
+  - `getPersonalizedFeed()` - Fetches mixed feed based on user profile
+  - `getUserTasteProfile()` - Analyzes user's cheese box for preferences
+  - `interleaveFeedItems()` - Mixes content types for varied feed
+  - `getCheeseDisplayName()` - Hides generic producer names
+
+- Created Supabase RPC functions (see `docs/home-feed-functions.md`):
+  - `get_user_taste_profile()` - Builds user preferences from ratings
+  - `get_personalized_feed()` - Returns categorized recommendations
+
+### Feed Composition
+- **Personalized Recommendations** (40%) - Based on user's taste profile
+- **Trending/Popular** (25%) - Highly rated cheeses
+- **Discovery** (20%) - Random cheeses for exploration
+- **Award Winners** - Cheeses with awards_image_url
+- **Articles** (20%) - Cheezopedia content
+- **Sponsored** (10%) - Promoted pairings
+
+### Cold Start Handling
+- New users (0 ratings): Heavy on trending, awards, discovery
+- Starting (1-3 ratings): Begin weighting toward preferences
+- Building (4-10 ratings): Personalization increases
+- Connoisseur (10+ ratings): Full personalization
+
+### Updated Home Screen (`app/(tabs)/index.tsx`)
+- Pull-to-refresh resets and reshuffles feed
+- Recommendation badges: "For You", "Trending", "Award Winner", "Discover"
+- Awards badge overlay on cheese cards
+- Personalized greeting based on user tier
+- Session-based seen ID tracking
+
+### Awards Image Support
+- Added `awards_image_url` to `ProducerCheese` interface
+- Awards badge displays on cheese detail hero
+- Awards badge displays on producer page cheese grid
+- Awards badge displays on home feed cards
+
 ## Producer Pages Implementation (December 2, 2025)
 
 ### Added Producer Showcase Feature

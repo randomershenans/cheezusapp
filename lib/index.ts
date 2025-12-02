@@ -18,3 +18,4 @@ export * from './cheese-types-service';
 export * from './producer-cheese-service';
 export * from './flavor-tags-service';
 export * from './producer-service';
+export * from './feed-service';
