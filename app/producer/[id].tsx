@@ -302,12 +302,21 @@ export default function ProducerDetailScreen() {
                     style={styles.cheeseCard}
                     onPress={() => router.push(`/producer-cheese/${cheese.id}`)}
                   >
-                    <Image
-                      source={{
-                        uri: cheese.image_url || 'https://via.placeholder.com/200?text=Cheese',
-                      }}
-                      style={styles.cheeseImage}
-                    />
+                    <View style={styles.cheeseImageContainer}>
+                      <Image
+                        source={{
+                          uri: cheese.image_url || 'https://via.placeholder.com/200?text=Cheese',
+                        }}
+                        style={styles.cheeseImage}
+                      />
+                      {cheese.awards_image_url && (
+                        <Image
+                          source={{ uri: cheese.awards_image_url }}
+                          style={styles.cheeseAwardBadge}
+                          resizeMode="contain"
+                        />
+                      )}
+                    </View>
                     <View style={styles.cheeseInfo}>
                       <Text style={styles.cheeseName} numberOfLines={2}>
                         {cheese.product_name || cheese.full_name}
@@ -608,10 +617,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Layout.shadow.small,
   },
+  cheeseImageContainer: {
+    position: 'relative',
+  },
   cheeseImage: {
     width: '100%',
     height: 120,
     backgroundColor: Colors.lightGray,
+  },
+  cheeseAwardBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 40,
+    height: 40,
   },
   cheeseInfo: {
     padding: Layout.spacing.s,

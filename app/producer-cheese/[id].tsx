@@ -281,6 +281,17 @@ export default function ProducerCheeseDetailScreen() {
           >
             <Share2 size={24} color={Colors.background} />
           </TouchableOpacity>
+
+          {/* Awards Badge */}
+          {producerCheese.awards_image_url && (
+            <View style={styles.awardsBadgeContainer}>
+              <Image
+                source={{ uri: producerCheese.awards_image_url }}
+                style={styles.awardsBadge}
+                resizeMode="contain"
+              />
+            </View>
+          )}
           
           {/* Hero Content */}
           <View style={styles.heroContent}>
@@ -754,6 +765,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+  },
+  awardsBadgeContainer: {
+    position: 'absolute',
+    top: Layout.spacing.m + 50,
+    right: Layout.spacing.m,
+    zIndex: 10,
+  },
+  awardsBadge: {
+    width: 80,
+    height: 80,
   },
   heroContent: {
     position: 'absolute',

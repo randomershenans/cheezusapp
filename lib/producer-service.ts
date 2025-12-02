@@ -28,6 +28,7 @@ export interface ProducerCheeseSummary {
   product_name?: string;
   cheese_type_name: string;
   image_url?: string;
+  awards_image_url?: string;
   average_rating: number;
   rating_count: number;
   milk_type?: string;
@@ -96,6 +97,7 @@ export const getProducerCheeses = async (
         product_name,
         cheese_type_name,
         image_url,
+        awards_image_url,
         average_rating,
         rating_count,
         milk_type,

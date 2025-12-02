@@ -17,6 +17,7 @@ export interface ProducerCheese {
   price_range?: number; // 1-5
   availability?: string;
   image_url?: string;
+  awards_image_url?: string;
   verified: boolean;
   added_by?: string;
   created_at?: string;
