@@ -72,7 +72,11 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    filterFeedItems();
+    if (searchQuery && searchQuery.trim()) {
+      searchDatabase();
+    } else {
+      setFeedItems(allFeedItems);
+    }
   }, [searchQuery, allFeedItems]);
 
   const fetchHomeData = async () => {
@@ -155,6 +159,71 @@ export default function HomeScreen() {
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+  };
+
+  // Search database directly when user types
+  const searchDatabase = async () => {
+    if (!searchQuery || !searchQuery.trim()) return;
+    
+    const query = searchQuery.trim();
+    
+    try {
+      // Search producer cheeses in database with ilike
+      const { data: producerCheeses } = await supabase
+        .from('producer_cheese_stats')
+        .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count')
+        .or(`full_name.ilike.%${query}%,cheese_type_name.ilike.%${query}%,producer_name.ilike.%${query}%,origin_country.ilike.%${query}%,description.ilike.%${query}%`)
+        .limit(50);
+
+      // Search articles
+      const { data: entries } = await supabase
+        .from('cheezopedia_entries')
+        .select('id, title, description, image_url, content_type, reading_time_minutes')
+        .eq('visible_in_feed', true)
+        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+        .limit(10);
+
+      // Build search results feed
+      const feed: FeedItem[] = [];
+
+      if (producerCheeses) {
+        producerCheeses.forEach(pc => {
+          const isGeneric = pc.producer_name?.toLowerCase().includes('generic') || 
+                            pc.producer_name?.toLowerCase().includes('unknown');
+          const displayName = isGeneric ? pc.cheese_type_name : pc.full_name;
+          
+          feed.push({
+            id: `cheese-${pc.id}`,
+            type: 'producer-cheese',
+            data: {
+              id: pc.id,
+              name: displayName,
+              type: pc.cheese_type_name,
+              origin_country: pc.origin_country,
+              origin_region: pc.origin_region,
+              description: pc.description,
+              image_url: pc.image_url,
+              producer_name: pc.producer_name,
+              cheese_type_name: pc.cheese_type_name,
+              cheese_family: pc.cheese_family,
+              average_rating: pc.average_rating,
+              rating_count: pc.rating_count,
+              is_producer_cheese: true,
+            },
+          });
+        });
+      }
+
+      if (entries) {
+        entries.forEach(entry => {
+          feed.push({ id: `featured-${entry.id}`, type: 'featured', data: entry });
+        });
+      }
+
+      setFeedItems(feed);
+    } catch (error) {
+      console.error('Error searching:', error);
+    }
   };
 
   // Fuzzy matching helper (same as discover)

@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 export interface ProducerCheese {
   id: string;
   cheese_type_id: string;
+  producer_id?: string;
   producer_name: string;
   product_name?: string;
   full_name: string;

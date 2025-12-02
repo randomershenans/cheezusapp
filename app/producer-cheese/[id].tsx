@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Star, MapPin, ArrowLeft, Factory, Package, DollarSign, Award, X, Share2 } from 'lucide-react-native';
+import { Star, MapPin, ArrowLeft, Factory, Package, DollarSign, Award, X, Share2, ChevronRight } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -317,14 +317,24 @@ export default function ProducerCheeseDetailScreen() {
             )}
 
             <View style={styles.metaRow}>
-              {/* Only show producer if not generic/unknown */}
+              {/* Only show producer if not generic/unknown - clickable if has producer_id */}
               {producerCheese.producer_name && 
                !producerCheese.producer_name.toLowerCase().includes('generic') &&
                !producerCheese.producer_name.toLowerCase().includes('unknown') && (
-                <View style={styles.metaItem}>
+                <TouchableOpacity 
+                  style={styles.metaItem}
+                  onPress={() => {
+                    if ((producerCheese as any).producer_id) {
+                      router.push(`/producer/${(producerCheese as any).producer_id}`);
+                    }
+                  }}
+                  disabled={!(producerCheese as any).producer_id}
+                >
                   <Factory size={16} color="rgba(255, 255, 255, 0.8)" />
-                  <Text style={styles.metaText}>{producerCheese.producer_name}</Text>
-                </View>
+                  <Text style={[styles.metaText, (producerCheese as any).producer_id && styles.metaTextClickable]}>
+                    {producerCheese.producer_name}
+                  </Text>
+                </TouchableOpacity>
               )}
               {producerCheese.price_range && (
                 <View style={styles.metaItem}>
@@ -556,9 +566,18 @@ export default function ProducerCheeseDetailScreen() {
            !producerCheese.producer_name.toLowerCase().includes('generic') &&
            !producerCheese.producer_name.toLowerCase().includes('unknown') && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                More from {producerCheese.producer_name}
-              </Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  if ((producerCheese as any).producer_id) {
+                    router.push(`/producer/${(producerCheese as any).producer_id}`);
+                  }
+                }}
+                disabled={!(producerCheese as any).producer_id}
+              >
+                <Text style={[styles.sectionTitle, (producerCheese as any).producer_id && styles.sectionTitleClickable]}>
+                  More from {producerCheese.producer_name}
+                </Text>
+              </TouchableOpacity>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -817,6 +836,9 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  metaTextClickable: {
+    textDecorationLine: 'underline',
+  },
   contentContainer: {
     padding: Layout.spacing.m,
     paddingBottom: Layout.spacing.xl,
@@ -854,6 +876,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
     marginBottom: Layout.spacing.m,
+  },
+  sectionTitleClickable: {
+    color: Colors.primary,
+    textDecorationLine: 'underline',
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -1200,5 +1226,40 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.primary,
+  },
+  // Producer Link Card
+  producerLinkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    marginTop: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    ...Layout.shadow.small,
+  },
+  producerLinkIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF0DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Layout.spacing.m,
+  },
+  producerLinkContent: {
+    flex: 1,
+  },
+  producerLinkLabel: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  producerLinkName: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.headingMedium,
+    color: Colors.text,
+    marginTop: 2,
   },
 });
