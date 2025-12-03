@@ -17,6 +17,7 @@ type Badge = {
   name: string;
   description: string;
   icon: string;
+  img_url?: string;
   category: string;
   threshold: number;
   progress: number;
@@ -133,12 +134,16 @@ export default function ProfileScreen() {
         .rpc('get_user_badges_with_progress', { user_id: user.id });
 
       if (data && Array.isArray(data)) {
-        const sortedBadges = data.sort((a, b) => {
-          if (a.completed && !b.completed) return -1;
-          if (!a.completed && b.completed) return 1;
-          return (b.progress / b.threshold) - (a.progress / a.threshold);
-        });
-        setBadges(sortedBadges.slice(0, 4));
+        // Show all completed badges first, then top in-progress ones
+        const completed = data.filter(b => b.completed).sort((a, b) => 
+          // Sort by category to group legacy badges first
+          a.category === 'legacy' ? -1 : b.category === 'legacy' ? 1 : 0
+        );
+        const inProgress = data
+          .filter(b => !b.completed)
+          .sort((a, b) => (b.progress / b.threshold) - (a.progress / a.threshold))
+          .slice(0, 4); // Show top 4 in-progress
+        setBadges([...completed, ...inProgress]);
       }
     } catch (error) {
       console.error('Error fetching badges:', error);
@@ -415,57 +420,51 @@ export default function ProfileScreen() {
           </View>
 
           {badges.length > 0 ? (
-            <View style={styles.badgesGrid}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.badgesRow}
+            >
               {badges.map((badge) => {
                 const progress = Math.min(100, (badge.progress / badge.threshold) * 100);
-                const categoryColors = {
-                  quantity: ['#FFE5E5', '#FF6B6B'],
-                  specialty: ['#F0E5FF', '#9B59B6'],
-                  type: ['#E5F9FF', '#3498DB'],
-                  origin: ['#FFF5E5', '#F39C12'],
-                  pairing: ['#E5FFE9', '#27AE60'],
-                  engagement: ['#FFE5F5', '#E91E63'],
-                };
-                const [bgColor, accentColor] = categoryColors[badge.category as keyof typeof categoryColors] || ['#F5F5F5', '#666'];
 
                 return (
                   <TouchableOpacity 
                     key={badge.id} 
-                    style={[styles.badgeCard, { backgroundColor: bgColor }]}
+                    style={styles.badgeCircleContainer}
                     onPress={() => router.push('/badges')}
                   >
-                    <View style={styles.badgeTop}>
-                      <View style={[styles.badgeIconCircle, { backgroundColor: accentColor }]}>
-                        <Text style={styles.badgeEmoji}>{badge.icon || '🏆'}</Text>
-                      </View>
-                      {badge.completed && (
-                        <View style={styles.completedBadge}>
-                          <Sparkles size={12} color="#FFD700" fill="#FFD700" />
-                        </View>
+                    {/* Badge circle with border indicating progress */}
+                    <View style={[
+                      styles.badgeCircle,
+                      badge.completed ? styles.badgeCircleCompleted : styles.badgeCircleInProgress
+                    ]}>
+                      {badge.img_url ? (
+                        <Image source={{ uri: badge.img_url }} style={styles.badgeImageLarge} resizeMode="cover" />
+                      ) : (
+                        <Text style={styles.badgeEmojiLarge}>{badge.icon || '🏆'}</Text>
                       )}
                     </View>
-                    <Text style={styles.badgeName} numberOfLines={1}>{badge.name}</Text>
-                    <Text style={styles.badgeDesc} numberOfLines={2}>{badge.description}</Text>
                     
-                    {!badge.completed && (
-                      <View style={styles.badgeProgress}>
-                        <View style={styles.progressBar}>
-                          <View 
-                            style={[styles.progressFill, { 
-                              width: `${progress}%`,
-                              backgroundColor: accentColor 
-                            }]} 
-                          />
-                        </View>
-                        <Text style={styles.progressText}>
-                          {badge.progress}/{badge.threshold}
-                        </Text>
+                    {/* Stars for completed */}
+                    {badge.completed && (
+                      <View style={styles.starsContainer}>
+                        <Star size={10} color="#FFD700" fill="#FFD700" />
+                        <Star size={12} color="#FFD700" fill="#FFD700" style={{ marginHorizontal: 1 }} />
+                        <Star size={10} color="#FFD700" fill="#FFD700" />
                       </View>
+                    )}
+                    
+                    {/* Progress text for incomplete */}
+                    {!badge.completed && (
+                      <Text style={styles.badgeProgressText}>
+                        {badge.progress}/{badge.threshold}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           ) : (
             <View style={styles.emptyState}>
               <Trophy size={48} color={Colors.subtleText} />
@@ -931,74 +930,43 @@ const styles = StyleSheet.create({
   },
 
   // Badges Grid
-  badgesGrid: {
+  badgesRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
     gap: Layout.spacing.m,
   },
-  badgeCard: {
-    width: (screenWidth - Layout.spacing.l * 2 - Layout.spacing.m) / 2,
-    padding: Layout.spacing.m,
-    borderRadius: Layout.borderRadius.large,
-    ...Layout.shadow.small,
+  badgeCircleContainer: {
+    alignItems: 'center',
   },
-  badgeTop: {
+  badgeCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeCircleCompleted: {
+  },
+  badgeCircleInProgress: {
+  },
+  badgeImageLarge: {
+    width: 120,
+    height: 120,
+  },
+  badgeEmojiLarge: {
+    fontSize: 36,
+  },
+  starsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Layout.spacing.s,
-  },
-  badgeIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 4,
   },
-  badgeEmoji: {
-    fontSize: 24,
-  },
-  completedBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Layout.shadow.small,
-  },
-  badgeName: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  badgeDesc: {
-    fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    lineHeight: 16,
-    marginBottom: Layout.spacing.s,
-  },
-  badgeProgress: {
-    marginTop: Layout.spacing.s,
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  progressText: {
+  badgeProgressText: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
-    textAlign: 'right',
+    marginTop: 4,
   },
   emptyState: {
     paddingVertical: Layout.spacing['2xl'],

@@ -1,11 +1,12 @@
 import React from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Image } from 'react-native';
 import Colors from '@/constants/Colors';
 import Typography from '@/constants/Typography';
 import Layout from '@/constants/Layout';
 
 interface BadgeProgressProps {
   icon: string;
+  imgUrl?: string;
   name: string;
   description: string;
   progress: number;
@@ -16,6 +17,7 @@ interface BadgeProgressProps {
 
 export default function BadgeProgressCard({
   icon,
+  imgUrl,
   name,
   description,
   progress,
@@ -34,9 +36,13 @@ export default function BadgeProgressCard({
       ]}
       onPress={onPress}
     >
-      {/* Badge icon with circle backdrop */}
+      {/* Badge icon/image with circle backdrop */}
       <View style={[styles.iconContainer, completed && styles.completedIconContainer]}>
-        <Text style={styles.icon}>{icon}</Text>
+        {imgUrl ? (
+          <Image source={{ uri: imgUrl }} style={styles.badgeImage} resizeMode="contain" />
+        ) : (
+          <Text style={styles.icon}>{icon}</Text>
+        )}
       </View>
       
       {/* Badge info */}
@@ -91,19 +97,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#E1F5FE',
+    width: 120,
+    height: 120,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: Layout.spacing.m,
   },
   completedIconContainer: {
-    backgroundColor: '#FFF8E1',
   },
   icon: {
-    fontSize: 28,
+    fontSize: 40,
+  },
+  badgeImage: {
+    width: 120,
+    height: 120,
   },
   infoContainer: {
     flex: 1,

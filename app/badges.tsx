@@ -11,7 +11,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { TouchableOpacity } from 'react-native';
-import { Trophy, ArrowLeft } from 'lucide-react-native';
+import { Trophy, ArrowLeft, CheckCircle, Circle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
 import Typography from '@/constants/Typography';
@@ -24,6 +24,7 @@ interface Badge {
   name: string;
   description: string;
   icon: string;
+  img_url?: string;
   category: string;
   threshold: number;
   progress: number;
@@ -35,6 +36,7 @@ export default function BadgeScreen() {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showCompletedFirst, setShowCompletedFirst] = useState(true);
   const [stats, setStats] = useState({
     totalBadges: 0,
     earnedBadges: 0,
@@ -89,15 +91,33 @@ export default function BadgeScreen() {
     fetchBadges();
   };
   
-  // Group badges by category for section headers
+  // Group badges - either by completion status or by category
   const groupedBadges = badges.reduce((acc, badge) => {
-    const category = badge.category;
-    if (!acc[category]) {
-      acc[category] = [];
+    let groupKey: string;
+    
+    if (showCompletedFirst) {
+      // Group by completion status
+      groupKey = badge.completed ? 'completed' : 'in_progress';
+    } else {
+      // Group by category
+      groupKey = badge.category;
     }
-    acc[category].push(badge);
+    
+    if (!acc[groupKey]) {
+      acc[groupKey] = [];
+    }
+    acc[groupKey].push(badge);
     return acc;
   }, {} as Record<string, Badge[]>);
+  
+  // Sort the groups so completed comes first
+  const sortedGroupEntries = Object.entries(groupedBadges).sort(([a], [b]) => {
+    if (showCompletedFirst) {
+      if (a === 'completed') return -1;
+      if (b === 'completed') return 1;
+    }
+    return a.localeCompare(b);
+  });
   
   // Format category names for display
   const formatCategory = (category: string) => {
@@ -161,18 +181,38 @@ export default function BadgeScreen() {
         </View>
       </View>
       
+      {/* Filter toggle */}
+      <View style={styles.filterRow}>
+        <TouchableOpacity 
+          style={[styles.filterButton, showCompletedFirst && styles.filterButtonActive]}
+          onPress={() => setShowCompletedFirst(true)}
+        >
+          <CheckCircle size={16} color={showCompletedFirst ? '#fff' : Colors.text} />
+          <Text style={[styles.filterText, showCompletedFirst && styles.filterTextActive]}>Completed First</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.filterButton, !showCompletedFirst && styles.filterButtonActive]}
+          onPress={() => setShowCompletedFirst(false)}
+        >
+          <Circle size={16} color={!showCompletedFirst ? '#fff' : Colors.text} />
+          <Text style={[styles.filterText, !showCompletedFirst && styles.filterTextActive]}>By Category</Text>
+        </TouchableOpacity>
+      </View>
+      
       {/* Badge list */}
       <FlatList
-        data={Object.entries(groupedBadges)}
+        data={sortedGroupEntries}
         keyExtractor={([category]) => category}
         renderItem={({ item: [category, categoryBadges] }) => (
           <View style={styles.categorySection}>
             <Text style={styles.categoryTitle}>{formatCategory(category)}</Text>
             {categoryBadges
               .sort((a, b) => {
-                // Show completed badges last
-                if (a.completed && !b.completed) return 1;
-                if (!a.completed && b.completed) return -1;
+                if (showCompletedFirst) {
+                  // Show completed badges first
+                  if (a.completed && !b.completed) return -1;
+                  if (!a.completed && b.completed) return 1;
+                }
                 // Otherwise sort by progress percentage
                 const aPercent = a.progress / a.threshold;
                 const bPercent = b.progress / b.threshold;
@@ -182,6 +222,7 @@ export default function BadgeScreen() {
                 <BadgeProgressCard
                   key={badge.id}
                   icon={badge.icon}
+                  imgUrl={badge.img_url}
                   name={badge.name}
                   description={badge.description}
                   progress={badge.progress}
@@ -276,6 +317,37 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodyMedium,
     fontSize: Typography.sizes.sm,
     color: Colors.subtleText,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Layout.spacing.m,
+    marginTop: Layout.spacing.m,
+    marginBottom: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.m,
+    borderRadius: 20,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  filterButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterText: {
+    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.text,
+  },
+  filterTextActive: {
+    color: '#fff',
   },
   categorySection: {
     marginTop: Layout.spacing.l,
