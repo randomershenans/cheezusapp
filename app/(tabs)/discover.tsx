@@ -200,16 +200,11 @@ export default function DiscoverScreen() {
         // Fetch producer cheeses - if searching, get more for fuzzy matching
         let producerQuery = supabase
           .from('producer_cheese_stats')
-          .select('id, full_name, description, image_url, cheese_type_name, producer_name, origin_country, average_rating, rating_count, cheese_family, flavor_profile');
+          .select('id, full_name, image_url, cheese_type_name, producer_name, average_rating, rating_count');
         
         // Apply type filter if present
         if (type && typeof type === 'string') {
           producerQuery = producerQuery.eq('cheese_type_name', type);
-        }
-        
-        // Apply region filter if present
-        if (region && typeof region === 'string') {
-          producerQuery = producerQuery.eq('origin_country', region);
         }
         
         // If searching, get more results for fuzzy matching; otherwise limit
@@ -227,13 +222,11 @@ export default function DiscoverScreen() {
               return {
                 id: c.id,
                 title: displayTitle,
-                description: c.description || `${c.producer_name} ${c.cheese_type_name}`,
+                description: `${c.producer_name} ${c.cheese_type_name}`,
                 image_url: c.image_url || 'https://via.placeholder.com/400?text=Cheese',
                 type: 'producer-cheese' as const,
                 metadata: {
-                  origin_country: c.origin_country,
                   cheese_type: c.cheese_type_name,
-                  cheese_family: c.cheese_family,
                   producer_name: c.producer_name,
                   average_rating: c.average_rating,
                   rating_count: c.rating_count,
@@ -324,6 +317,7 @@ export default function DiscoverScreen() {
   const applyAdvancedFilters = (items: DiscoverItem[], filters: SelectedFilters): DiscoverItem[] => {
     let filtered = items;
 
+    // Country filter - only applies to items that have origin_country in metadata
     if (filters.country) {
       filtered = filtered.filter(item => 
         item.metadata?.origin_country === filters.country
@@ -332,7 +326,7 @@ export default function DiscoverScreen() {
 
     if (filters.cheeseType) {
       filtered = filtered.filter(item => 
-        item.metadata?.cheese_family === filters.cheeseType
+        item.metadata?.cheese_type === filters.cheeseType
       );
     }
 
@@ -341,16 +335,13 @@ export default function DiscoverScreen() {
   };
 
   const extractFilterOptions = (): FilterOptions => {
-    const countries = [...new Set(
-      allItems
-        .filter(item => item.metadata?.origin_country)
-        .map(item => item.metadata!.origin_country!)
-    )].sort();
+    // Countries - currently not available in producer_cheese_stats view
+    const countries: string[] = [];
 
     const cheeseTypes = [...new Set(
       allItems
-        .filter(item => item.metadata?.cheese_family)
-        .map(item => item.metadata!.cheese_family!)
+        .filter(item => item.metadata?.cheese_type)
+        .map(item => item.metadata!.cheese_type!)
     )].sort();
 
     return {

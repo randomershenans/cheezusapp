@@ -191,7 +191,7 @@ export default function ProfileScreen() {
           created_at,
           rating,
           notes,
-          cheese:cheeses(name, type)
+          producer_cheese:producer_cheeses(full_name, producer_name, product_name)
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -539,7 +539,8 @@ export default function ProfileScreen() {
           {recentActivity.length > 0 ? (
             <View style={styles.activityList}>
               {recentActivity.map((activity, index) => {
-                const cheese = activity.cheese as any;
+                const cheese = activity.producer_cheese as any;
+                const cheeseName = cheese?.full_name || cheese?.product_name || 'a cheese';
                 const date = new Date(activity.created_at);
                 const timeAgo = formatTimeAgo(date);
                 
@@ -550,7 +551,7 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.activityContent}>
                       <Text style={styles.activityTitle}>
-                        Tried {cheese?.name || 'a cheese'}
+                        Tried {cheeseName}
                       </Text>
                       <Text style={styles.activityDate}>
                         {activity.rating ? `⭐ ${activity.rating}/5 • ` : ''}{timeAgo}
