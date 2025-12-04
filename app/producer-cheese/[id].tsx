@@ -404,9 +404,15 @@ export default function ProducerCheeseDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Details</Text>
             <View style={styles.detailsGrid}>
+              {(producerCheese as any).cheese_type && (
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Type</Text>
+                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).cheese_type)}</Text>
+                </View>
+              )}
               {(producerCheese as any).cheese_family && (
                 <View style={styles.detailCard}>
-                  <Text style={styles.detailLabel}>Cheese Type</Text>
+                  <Text style={styles.detailLabel}>Family</Text>
                   <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).cheese_family)}</Text>
                 </View>
               )}
@@ -416,10 +422,10 @@ export default function ProducerCheeseDetailScreen() {
                   <Text style={styles.detailValue}>{capitalizeText(producerCheese.milk_type)}</Text>
                 </View>
               )}
-              {(producerCheese as any).texture_notes && (
+              {(producerCheese as any).texture && (
                 <View style={styles.detailCard}>
                   <Text style={styles.detailLabel}>Texture</Text>
-                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).texture_notes)}</Text>
+                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).texture)}</Text>
                 </View>
               )}
               {(producerCheese as any).color && (
@@ -434,12 +440,10 @@ export default function ProducerCheeseDetailScreen() {
                   <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).rind)}</Text>
                 </View>
               )}
-              {((producerCheese as any).typical_ageing_period || producerCheese.ageing_period) && (
+              {producerCheese.ageing_period && (
                 <View style={styles.detailCard}>
                   <Text style={styles.detailLabel}>Ageing</Text>
-                  <Text style={styles.detailValue}>
-                    {capitalizeText((producerCheese as any).typical_ageing_period || producerCheese.ageing_period)}
-                  </Text>
+                  <Text style={styles.detailValue}>{capitalizeText(producerCheese.ageing_period)}</Text>
                 </View>
               )}
               {(producerCheese as any).fat_content && (
@@ -454,27 +458,61 @@ export default function ProducerCheeseDetailScreen() {
                   <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).calcium_content)}</Text>
                 </View>
               )}
+              {(producerCheese as any).vegetarian === true && (
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Vegetarian</Text>
+                  <Text style={styles.detailValue}>Yes ✓</Text>
+                </View>
+              )}
+              {(producerCheese as any).vegan === true && (
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Vegan</Text>
+                  <Text style={styles.detailValue}>Yes ✓</Text>
+                </View>
+              )}
             </View>
           </View>
 
           {/* Flavor & Aroma */}
-          {((producerCheese as any).flavor_profile || (producerCheese as any).aroma) && (
+          {((producerCheese as any).flavor || (producerCheese as any).aroma) && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Taste Profile</Text>
-              <View style={styles.detailsGrid}>
-                {(producerCheese as any).flavor_profile && (
-                  <View style={styles.detailCard}>
-                    <Text style={styles.detailLabel}>Flavor</Text>
-                    <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).flavor_profile)}</Text>
+              
+              {/* Flavor Tags - clickable */}
+              {(producerCheese as any).flavor && (
+                <View style={styles.flavorSection}>
+                  <Text style={styles.flavorLabel}>Flavor</Text>
+                  <View style={styles.flavorTagsRow}>
+                    {(producerCheese as any).flavor.split(',').map((flavor: string, index: number) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.flavorTag}
+                        onPress={() => router.push(`/(tabs)/discover?search=${flavor.trim()}`)}
+                      >
+                        <Text style={styles.flavorTagText}>{capitalizeText(flavor.trim())}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                )}
-                {(producerCheese as any).aroma && (
-                  <View style={styles.detailCard}>
-                    <Text style={styles.detailLabel}>Aroma</Text>
-                    <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).aroma)}</Text>
+                </View>
+              )}
+              
+              {/* Aroma Tags - clickable */}
+              {(producerCheese as any).aroma && (
+                <View style={styles.flavorSection}>
+                  <Text style={styles.flavorLabel}>Aroma</Text>
+                  <View style={styles.flavorTagsRow}>
+                    {(producerCheese as any).aroma.split(',').map((aroma: string, index: number) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.aromaTag}
+                        onPress={() => router.push(`/(tabs)/discover?search=${aroma.trim()}`)}
+                      >
+                        <Text style={styles.aromaTagText}>{capitalizeText(aroma.trim())}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                )}
-              </View>
+                </View>
+              )}
             </View>
           )}
 
@@ -1238,6 +1276,49 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
+  },
+  // Flavor/Aroma tag styles
+  flavorSection: {
+    marginBottom: Layout.spacing.m,
+  },
+  flavorLabel: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginBottom: Layout.spacing.s,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  flavorTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Layout.spacing.s,
+  },
+  flavorTag: {
+    backgroundColor: '#FEF9E7',
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    borderWidth: 1,
+    borderColor: '#FCD95B',
+  },
+  flavorTagText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#92400E',
+  },
+  aromaTag: {
+    backgroundColor: '#F0FDF4',
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  aromaTagText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#166534',
   },
   viewMoreButton: {
     marginTop: Layout.spacing.s,

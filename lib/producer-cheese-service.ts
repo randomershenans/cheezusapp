@@ -26,6 +26,10 @@ export interface ProducerCheese {
 
 export interface ProducerCheeseWithStats extends ProducerCheese {
   cheese_type_name: string;
+  cheese_type?: string; // Hard, Soft, Fresh, etc.
+  cheese_type_description?: string;
+  cheese_type_texture?: string;
+  cheese_type_flavor_profile?: string;
   rating_count: number;
   average_rating: number;
   last_rated_at?: string;

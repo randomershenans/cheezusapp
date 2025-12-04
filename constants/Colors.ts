@@ -1,8 +1,8 @@
 const Colors = {
   // Primary brand colors
-  primary: '#E67E22',
-  primaryLight: '#F39C12',
-  primaryDark: '#D35400',
+  primary: '#FCD95B',
+  primaryLight: '#FDE68A',
+  primaryDark: '#EAB308',
   
   // Background colors
   background: '#FFFFFF',

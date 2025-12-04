@@ -150,25 +150,43 @@ export default function AnalyticsScreen() {
 
       // Fetch producer cheese details for each entry
       const cheeseIds = boxEntries?.map(e => e.cheese_id) || [];
+      
+      // Get basic info from producer_cheese_stats view
       const { data: producerCheeses } = await supabase
         .from('producer_cheese_stats')
-        .select('id, full_name, cheese_type_name, producer_name, cheese_family, origin_country, flavor_profile')
+        .select('id, full_name, cheese_type_name, producer_name')
         .in('id', cheeseIds);
+
+      // Get additional details from producer_cheeses table with cheese_type info
+      const { data: producerCheeseDetails } = await supabase
+        .from('producer_cheeses')
+        .select('id, origin_country, cheese_type:cheese_types(type)')
+        .in('id', cheeseIds);
+
+      // Get flavor tags for these cheeses
+      const { data: flavorTags } = await supabase
+        .from('producer_cheese_flavor_tags')
+        .select('producer_cheese_id, flavor_tag:flavor_tags(name)')
+        .in('producer_cheese_id', cheeseIds);
 
       // Map entries to include cheese data
       const entriesWithCheese: CheeseEntry[] = boxEntries?.map(entry => {
         const cheese = producerCheeses?.find(c => c.id === entry.cheese_id);
+        const details = producerCheeseDetails?.find(d => d.id === entry.cheese_id);
+        const cheeseFlavors = flavorTags?.filter(t => t.producer_cheese_id === entry.cheese_id) || [];
         
         // Hide generic/unknown producers - just show cheese type name
-        const isGeneric = (cheese as any)?.producer_name?.toLowerCase().includes('generic') || 
-                          (cheese as any)?.producer_name?.toLowerCase().includes('unknown');
-        const displayName = isGeneric ? (cheese as any)?.cheese_type_name : cheese?.full_name;
+        const isGeneric = cheese?.producer_name?.toLowerCase().includes('generic') || 
+                          cheese?.producer_name?.toLowerCase().includes('unknown');
+        const displayName = isGeneric ? cheese?.cheese_type_name : cheese?.full_name;
         
-        // Parse flavor_profile string into array of flavor objects
-        const flavorProfile = (cheese as any)?.flavor_profile || '';
-        const flavors = flavorProfile
-          ? flavorProfile.split(',').map((f: string) => ({ flavor: f.trim() }))
-          : [];
+        // Map flavor tags to flavor objects
+        const flavors = cheeseFlavors.map(t => ({ 
+          flavor: (t.flavor_tag as any)?.name || '' 
+        })).filter(f => f.flavor);
+        
+        // Get cheese type category (hard, soft, fresh, etc.)
+        const cheeseTypeCategory = (details?.cheese_type as any)?.type || 'Unknown';
         
         return {
           id: entry.id,
@@ -177,8 +195,8 @@ export default function AnalyticsScreen() {
           cheese: {
             id: cheese?.id || '',
             name: displayName || '',
-            type: (cheese as any)?.cheese_family || 'Unknown',
-            origin_country: cheese?.origin_country || '',
+            type: cheeseTypeCategory,
+            origin_country: details?.origin_country || '',
             flavors: flavors,
           },
         };
@@ -257,7 +275,7 @@ export default function AnalyticsScreen() {
           : b.avgRating - a.avgRating
       );
 
-    return sorted;
+    return sorted.slice(0, 5);
   };
 
   // Calculate top flavors for list view
@@ -405,7 +423,7 @@ export default function AnalyticsScreen() {
             <Text style={styles.quickStatLabel}>Countries</Text>
           </View>
           <View style={styles.quickStatCard}>
-            <Milk size={20} color="#8B4513" />
+            <Milk size={20} color={Colors.primary} />
             <Text style={styles.quickStatNumber}>{advancedStats.uniqueTypes}</Text>
             <Text style={styles.quickStatLabel}>Types</Text>
           </View>
@@ -444,7 +462,7 @@ export default function AnalyticsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Award size={20} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Cheese Types</Text>
+            <Text style={styles.sectionTitle}>Cheeses</Text>
           </View>
           <View style={styles.sectionCard}>
             {typeStats.map((stat, index) => (
@@ -720,7 +738,7 @@ const styles = StyleSheet.create({
   flavorTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0DB',
+    backgroundColor: '#FEF9E7',
     paddingVertical: Layout.spacing.xs,
     paddingLeft: Layout.spacing.m,
     paddingRight: Layout.spacing.xs,
@@ -730,7 +748,7 @@ const styles = StyleSheet.create({
   flavorTagText: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.primary,
+    color: '#1F2937',
   },
   flavorTagBadge: {
     backgroundColor: Colors.primary,
@@ -744,7 +762,7 @@ const styles = StyleSheet.create({
   flavorTagCount: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.background,
+    color: '#1F2937',
   },
   chartCard: {
     backgroundColor: Colors.card,
