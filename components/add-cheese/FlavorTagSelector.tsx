@@ -6,10 +6,13 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { getAllFlavorTags, FlavorTag } from '@/lib';
+import { supabase } from '@/lib/supabase';
 import Typography from '@/constants/Typography';
-import { Check } from 'lucide-react-native';
+import { Check, Plus } from 'lucide-react-native';
 
 interface FlavorTagSelectorProps {
   selectedTagIds: string[];
@@ -24,6 +27,9 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
 }) => {
   const [allTags, setAllTags] = useState<FlavorTag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAddNew, setShowAddNew] = useState(false);
+  const [newFlavorName, setNewFlavorName] = useState('');
+  const [isAddingNew, setIsAddingNew] = useState(false);
 
   useEffect(() => {
     loadFlavorTags();
@@ -48,6 +54,53 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
     }
   };
 
+  const handleAddNewFlavor = async () => {
+    if (!newFlavorName.trim()) {
+      Alert.alert('Error', 'Please enter a flavor name');
+      return;
+    }
+
+    setIsAddingNew(true);
+    try {
+      // Check if flavor already exists
+      const existingTag = allTags.find(
+        t => t.name.toLowerCase() === newFlavorName.trim().toLowerCase()
+      );
+      
+      if (existingTag) {
+        Alert.alert('Already exists', 'This flavor profile already exists');
+        setIsAddingNew(false);
+        return;
+      }
+
+      // Insert new flavor tag
+      const { data, error } = await supabase
+        .from('flavor_tags')
+        .insert({ name: newFlavorName.trim() })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to local list and select it
+      if (data) {
+        setAllTags([...allTags, data]);
+        if (selectedTagIds.length < maxSelections) {
+          onSelectionChange([...selectedTagIds, data.id]);
+        }
+      }
+
+      setNewFlavorName('');
+      setShowAddNew(false);
+      Alert.alert('Added!', `"${newFlavorName.trim()}" has been added`);
+    } catch (error) {
+      console.error('Error adding flavor:', error);
+      Alert.alert('Error', 'Failed to add new flavor');
+    } finally {
+      setIsAddingNew(false);
+    }
+  };
+
   const isSelected = (tagId: string) => selectedTagIds.includes(tagId);
 
   const renderTag = (tag: FlavorTag) => {
@@ -62,7 +115,7 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
         <Text style={[styles.tagText, selected && styles.tagTextSelected]}>
           {tag.name}
         </Text>
-        {selected && <Check size={16} color="#fff" style={styles.checkIcon} />}
+        {selected && <Check size={16} color="#1F2937" style={styles.checkIcon} />}
       </TouchableOpacity>
     );
   };
@@ -70,7 +123,7 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <ActivityIndicator size="large" color="#FCD95B" />
       </View>
     );
   }
@@ -97,6 +150,49 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
           </View>
         }
       />
+
+      {/* Add New Flavor */}
+      {showAddNew ? (
+        <View style={styles.addNewContainer}>
+          <TextInput
+            style={styles.addNewInput}
+            placeholder="Enter flavor name..."
+            placeholderTextColor="#9CA3AF"
+            value={newFlavorName}
+            onChangeText={setNewFlavorName}
+            autoCapitalize="words"
+            autoFocus
+          />
+          <View style={styles.addNewButtons}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowAddNew(false);
+                setNewFlavorName('');
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.addButton, isAddingNew && styles.addButtonDisabled]}
+              onPress={handleAddNewFlavor}
+              disabled={isAddingNew}
+            >
+              <Text style={styles.addButtonText}>
+                {isAddingNew ? 'Adding...' : 'Add'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.addNewTrigger}
+          onPress={() => setShowAddNew(true)}
+        >
+          <Plus size={16} color="#FCD95B" />
+          <Text style={styles.addNewTriggerText}>Can't find a flavor? Add it</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -135,8 +231,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   tagChipSelected: {
-    backgroundColor: '#F59E0B',
-    borderColor: '#D97706',
+    backgroundColor: '#FCD95B',
+    borderColor: '#FCD95B',
   },
   tagText: {
     fontSize: 14,
@@ -144,7 +240,7 @@ const styles = StyleSheet.create({
     color: '#4B5563',
   },
   tagTextSelected: {
-    color: '#fff',
+    color: '#1F2937',
   },
   checkIcon: {
     marginLeft: 6,
@@ -164,5 +260,62 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     color: '#9CA3AF',
     textAlign: 'center',
+  },
+  addNewTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  addNewTriggerText: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#FCD95B',
+  },
+  addNewContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  addNewInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    fontFamily: Typography.fonts.body,
+    color: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+  },
+  addNewButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  cancelButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#6B7280',
+  },
+  addButton: {
+    backgroundColor: '#FCD95B',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  addButtonDisabled: {
+    opacity: 0.6,
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#1F2937',
   },
 });

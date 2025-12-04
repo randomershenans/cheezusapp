@@ -319,7 +319,7 @@ export default function ProfileScreen() {
                   style={styles.avatar}
                 />
                 <View style={styles.avatarEditBadge}>
-                  <Pencil size={12} color={Colors.background} />
+                  <Pencil size={12} color="#1F2937" />
                 </View>
               </TouchableOpacity>
               
@@ -415,7 +415,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/badges')}
             >
               <Text style={styles.viewAllText}>View All</Text>
-              <ChevronRight size={16} color={Colors.primary} />
+              <ChevronRight size={16} color="#FCD95B" />
             </TouchableOpacity>
           </View>
 
@@ -482,7 +482,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/saved-items')}
             >
               <Text style={styles.viewAllText}>View All</Text>
-              <ChevronRight size={16} color={Colors.primary} />
+              <ChevronRight size={16} color="#FCD95B" />
             </TouchableOpacity>
           </View>
           
@@ -532,7 +532,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/(tabs)/cheese-box')}
             >
               <Text style={styles.viewAllText}>View All</Text>
-              <ChevronRight size={16} color={Colors.primary} />
+              <ChevronRight size={16} color="#FCD95B" />
             </TouchableOpacity>
           </View>
           
@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -884,7 +884,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: Colors.card,
+    backgroundColor: '#FCD95B',
     padding: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
     alignItems: 'center',
@@ -893,13 +893,13 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: Typography.sizes['2xl'],
     fontFamily: Typography.fonts.bodyBold,
-    color: Colors.text,
+    color: '#1F2937',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
+    color: '#1F2937',
   },
 
   // Sections
@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.primary,
+    color: '#FCD95B',
   },
 
   // Badges Grid

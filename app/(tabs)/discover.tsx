@@ -58,7 +58,7 @@ const filterOptions = [
   { key: 'recipes',  label: 'Recipes',  icon: Utensils, color: '#E74C3C' },
 ];
 
-// Synonym mapping for smart search
+// Synonym mapping for smart search (includes common misspellings)
 const CHEESE_SYNONYMS: Record<string, string[]> = {
   'goat': ['goat', 'goats', 'chèvre', 'chevre', "goat's", 'capra'],
   'blue': ['blue', 'bleu', 'gorgonzola', 'roquefort', 'stilton', 'veined'],
@@ -72,15 +72,21 @@ const CHEESE_SYNONYMS: Record<string, string[]> = {
   'english': ['english', 'england', 'british'],
   'spanish': ['spanish', 'spain', 'espana'],
   'dutch': ['dutch', 'netherlands', 'holland', 'gouda'],
-  'cheddar': ['cheddar', 'cheder', 'cheedar'],
-  'mozzarella': ['mozzarella', 'mozarella', 'mozzerella', 'mozza'],
-  'parmesan': ['parmesan', 'parmigiano', 'reggiano', 'parm'],
-  'brie': ['brie', 'bree'],
-  'feta': ['feta', 'fetta'],
-  'camembert': ['camembert', 'camembear', 'camember'],
+  'cheddar': ['cheddar', 'cheder', 'cheedar', 'chedar', 'chedder'],
+  'mozzarella': ['mozzarella', 'mozarella', 'mozzerella', 'mozza', 'mozerella'],
+  'parmesan': ['parmesan', 'parmigiano', 'reggiano', 'parm', 'parmasean'],
+  'brie': ['brie', 'bree', 'bri'],
+  'feta': ['feta', 'fetta', 'feeta'],
+  'camembert': ['camembert', 'camembear', 'camember', 'camambert', 'camenbert'],
   'ricotta': ['ricotta', 'ricota'],
-  'provolone': ['provolone', 'provoloni'],
-  'gruyere': ['gruyere', 'gruyère', 'gruyer'],
+  'provolone': ['provolone', 'provoloni', 'provelone'],
+  'gruyere': ['gruyere', 'gruyère', 'gruyer', 'gruyear'],
+  'gouda': ['gouda', 'guda', 'gooda'],
+  'emmental': ['emmental', 'emmenthal', 'emmenthaler'],
+  'gorgonzola': ['gorgonzola', 'gorganzola'],
+  'stilton': ['stilton', 'stiliton'],
+  'roquefort': ['roquefort', 'rocquefort', 'roquefor'],
+  'havarti': ['havarti', 'havarthi'],
   'mild': ['mild', 'subtle', 'delicate', 'gentle'],
   'strong': ['strong', 'sharp', 'pungent', 'intense', 'tangy'],
   'nutty': ['nutty', 'hazelnut', 'almond'],

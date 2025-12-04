@@ -13,6 +13,44 @@ import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
+// Synonym mapping for fuzzy search
+const CHEESE_SYNONYMS: Record<string, string[]> = {
+  'cheddar': ['cheddar', 'cheder', 'cheedar', 'chedar', 'chedder'],
+  'mozzarella': ['mozzarella', 'mozarella', 'mozzerella', 'mozza', 'mozerella'],
+  'parmesan': ['parmesan', 'parmigiano', 'reggiano', 'parm', 'parmasean'],
+  'brie': ['brie', 'bree', 'bri'],
+  'feta': ['feta', 'fetta', 'feeta'],
+  'camembert': ['camembert', 'camembear', 'camember', 'camambert', 'camenbert'],
+  'gouda': ['gouda', 'guda', 'gooda'],
+  'gruyere': ['gruyere', 'gruyère', 'gruyer', 'gruyear'],
+  'ricotta': ['ricotta', 'ricota'],
+  'provolone': ['provolone', 'provoloni', 'provelone'],
+  'emmental': ['emmental', 'emmenthal', 'emmenthaler', 'swiss'],
+  'manchego': ['manchego', 'manchago'],
+  'gorgonzola': ['gorgonzola', 'gorganzola'],
+  'stilton': ['stilton', 'stiliton'],
+  'roquefort': ['roquefort', 'rocquefort', 'roquefor'],
+  'havarti': ['havarti', 'havarthi'],
+  'goat': ['goat', 'goats', 'chèvre', 'chevre'],
+  'blue': ['blue', 'bleu'],
+  'sheep': ['sheep', 'sheeps', 'pecorino'],
+};
+
+// Expand search term with synonyms
+function expandSearchTerms(term: string): string[] {
+  const lower = term.toLowerCase().trim();
+  const expanded = [lower];
+  
+  for (const [key, synonyms] of Object.entries(CHEESE_SYNONYMS)) {
+    if (synonyms.some(s => s === lower || lower.includes(s) || s.includes(lower))) {
+      expanded.push(...synonyms);
+      break;
+    }
+  }
+  
+  return [...new Set(expanded)];
+}
+
 const { width: initialScreenWidth } = Dimensions.get('window');
 
 type FeaturedEntry = {
@@ -55,7 +93,7 @@ type SponsoredPairing = {
 
 type FeedItem = {
   id: string;
-  type: 'cheese' | 'producer-cheese' | 'featured' | 'nearby' | 'sponsored_pairing';
+  type: 'cheese' | 'producer-cheese' | 'featured' | 'nearby' | 'sponsored_pairing' | 'add-cheese-prompt';
   data: TrendingCheese | FeaturedEntry | SponsoredPairing | null;
 };
 
@@ -320,21 +358,51 @@ export default function HomeScreen() {
     
     const query = searchQuery.trim();
     
+    // Expand search terms with synonyms for fuzzy matching
+    const searchTerms = expandSearchTerms(query);
+    
     try {
-      // Search producer cheeses in database with ilike
+      // Build OR conditions for all search terms
+      const cheeseOrConditions = searchTerms.flatMap(term => [
+        `full_name.ilike.%${term}%`,
+        `cheese_type_name.ilike.%${term}%`,
+        `producer_name.ilike.%${term}%`,
+        `origin_country.ilike.%${term}%`,
+      ]).join(',');
+
+      // Search producer cheeses in database with expanded terms
       const { data: producerCheeses } = await supabase
         .from('producer_cheese_stats')
         .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count')
-        .or(`full_name.ilike.%${query}%,cheese_type_name.ilike.%${query}%,producer_name.ilike.%${query}%,origin_country.ilike.%${query}%,description.ilike.%${query}%`)
+        .or(cheeseOrConditions)
         .limit(50);
 
-      // Search articles
+      // Build OR conditions for articles
+      const articleOrConditions = searchTerms.flatMap(term => [
+        `title.ilike.%${term}%`,
+        `description.ilike.%${term}%`,
+        `content.ilike.%${term}%`,
+      ]).join(',');
+
+      // Search articles - include content for better relevance
       const { data: entries } = await supabase
         .from('cheezopedia_entries')
-        .select('id, title, description, image_url, content_type, reading_time_minutes')
+        .select('id, title, description, content, image_url, content_type, reading_time_minutes')
         .eq('visible_in_feed', true)
-        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
-        .limit(10);
+        .or(articleOrConditions)
+        .limit(20);
+
+      // Filter articles to only show truly relevant ones
+      const queryLower = query.toLowerCase();
+      const allSearchTermsLower = searchTerms.map(t => t.toLowerCase());
+      const relevantEntries = (entries || []).filter(entry => {
+        // Check if any search term matches title, description, or content
+        return allSearchTermsLower.some(term => 
+          entry.title?.toLowerCase().includes(term) ||
+          entry.description?.toLowerCase().includes(term) ||
+          entry.content?.toLowerCase().includes(term)
+        );
+      }).slice(0, 5);
 
       // Build search results feed
       const feed: FeedItem[] = [];
@@ -367,11 +435,14 @@ export default function HomeScreen() {
         });
       }
 
-      if (entries) {
-        entries.forEach(entry => {
+      if (relevantEntries.length > 0) {
+        relevantEntries.forEach(entry => {
           feed.push({ id: `featured-${entry.id}`, type: 'featured', data: entry });
         });
       }
+
+      // Add "Can't find your cheese?" prompt at the end of search results
+      feed.push({ id: 'add-cheese-prompt', type: 'add-cheese-prompt' as any, data: null });
 
       setFeedItems(feed);
     } catch (error) {
@@ -540,11 +611,11 @@ export default function HomeScreen() {
       }
     };
 
-    // Get recommendation badge info
+    // Get recommendation badge info (removed "For You" - if it's on the feed, it's for you anyway)
     const getRecommendationBadge = () => {
       switch (cheese.recommendation_type) {
         case 'recommendation':
-          return { icon: <Sparkles size={12} color={Colors.background} />, text: 'For You' };
+          return null; // Removed "For You" tag
         case 'trending':
           return { icon: <TrendingUp size={12} color={Colors.background} />, text: 'Trending' };
         case 'award_winner':
@@ -721,6 +792,18 @@ export default function HomeScreen() {
     );
   };
 
+  const renderAddCheesePrompt = () => (
+    <View style={styles.addCheesePrompt}>
+      <Text style={styles.addCheesePromptText}>Can't find what you're looking for?</Text>
+      <TouchableOpacity 
+        style={styles.addCheesePromptButton}
+        onPress={() => router.push('/add-cheese')}
+      >
+        <Text style={styles.addCheesePromptButtonText}>+ Add New Cheese</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderFeedItem = (item: FeedItem) => {
     switch (item.type) {
       case 'cheese':
@@ -732,6 +815,8 @@ export default function HomeScreen() {
         return renderSponsoredPairingCard(item.data as SponsoredPairing);
       case 'nearby':
         return <NearbyCheeseCard key={item.id} />;
+      case 'add-cheese-prompt':
+        return renderAddCheesePrompt();
       default:
         return null;
     }
@@ -1208,6 +1293,30 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  /* -------- add cheese prompt -------- */
+  addCheesePrompt: {
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.xl,
+    paddingHorizontal: Layout.spacing.l,
+    marginTop: Layout.spacing.m,
+  },
+  addCheesePromptText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.textSecondary,
+    marginBottom: Layout.spacing.m,
+  },
+  addCheesePromptButton: {
+    backgroundColor: '#FCD95B',
+    paddingHorizontal: Layout.spacing.xl,
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+  },
+  addCheesePromptButtonText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: '#1F2937',
   },
   /* -------- modal -------- */
   modalOverlay: {

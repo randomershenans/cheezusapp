@@ -162,7 +162,7 @@ export default function BadgeScreen() {
       
       {/* Progress summary */}
       <View style={styles.summaryCard}>
-        <Trophy size={40} color={Colors.primary} />
+        <Trophy size={40} color="#FCD95B" />
         <View style={styles.statsContainer}>
           <Text style={styles.statsTitle}>
             {stats.earnedBadges} of {stats.totalBadges} badges earned
@@ -187,14 +187,14 @@ export default function BadgeScreen() {
           style={[styles.filterButton, showCompletedFirst && styles.filterButtonActive]}
           onPress={() => setShowCompletedFirst(true)}
         >
-          <CheckCircle size={16} color={showCompletedFirst ? '#fff' : Colors.text} />
+          <CheckCircle size={16} color={showCompletedFirst ? '#1F2937' : Colors.text} />
           <Text style={[styles.filterText, showCompletedFirst && styles.filterTextActive]}>Completed First</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.filterButton, !showCompletedFirst && styles.filterButtonActive]}
           onPress={() => setShowCompletedFirst(false)}
         >
-          <Circle size={16} color={!showCompletedFirst ? '#fff' : Colors.text} />
+          <Circle size={16} color={!showCompletedFirst ? '#1F2937' : Colors.text} />
           <Text style={[styles.filterText, !showCompletedFirst && styles.filterTextActive]}>By Category</Text>
         </TouchableOpacity>
       </View>
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FCD95B',
     borderRadius: 4,
   },
   statsSubtitle: {
@@ -338,8 +338,8 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   filterButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: '#FCD95B',
+    borderColor: '#FCD95B',
   },
   filterText: {
     fontFamily: Typography.fonts.bodyMedium,
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   filterTextActive: {
-    color: '#fff',
+    color: '#1F2937',
   },
   categorySection: {
     marginTop: Layout.spacing.l,

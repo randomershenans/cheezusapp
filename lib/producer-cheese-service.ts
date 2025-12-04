@@ -44,6 +44,8 @@ export interface CreateProducerCheeseInput {
   price_range?: number;
   availability?: string;
   image_url?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  source?: 'system' | 'user';
 }
 
 /**
@@ -149,6 +151,8 @@ export const createProducerCheese = async (
       origin_region: input.origin_region ? capitalizeWords(input.origin_region) : undefined,
       producer_location: input.producer_location ? capitalizeWords(input.producer_location) : undefined,
       added_by: user.id,
+      status: input.status || 'pending',
+      source: input.source || 'user',
     };
     
     const { data, error } = await supabase

@@ -62,7 +62,7 @@ export default function BadgeProgressCard({
                 styles.progressBar, 
                 { 
                   width: `${percentComplete}%`,
-                  backgroundColor: completed ? '#FFD700' : '#3B82F6' 
+                  backgroundColor: '#FCD95B' 
                 }
               ]}
             />

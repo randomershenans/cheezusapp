@@ -268,10 +268,7 @@ export default function CheeseBoxScreen() {
               style={styles.analyticsButton}
               onPress={() => router.push('/analytics')}
             >
-              <View style={styles.analyticsButtonContent}>
-                <BarChart3 size={20} color={Colors.primary} />
-                <Text style={styles.analyticsButtonText}>Elite Analytics</Text>
-              </View>
+              <Text style={styles.analyticsButtonText}>Elite Analytics</Text>
               <Text style={styles.analyticsButtonSubtext}>
                 Deep dive into your cheese stats
               </Text>
@@ -534,28 +531,22 @@ const styles = StyleSheet.create({
   analyticsButton: {
     marginHorizontal: Layout.spacing.m,
     marginBottom: Layout.spacing.l,
-    backgroundColor: Colors.card,
+    backgroundColor: '#FCD95B',
     borderRadius: Layout.borderRadius.large,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
     padding: Layout.spacing.m,
-    ...Layout.shadow.small,
-  },
-  analyticsButtonContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: Layout.spacing.s,
-    marginBottom: 4,
+    ...Layout.shadow.small,
   },
   analyticsButtonText: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
+    color: '#1F2937',
+    marginBottom: 4,
   },
   analyticsButtonSubtext: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
+    color: '#1F2937',
   },
   authPrompt: {
     flex: 1,

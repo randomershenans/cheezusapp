@@ -1,84 +1,40 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, SafeAreaView, Alert } from 'react-native';
+import { StyleSheet, SafeAreaView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  CheeseTypeWithStats,
-  CreateCheeseTypeInput,
-  createCheeseType,
-  createProducerCheese,
-  updateFlavorTagsForProducerCheese,
-  addProducerCheeseToBox,
-} from '@/lib';
+import { supabase } from '@/lib/supabase';
 import { uploadImageToStorage } from '@/lib/storage';
-import { CheeseTypeSelector } from '@/components/add-cheese/CheeseTypeSelector';
-import { ProducerCheeseForm, ProducerCheeseFormData } from '@/components/add-cheese/ProducerCheeseForm';
-import { CreateCheeseTypeModal } from '@/components/add-cheese/CreateCheeseTypeModal';
+import { CheeseSearch, CheeseSearchResult } from '@/components/add-cheese/CheeseSearch';
+import { AddToBoxForm, AddToBoxFormData } from '@/components/add-cheese/AddToBoxForm';
+import { NewCheeseForm, NewCheeseFormData } from '@/components/add-cheese/NewCheeseForm';
 import Colors from '@/constants/Colors';
 
-type Step = 'select-type' | 'enter-details';
+type Step = 'search' | 'add-existing' | 'add-new';
 
 export default function AddCheeseScreen() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('select-type');
-  const [selectedCheeseType, setSelectedCheeseType] = useState<CheeseTypeWithStats | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [step, setStep] = useState<Step>('search');
+  const [selectedCheese, setSelectedCheese] = useState<CheeseSearchResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCreatingType, setIsCreatingType] = useState(false);
 
-  // Handle cheese type selection
-  const handleSelectCheeseType = (cheeseType: CheeseTypeWithStats) => {
-    setSelectedCheeseType(cheeseType);
-    setStep('enter-details');
+  // Handle selecting an existing cheese
+  const handleSelectExisting = (cheese: CheeseSearchResult) => {
+    setSelectedCheese(cheese);
+    setStep('add-existing');
   };
 
-  // Handle creating new cheese type
-  const handleCreateCheeseType = async (data: CreateCheeseTypeInput) => {
-    setIsCreatingType(true);
-    try {
-      const cheeseTypeId = await createCheeseType(data);
-      
-      if (cheeseTypeId) {
-        // Create a CheeseTypeWithStats object for the newly created type
-        const newCheeseType: CheeseTypeWithStats = {
-          id: cheeseTypeId,
-          name: data.name,
-          type: data.type,
-          milk_type: data.milk_type,
-          origin_country: data.origin_country,
-          origin_region: data.origin_region,
-          description: data.description,
-          producer_count: 0,
-          total_ratings: 0,
-          average_rating: 0,
-          unique_raters: 0,
-        };
-        
-        setShowCreateModal(false);
-        setSelectedCheeseType(newCheeseType);
-        setStep('enter-details');
-        Alert.alert('Success', 'Cheese type created!');
-      } else {
-        Alert.alert('Error', 'Failed to create cheese type');
-      }
-    } catch (error) {
-      console.error('Error creating cheese type:', error);
-      Alert.alert('Error', 'Failed to create cheese type');
-    } finally {
-      setIsCreatingType(false);
-    }
-  };
-
-  // Handle producer cheese form submission
-  const handleSubmitProducerCheese = async (formData: ProducerCheeseFormData) => {
-    if (!selectedCheeseType) return;
+  // Handle adding to cheese box (existing cheese)
+  const handleAddToBox = async (formData: AddToBoxFormData) => {
+    if (!selectedCheese) return;
     
     setIsSubmitting(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       // Upload image if provided
       let imageUrl: string | undefined;
       if (formData.imageUri) {
         try {
-          // Convert URI to base64
           const response = await fetch(formData.imageUri);
           const blob = await response.blob();
           const reader = new FileReader();
@@ -95,67 +51,246 @@ export default function AddCheeseScreen() {
             reader.readAsDataURL(blob);
           });
           
-          // Upload to storage
           const uploadedUrl = await uploadImageToStorage(base64, 'jpg');
           if (uploadedUrl) {
             imageUrl = uploadedUrl;
           }
         } catch (error) {
           console.error('Error uploading image:', error);
-          // Continue without image
         }
       }
 
-      // Create producer cheese
-      const producerCheeseId = await createProducerCheese({
-        cheese_type_id: selectedCheeseType.id,
-        producer_name: formData.producerName,
-        product_name: formData.productName || undefined,
-        origin_country: formData.originCountry || undefined,
-        origin_region: formData.originRegion || undefined,
-        price_range: formData.priceRange,
-        description: formData.description || undefined,
-        image_url: imageUrl,
-      });
+      // Add to cheese box
+      const { error } = await supabase
+        .from('cheese_box_entries')
+        .insert({
+          user_id: user.id,
+          cheese_id: selectedCheese.id,
+          rating: formData.rating || null,
+          notes: formData.notes || null,
+        });
 
-      if (!producerCheeseId) {
-        Alert.alert('Error', 'Failed to create producer cheese');
+      if (error) throw error;
+
+      Alert.alert(
+        'Added! 🧀',
+        `${selectedCheese.name} is now in your cheese box`,
+        [
+          {
+            text: 'View Cheese',
+            onPress: () => router.replace(`/producer-cheese/${selectedCheese.id}`),
+          },
+          {
+            text: 'Back to Box',
+            onPress: () => router.replace('/(tabs)/cheese-box'),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error adding to cheese box:', error);
+      Alert.alert('Error', 'Failed to add cheese to your box');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle creating a new cheese
+  const handleCreateNewCheese = async (formData: NewCheeseFormData) => {
+    setIsSubmitting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Upload image if provided
+      let imageUrl: string | undefined;
+      if (formData.imageUri) {
+        try {
+          const response = await fetch(formData.imageUri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          
+          const base64 = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                resolve(reader.result);
+              } else {
+                reject(new Error('Failed to convert image'));
+              }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          
+          const uploadedUrl = await uploadImageToStorage(base64, 'jpg');
+          if (uploadedUrl) {
+            imageUrl = uploadedUrl;
+          }
+        } catch (error) {
+          console.error('Error uploading image:', error);
+        }
+      }
+
+      // 1. Check if cheese type already exists, otherwise create it
+      const cheeseName = formData.cheeseName.trim();
+      
+      // First try to find existing cheese type
+      const { data: existingType } = await supabase
+        .from('cheese_types')
+        .select('id')
+        .ilike('name', cheeseName)
+        .single();
+
+      let cheeseTypeId: string;
+
+      if (existingType) {
+        // Use existing cheese type
+        cheeseTypeId = existingType.id;
+      } else {
+        // Create new cheese type (pending status)
+        const { data: newCheeseType, error: ctError } = await supabase
+          .from('cheese_types')
+          .insert({
+            name: cheeseName,
+            type: formData.cheeseType || null,
+            milk_type: formData.milkTypes.length > 0 ? formData.milkTypes.join(', ') : null,
+            origin_country: formData.originCountry || null,
+            description: formData.description || null,
+            status: 'pending',
+            source: 'user',
+            added_by: user.id,
+          })
+          .select('id')
+          .single();
+
+        if (ctError) throw ctError;
+        cheeseTypeId = newCheeseType.id;
+      }
+
+      // 2. Handle producer - check if exists in producers table, otherwise create
+      const producerName = formData.producerName?.trim() || 'Generic';
+      const productName = formData.cheeseName.trim();
+      let producerId: string | null = null;
+
+      if (producerName !== 'Generic') {
+        // Check if producer exists
+        const { data: existingProducer } = await supabase
+          .from('producers')
+          .select('id')
+          .ilike('name', producerName)
+          .single();
+
+        if (existingProducer) {
+          producerId = existingProducer.id;
+        } else {
+          // Create new producer
+          const { data: newProducer, error: prodError } = await supabase
+            .from('producers')
+            .insert({
+              name: producerName,
+              country: formData.originCountry || null,
+            })
+            .select('id')
+            .single();
+
+          if (prodError) {
+            console.error('Error creating producer:', prodError);
+            // Continue without producer_id if it fails
+          } else {
+            producerId = newProducer.id;
+          }
+        }
+      }
+
+      // 3. Check if producer cheese already exists, otherwise create it
+      // Note: full_name is a generated column, so we don't insert it
+      const { data: existingProducerCheese } = await supabase
+        .from('producer_cheeses')
+        .select('id')
+        .eq('cheese_type_id', cheeseTypeId)
+        .ilike('producer_name', producerName)
+        .ilike('product_name', productName)
+        .single();
+
+      let producerCheeseId: string;
+
+      if (existingProducerCheese) {
+        // Use existing producer cheese, but update producer_id if we have one
+        producerCheeseId = existingProducerCheese.id;
+        
+        if (producerId) {
+          await supabase
+            .from('producer_cheeses')
+            .update({ producer_id: producerId })
+            .eq('id', producerCheeseId);
+        }
+      } else {
+        // Create new producer cheese
+        const { data: newProducerCheese, error: pcError } = await supabase
+          .from('producer_cheeses')
+          .insert({
+            cheese_type_id: cheeseTypeId,
+            producer_id: producerId,
+            producer_name: producerName,
+            product_name: productName,
+            origin_country: formData.originCountry || null,
+            description: formData.description || null,
+            image_url: imageUrl || null,
+            status: 'pending',
+            source: 'user',
+            added_by: user.id,
+          })
+          .select('id')
+          .single();
+
+        if (pcError) throw pcError;
+        producerCheeseId = newProducerCheese.id;
+      }
+
+      // 3. Add flavor tags if any (use upsert to avoid duplicates)
+      if (formData.flavorTagIds.length > 0) {
+        const flavorTagInserts = formData.flavorTagIds.map(tagId => ({
+          producer_cheese_id: producerCheeseId,
+          flavor_tag_id: tagId,
+        }));
+
+        await supabase
+          .from('producer_cheese_flavor_tags')
+          .upsert(flavorTagInserts, { onConflict: 'producer_cheese_id,flavor_tag_id' });
+      }
+
+      // 4. Add to cheese box (check if already exists first)
+      const { data: existingEntry } = await supabase
+        .from('cheese_box_entries')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('cheese_id', producerCheeseId)
+        .single();
+
+      if (existingEntry) {
+        // Already in cheese box - just navigate to it
+        router.replace(`/producer-cheese/${producerCheeseId}`);
         return;
       }
 
-      // Add flavor tags
-      if (formData.flavorTagIds.length > 0) {
-        await updateFlavorTagsForProducerCheese(producerCheeseId, formData.flavorTagIds);
-      }
+      const { error: boxError } = await supabase
+        .from('cheese_box_entries')
+        .insert({
+          user_id: user.id,
+          cheese_id: producerCheeseId,
+          rating: formData.rating || null,
+          notes: formData.notes || null,
+        });
 
-      // Add to cheese box with rating
-      const added = await addProducerCheeseToBox(
-        producerCheeseId,
-        formData.rating,
-        formData.notes || undefined
-      );
+      if (boxError) throw boxError;
 
-      if (added) {
-        Alert.alert(
-          'Success! 🧀',
-          `${formData.producerName} ${selectedCheeseType.name} added to your cheese box`,
-          [
-            {
-              text: 'View Cheese',
-              onPress: () => router.replace(`/producer-cheese/${producerCheeseId}`),
-            },
-            {
-              text: 'Back to Box',
-              onPress: () => router.replace('/(tabs)/cheese-box'),
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Error', 'Failed to add to cheese box');
-      }
+      // 5. Update badges
+      await supabase.rpc('update_all_badges_for_user', { p_user_id: user.id });
+
+      // Navigate directly to the cheese page
+      router.replace(`/producer-cheese/${producerCheeseId}`);
     } catch (error) {
-      console.error('Error submitting producer cheese:', error);
-      Alert.alert('Error', 'Something went wrong');
+      console.error('Error creating cheese:', error);
+      Alert.alert('Error', 'Failed to add cheese. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -163,9 +298,9 @@ export default function AddCheeseScreen() {
 
   // Handle back navigation
   const handleBack = () => {
-    if (step === 'enter-details') {
-      setStep('select-type');
-      setSelectedCheeseType(null);
+    if (step === 'add-existing' || step === 'add-new') {
+      setStep('search');
+      setSelectedCheese(null);
     } else {
       router.back();
     }
@@ -173,26 +308,29 @@ export default function AddCheeseScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {step === 'select-type' ? (
-        <CheeseTypeSelector
-          onSelect={handleSelectCheeseType}
-          onCreateNew={() => setShowCreateModal(true)}
+      {step === 'search' && (
+        <CheeseSearch
+          onSelectExisting={handleSelectExisting}
+          onAddNew={() => setStep('add-new')}
         />
-      ) : selectedCheeseType ? (
-        <ProducerCheeseForm
-          cheeseType={selectedCheeseType}
-          onSubmit={handleSubmitProducerCheese}
+      )}
+
+      {step === 'add-existing' && selectedCheese && (
+        <AddToBoxForm
+          cheese={selectedCheese}
+          onSubmit={handleAddToBox}
           onBack={handleBack}
           isSubmitting={isSubmitting}
         />
-      ) : null}
+      )}
 
-      <CreateCheeseTypeModal
-        visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreate={handleCreateCheeseType}
-        isCreating={isCreatingType}
-      />
+      {step === 'add-new' && (
+        <NewCheeseForm
+          onSubmit={handleCreateNewCheese}
+          onBack={handleBack}
+          isSubmitting={isSubmitting}
+        />
+      )}
     </SafeAreaView>
   );
 }
