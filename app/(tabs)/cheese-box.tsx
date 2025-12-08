@@ -31,13 +31,36 @@ type CheeseBoxEntry = {
   };
 };
 
+type WishlistEntry = {
+  id: string;
+  created_at: string;
+  notes?: string;
+  priority?: number;
+  producer_cheese: {
+    id: string;
+    full_name: string;
+    producer_name: string;
+    product_name?: string;
+    image_url?: string;
+    cheese_type: {
+      id: string;
+      name: string;
+      type: string;
+      origin_country?: string;
+    };
+  };
+};
+
 type FilterType = 'all' | 'rated' | 'unrated' | string;
 type ViewMode = 'grid' | 'list';
+type TabType = 'tried' | 'wishlist';
 
 export default function CheeseBoxScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('tried');
   const [entries, setEntries] = useState<CheeseBoxEntry[]>([]);
+  const [wishlistEntries, setWishlistEntries] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
@@ -52,6 +75,7 @@ export default function CheeseBoxScreen() {
   useEffect(() => {
     if (user) {
       fetchCheeseBoxEntries();
+      fetchWishlistEntries();
     }
   }, [user]);
 
@@ -92,6 +116,64 @@ export default function CheeseBoxScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchWishlistEntries = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('wishlists')
+        .select(`
+          id,
+          notes,
+          priority,
+          created_at,
+          producer_cheese:producer_cheeses!cheese_id (
+            id,
+            full_name,
+            producer_name,
+            product_name,
+            image_url,
+            cheese_type:cheese_types!cheese_type_id (
+              id,
+              name,
+              type,
+              origin_country
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setWishlistEntries(data || []);
+    } catch (error) {
+      console.error('Error fetching wishlist entries:', error);
+    }
+  };
+
+  const handleRemoveFromWishlist = async (wishlistId: string) => {
+    try {
+      const { error } = await supabase
+        .from('wishlists')
+        .delete()
+        .eq('id', wishlistId);
+
+      if (error) throw error;
+      
+      // Refresh wishlist
+      fetchWishlistEntries();
+    } catch (error) {
+      console.error('Error removing from wishlist:', error);
+      Alert.alert('Error', 'Failed to remove from wishlist');
+    }
+  };
+
+  const handleMoveToCheeseBox = async (wishlistEntry: WishlistEntry) => {
+    // Navigate to cheese details where they can add it to their box
+    router.push(`/producer-cheese/${wishlistEntry.producer_cheese.id}`);
   };
 
   // Get unique cheese types for filters
@@ -237,7 +319,31 @@ export default function CheeseBoxScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Tab Switcher */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'tried' && styles.tabActive]}
+          onPress={() => setActiveTab('tried')}
+        >
+          <Star size={16} color={activeTab === 'tried' ? Colors.text : Colors.subtleText} />
+          <Text style={[styles.tabText, activeTab === 'tried' && styles.tabTextActive]}>
+            Tried ({entries.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'wishlist' && styles.tabActive]}
+          onPress={() => setActiveTab('wishlist')}
+        >
+          <Heart size={16} color={activeTab === 'wishlist' ? '#E91E63' : Colors.subtleText} />
+          <Text style={[styles.tabText, activeTab === 'wishlist' && styles.tabTextActive]}>
+            Wishlist ({wishlistEntries.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {activeTab === 'tried' && (
+        <>
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
@@ -449,6 +555,91 @@ export default function CheeseBoxScreen() {
             </View>
           </View>
         )}
+        </>
+        )}
+
+        {/* Wishlist Tab Content */}
+        {activeTab === 'wishlist' && (
+          <>
+            {wishlistEntries.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIcon}>
+                  <Heart size={48} color="#E91E63" />
+                </View>
+                <Text style={styles.emptyTitle}>Your Wishlist is Empty</Text>
+                <Text style={styles.emptySubtitle}>
+                  Save cheeses you want to try by tapping the heart icon on any cheese page
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => router.push('/(tabs)/discover')}
+                >
+                  <Search size={20} color={Colors.background} />
+                  <Text style={styles.emptyButtonText}>Discover Cheeses</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.entriesContainer}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Want to Try</Text>
+                  <Text style={styles.sectionCount}>
+                    {wishlistEntries.length} cheeses
+                  </Text>
+                </View>
+                <View style={styles.listContainer}>
+                  {wishlistEntries.map((entry) => {
+                    const cheese = entry.producer_cheese as any;
+                    const isGeneric = cheese?.producer_name?.toLowerCase().includes('generic') || 
+                                      cheese?.producer_name?.toLowerCase().includes('unknown');
+                    const displayName = isGeneric ? cheese?.cheese_type?.name : cheese?.full_name;
+                    
+                    return (
+                      <View key={entry.id} style={styles.wishlistCard}>
+                        <TouchableOpacity
+                          style={styles.wishlistContent}
+                          onPress={() => handleMoveToCheeseBox(entry)}
+                        >
+                          <Image 
+                            source={{ 
+                              uri: cheese?.image_url || 'https://via.placeholder.com/90?text=Cheese'
+                            }} 
+                            style={styles.wishlistImage}
+                          />
+                          <View style={styles.wishlistInfo}>
+                            <Text style={styles.wishlistName} numberOfLines={2}>{displayName || 'Unknown Cheese'}</Text>
+                            <Text style={styles.wishlistType}>
+                              {cheese?.cheese_type?.name} • {cheese?.cheese_type?.type}
+                            </Text>
+                            <Text style={styles.wishlistDate}>
+                              Added {new Date(entry.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                        <View style={styles.wishlistActions}>
+                          <TouchableOpacity
+                            style={styles.wishlistTryButton}
+                            onPress={() => handleMoveToCheeseBox(entry)}
+                          >
+                            <Text style={styles.wishlistTryButtonText}>Try It</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.wishlistRemoveButton}
+                            onPress={() => handleRemoveFromWishlist(entry.id)}
+                          >
+                            <X size={16} color={Colors.subtleText} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </>
+        )}
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
@@ -489,6 +680,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...Layout.shadow.medium,
+  },
+  // Tab styles
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: Layout.spacing.m,
+    marginBottom: Layout.spacing.m,
+    gap: Layout.spacing.s,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    backgroundColor: Colors.backgroundSecondary,
+    gap: Layout.spacing.xs,
+  },
+  tabActive: {
+    backgroundColor: '#FEF9E7',
+    borderWidth: 1,
+    borderColor: '#FCD95B',
+  },
+  tabText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+  tabTextActive: {
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
   },
   content: {
     flex: 1,
@@ -873,5 +1096,74 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: Layout.spacing.xl,
+  },
+  // Empty state
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Layout.spacing.xl,
+    paddingVertical: Layout.spacing.xl * 2,
+  },
+  // Wishlist styles
+  wishlistCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    marginBottom: Layout.spacing.s,
+    marginHorizontal: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    ...Layout.shadow.small,
+  },
+  wishlistContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  wishlistImage: {
+    width: 60,
+    height: 60,
+    borderRadius: Layout.borderRadius.medium,
+    marginRight: Layout.spacing.m,
+  },
+  wishlistInfo: {
+    flex: 1,
+  },
+  wishlistName: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  wishlistType: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginBottom: 2,
+  },
+  wishlistDate: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+  wishlistActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+  },
+  wishlistTryButton: {
+    backgroundColor: '#FCD95B',
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+  },
+  wishlistTryButtonText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  wishlistRemoveButton: {
+    padding: Layout.spacing.xs,
   },
 });

@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Star, MapPin, ArrowLeft, Factory, Package, DollarSign, Award, X, Share2, ChevronRight } from 'lucide-react-native';
+import { Star, MapPin, ArrowLeft, Factory, Package, DollarSign, Award, X, Share2, ChevronRight, Heart } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -41,6 +41,7 @@ export default function ProducerCheeseDetailScreen() {
   const [producerCheese, setProducerCheese] = useState<ProducerCheeseWithStats | null>(null);
   const [flavorTags, setFlavorTags] = useState<Array<{ id: string; name: string }>>([]);
   const [userEntry, setUserEntry] = useState<any>(null);
+  const [isWishlisted, setIsWishlisted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [otherProducerCheeses, setOtherProducerCheeses] = useState<any[]>([]);
   const [pairings, setPairings] = useState<any[]>([]);
@@ -54,6 +55,7 @@ export default function ProducerCheeseDetailScreen() {
       fetchProducerCheeseDetails();
       if (user) {
         fetchUserEntry();
+        fetchWishlistStatus();
       }
     }
   }, [id, user]);
@@ -141,6 +143,59 @@ export default function ProducerCheeseDetailScreen() {
     } catch (error) {
       // Silently fail - user just hasn't rated this cheese yet
       console.log('User has not rated this cheese yet');
+    }
+  };
+
+  const fetchWishlistStatus = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('wishlists')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('cheese_id', id)
+        .maybeSingle();
+
+      if (!error && data) {
+        setIsWishlisted(true);
+      } else {
+        setIsWishlisted(false);
+      }
+    } catch (error) {
+      console.log('Error checking wishlist status');
+    }
+  };
+
+  const handleToggleWishlist = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to add cheeses to your wishlist.');
+      return;
+    }
+
+    try {
+      if (isWishlisted) {
+        // Remove from wishlist
+        const { error } = await supabase
+          .from('wishlists')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('cheese_id', id);
+
+        if (error) throw error;
+        setIsWishlisted(false);
+      } else {
+        // Add to wishlist
+        const { error } = await supabase
+          .from('wishlists')
+          .insert({ user_id: user.id, cheese_id: id });
+
+        if (error) throw error;
+        setIsWishlisted(true);
+      }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      Alert.alert('Error', 'Failed to update wishlist');
     }
   };
 
@@ -360,22 +415,44 @@ export default function ProducerCheeseDetailScreen() {
         {/* Content Container */}
         <View style={styles.contentContainer}>
 
-          {/* Add to Box Button */}
+          {/* Action Buttons */}
           {user && (
             <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.addToBoxButton}
-                onPress={() => {
-                  setTempRating(userEntry?.rating || 0);
-                  setTempNotes(userEntry?.notes || '');
-                  setShowRatingModal(true);
-                }}
-              >
-                <Star size={20} color="#FFF" fill={userEntry ? "#FFF" : "none"} />
-                <Text style={styles.addToBoxButtonText}>
-                  {userEntry ? 'Update Rating' : 'Add to Cheese Box'}
+              <View style={styles.actionButtonsRow}>
+                {/* Add to Box / Update Rating Button */}
+                <TouchableOpacity
+                  style={[styles.addToBoxButton, { flex: 1 }]}
+                  onPress={() => {
+                    setTempRating(userEntry?.rating || 0);
+                    setTempNotes(userEntry?.notes || '');
+                    setShowRatingModal(true);
+                  }}
+                >
+                  <Star size={20} color="#FFF" fill={userEntry ? "#FFF" : "none"} />
+                  <Text style={styles.addToBoxButtonText}>
+                    {userEntry ? 'Update Rating' : 'Add to Cheese Box'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Wishlist Button - only show if not already in cheese box */}
+                {!userEntry && (
+                  <TouchableOpacity
+                    style={styles.wishlistButton}
+                    onPress={handleToggleWishlist}
+                  >
+                    <Heart 
+                      size={20} 
+                      color={Colors.primary} 
+                      fill={isWishlisted ? Colors.primary : "none"} 
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {!userEntry && (
+                <Text style={styles.wishlistHint}>
+                  {isWishlisted ? '♥ On your wishlist' : 'Tap ♡ to add to wishlist'}
                 </Text>
-              </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -1107,6 +1184,11 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+  },
   addToBoxButton: {
     backgroundColor: '#FCD95B',
     flexDirection: 'row',
@@ -1122,6 +1204,23 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.background,
+  },
+  wishlistButton: {
+    backgroundColor: Colors.background,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: Layout.borderRadius.large,
+  },
+  wishlistHint: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginTop: Layout.spacing.xs,
   },
   // Modal styles
   modalOverlay: {
