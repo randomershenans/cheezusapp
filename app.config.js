@@ -2,6 +2,7 @@ export default {
   expo: {
     name: "Cheezus",
     slug: "cheezus",
+    owner: "cheezus-group",
     scheme: "cheezus",
     version: "1.0.0",
     orientation: "portrait",
@@ -73,7 +74,7 @@ export default {
         origin: false
       },
       eas: {
-        projectId: "randomshenans"
+        projectId: "b1055361-e496-4341-9552-538cbfce7804"
       }
     }
   }
