@@ -48,6 +48,13 @@ export async function registerForPushNotifications(userId: string): Promise<stri
   // Get the Expo push token
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    
+    // Skip if no projectId configured
+    if (!projectId) {
+      console.log('Push notifications: No projectId configured. Skipping token registration.');
+      return null;
+    }
+
     const token = await Notifications.getExpoPushTokenAsync({
       projectId: projectId,
     });
@@ -67,7 +74,8 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     return token.data;
   } catch (error) {
-    console.error('Error getting push token:', error);
+    // Don't show error for missing projectId - it's expected in dev
+    console.log('Push notifications not available:', (error as Error).message);
     return null;
   }
 }

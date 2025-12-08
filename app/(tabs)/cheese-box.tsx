@@ -179,7 +179,7 @@ export default function CheeseBoxScreen() {
 
   // Get unique cheese types for filters
   const cheeseTypes = useMemo(() => {
-    const types = new Set(entries.map(e => e.producer_cheese.cheese_type.type));
+    const types = new Set(entries.map(e => e.producer_cheese?.cheese_type?.type).filter(Boolean));
     return Array.from(types).sort();
   }, [entries]);
 
@@ -191,9 +191,9 @@ export default function CheeseBoxScreen() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(entry => 
-        entry.producer_cheese.full_name.toLowerCase().includes(query) ||
-        entry.producer_cheese.cheese_type.name.toLowerCase().includes(query) ||
-        entry.producer_cheese.cheese_type.type.toLowerCase().includes(query) ||
+        entry.producer_cheese?.full_name?.toLowerCase().includes(query) ||
+        entry.producer_cheese?.cheese_type?.name?.toLowerCase().includes(query) ||
+        entry.producer_cheese?.cheese_type?.type?.toLowerCase().includes(query) ||
         entry.notes?.toLowerCase().includes(query)
       );
     }
@@ -204,7 +204,7 @@ export default function CheeseBoxScreen() {
     } else if (selectedFilter === 'unrated') {
       filtered = filtered.filter(e => !e.rating);
     } else if (selectedFilter !== 'all') {
-      filtered = filtered.filter(e => e.producer_cheese.cheese_type.type === selectedFilter);
+      filtered = filtered.filter(e => e.producer_cheese?.cheese_type?.type === selectedFilter);
     }
 
     return filtered;
@@ -217,8 +217,10 @@ export default function CheeseBoxScreen() {
     
     // Find most common cheese type
     const typeCounts = entries.reduce((acc, entry) => {
-      const type = entry.producer_cheese.cheese_type.type;
-      acc[type] = (acc[type] || 0) + 1;
+      const type = entry.producer_cheese?.cheese_type?.type;
+      if (type) {
+        acc[type] = (acc[type] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
     
@@ -491,20 +493,22 @@ export default function CheeseBoxScreen() {
             <View style={viewMode === 'grid' ? styles.gridContainer : styles.listContainer}>
             {filteredEntries.map((entry) => {
               // Hide generic/unknown producers
-              const isGeneric = entry.producer_cheese.producer_name?.toLowerCase().includes('generic') || 
-                                entry.producer_cheese.producer_name?.toLowerCase().includes('unknown');
-              const displayName = isGeneric ? entry.producer_cheese.cheese_type.name : entry.producer_cheese.full_name;
+              const isGeneric = entry.producer_cheese?.producer_name?.toLowerCase().includes('generic') || 
+                                entry.producer_cheese?.producer_name?.toLowerCase().includes('unknown');
+              const displayName = isGeneric 
+                ? (entry.producer_cheese?.cheese_type?.name || 'Unknown Cheese')
+                : (entry.producer_cheese?.full_name || 'Unknown Cheese');
               
               return (
               <View key={entry.id} style={viewMode === 'grid' ? styles.entryCard : styles.entryCardList}>
                 <TouchableOpacity
                   style={styles.entryContent}
-                  onPress={() => router.push(`/producer-cheese/${entry.producer_cheese.id}`)}
+                  onPress={() => router.push(`/producer-cheese/${entry.producer_cheese?.id}`)}
                 >
                   <View style={styles.imageWrapper}>
                     <Image 
                       source={{ 
-                        uri: entry.producer_cheese.image_url || 'https://via.placeholder.com/90?text=Cheese'
+                        uri: entry.producer_cheese?.image_url || 'https://via.placeholder.com/90?text=Cheese'
                       }} 
                       style={viewMode === 'grid' ? styles.entryImage : styles.entryImageList}
                     />
@@ -516,26 +520,26 @@ export default function CheeseBoxScreen() {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.entryInfo}>
-                    <Text style={styles.entryName} numberOfLines={2}>{displayName}</Text>
+                    <Text style={styles.entryName} numberOfLines={2}>{displayName || 'Unknown Cheese'}</Text>
                     <Text style={styles.entryType}>
-                      {entry.producer_cheese.cheese_type.name} • {entry.producer_cheese.cheese_type.type}
+                      {entry.producer_cheese?.cheese_type?.name || 'Unknown'} • {entry.producer_cheese?.cheese_type?.type || 'Cheese'}
                     </Text>
-                    {entry.producer_cheese.cheese_type.origin_country && (
+                    {entry.producer_cheese?.cheese_type?.origin_country ? (
                       <Text style={styles.entryOrigin}>
                         📍 {entry.producer_cheese.cheese_type.origin_country}
                       </Text>
-                    )}
-                    {entry.rating && (
+                    ) : null}
+                    {entry.rating ? (
                       <View style={styles.ratingContainer}>
                         {renderStars(entry.rating)}
                         <Text style={styles.ratingText}>({entry.rating}/5)</Text>
                       </View>
-                    )}
-                    {entry.notes && (
+                    ) : null}
+                    {entry.notes ? (
                       <Text style={styles.entryNotes} numberOfLines={2}>
                         "{entry.notes}"
                       </Text>
-                    )}
+                    ) : null}
                     <Text style={styles.entryDate}>
                       Added {new Date(entry.created_at).toLocaleDateString('en-US', {
                         month: 'short',
@@ -604,7 +608,7 @@ export default function CheeseBoxScreen() {
                           <View style={styles.wishlistInfo}>
                             <Text style={styles.wishlistName} numberOfLines={2}>{displayName || 'Unknown Cheese'}</Text>
                             <Text style={styles.wishlistType}>
-                              {cheese?.cheese_type?.name} • {cheese?.cheese_type?.type}
+                              {cheese?.cheese_type?.name || 'Unknown'} • {cheese?.cheese_type?.type || 'Cheese'}
                             </Text>
                             <Text style={styles.wishlistDate}>
                               Added {new Date(entry.created_at).toLocaleDateString('en-US', {

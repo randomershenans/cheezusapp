@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Shield, Lock, Eye, Download, Trash2, Smartphone } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,12 +8,22 @@ import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
-// Optional import - biometric auth only if package is installed
+// Optional imports
 let LocalAuthentication: any = null;
+let FileSystem: any = null;
+let Sharing: any = null;
+
 try {
   LocalAuthentication = require('expo-local-authentication');
 } catch (e) {
-  console.log('expo-local-authentication not installed');
+  // Not installed
+}
+
+try {
+  FileSystem = require('expo-file-system');
+  Sharing = require('expo-sharing');
+} catch (e) {
+  // Not installed
 }
 
 type PrivacySettings = {
@@ -193,7 +201,7 @@ export default function PrivacyScreen() {
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
-              } else {
+              } else if (FileSystem && Sharing) {
                 // Native: save to file and share
                 const fileUri = FileSystem.documentDirectory + fileName;
                 await FileSystem.writeAsStringAsync(fileUri, jsonString, {
@@ -208,6 +216,10 @@ export default function PrivacyScreen() {
                 } else {
                   Alert.alert('Saved', `Data saved to: ${fileUri}`);
                 }
+              } else {
+                // Fallback: show data in alert
+                Alert.alert('Export Data', 'Data export is not available on this device. Please try on web.');
+                return;
               }
 
               Alert.alert('Success', 'Your data has been exported!');

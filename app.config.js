@@ -71,6 +71,9 @@ export default {
     extra: {
       router: {
         origin: false
+      },
+      eas: {
+        projectId: "randomshenans"
       }
     }
   }
