@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, Platform, TextInput, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { User, ChevronRight, Settings, Pencil, Trophy, Award, Star, Sparkles, Target } from 'lucide-react-native';
+import { User, ChevronRight, Settings, Pencil, Trophy, Award, Star, Sparkles, Target, Users, Share2 } from 'lucide-react-native';
+import { Share } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import ProfilePictureUpload from '../../components/ProfilePictureUpload';
@@ -30,6 +31,7 @@ type Profile = {
   tagline: string | null;
   location: string | null;
   avatar_url: string | null;
+  vanity_url: string | null;
   premium: boolean;
   created_at: string;
   updated_at: string;
@@ -46,6 +48,9 @@ export default function ProfileScreen() {
   const [editedName, setEditedName] = useState('');
   const [editedLocation, setEditedLocation] = useState('');
   const [editedTagline, setEditedTagline] = useState('');
+  const [isEditingVanityUrl, setIsEditingVanityUrl] = useState(false);
+  const [editedVanityUrl, setEditedVanityUrl] = useState('');
+  const [vanityUrlError, setVanityUrlError] = useState('');
   
   const [badges, setBadges] = useState<Badge[]>([]);
   const [stats, setStats] = useState({
@@ -58,6 +63,10 @@ export default function ProfileScreen() {
     recipes: 0,
     pairings: 0,
   });
+  const [followCounts, setFollowCounts] = useState({
+    followers: 0,
+    following: 0,
+  });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
@@ -67,13 +76,15 @@ export default function ProfileScreen() {
     fetchBadges();
     fetchSavedCounts();
     fetchRecentActivity();
+    fetchFollowCounts();
   }, [user]);
 
-  // Refresh saved counts when screen comes into focus
+  // Refresh counts when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
         fetchSavedCounts();
+        fetchFollowCounts();
       }
     }, [user])
   );
@@ -181,6 +192,28 @@ export default function ProfileScreen() {
     }
   };
 
+  const fetchFollowCounts = async () => {
+    if (!user) return;
+    try {
+      const { count: followersCount } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', user.id);
+
+      const { count: followingCount } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('follower_id', user.id);
+
+      setFollowCounts({
+        followers: followersCount ?? 0,
+        following: followingCount ?? 0,
+      });
+    } catch (error) {
+      console.error('Error fetching follow counts:', error);
+    }
+  };
+
   const fetchRecentActivity = async () => {
     if (!user) return;
     try {
@@ -250,6 +283,85 @@ export default function ProfileScreen() {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  const handleShareProfile = async () => {
+    if (!user || !profile) return;
+    try {
+      const displayName = profile.name || 'Cheese Lover';
+      const profileUrl = profile.vanity_url 
+        ? `https://cheezus.co/@${profile.vanity_url}`
+        : `https://cheezus.co/profile/${user.id}`;
+      await Share.share({
+        message: `Check out ${displayName}'s cheese journey on Cheezus! 🧀\n\n${profileUrl}`,
+        title: `${displayName} on Cheezus`,
+      });
+    } catch (error) {
+      console.error('Error sharing profile:', error);
+    }
+  };
+
+  const validateVanityUrl = (url: string): boolean => {
+    // Only allow lowercase letters, numbers, and underscores
+    const regex = /^[a-z0-9_]{3,20}$/;
+    return regex.test(url);
+  };
+
+  const handleSaveVanityUrl = async () => {
+    if (!user || !profile) return;
+    
+    const cleanUrl = editedVanityUrl.toLowerCase().trim();
+    
+    if (!cleanUrl) {
+      // Allow clearing the vanity URL
+      try {
+        await supabase
+          .from('profiles')
+          .update({ vanity_url: null })
+          .eq('id', user.id);
+        
+        setProfile({ ...profile, vanity_url: null });
+        setIsEditingVanityUrl(false);
+        setVanityUrlError('');
+      } catch (error) {
+        setVanityUrlError('Failed to update');
+      }
+      return;
+    }
+
+    if (!validateVanityUrl(cleanUrl)) {
+      setVanityUrlError('3-20 characters, letters, numbers, underscores only');
+      return;
+    }
+
+    try {
+      // Check if already taken
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('vanity_url', cleanUrl)
+        .neq('id', user.id)
+        .maybeSingle();
+
+      if (existing) {
+        setVanityUrlError('This URL is already taken');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ vanity_url: cleanUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile({ ...profile, vanity_url: cleanUrl });
+      setIsEditingVanityUrl(false);
+      setVanityUrlError('');
+    } catch (error) {
+      console.error('Error saving vanity URL:', error);
+      setVanityUrlError('Failed to save');
+    }
   };
 
   // Not logged in view
@@ -406,6 +518,26 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Followers/Following */}
+        <View style={styles.followRow}>
+          <TouchableOpacity 
+            style={styles.followCard}
+            onPress={() => router.push('/followers?tab=followers')}
+          >
+            <Users size={18} color={Colors.primary} />
+            <Text style={styles.followNumber}>{followCounts.followers}</Text>
+            <Text style={styles.followLabel}>Followers</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.followCard}
+            onPress={() => router.push('/followers?tab=following')}
+          >
+            <Users size={18} color={Colors.primary} />
+            <Text style={styles.followNumber}>{followCounts.following}</Text>
+            <Text style={styles.followLabel}>Following</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Achievements Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -521,6 +653,90 @@ export default function ProfileScreen() {
           <Text style={styles.collectionHint}>
             💡 Tap the bookmark icon on articles and recipes to save them here
           </Text>
+        </View>
+
+        {/* Share Profile / Vanity URL */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Share Your Profile</Text>
+          </View>
+          
+          <View style={styles.vanityUrlCard}>
+            {isEditingVanityUrl ? (
+              <View style={styles.vanityUrlEditContainer}>
+                <View style={styles.vanityUrlInputRow}>
+                  <Text style={styles.vanityUrlPrefix}>cheezus.co/@</Text>
+                  <TextInput
+                    style={styles.vanityUrlInput}
+                    value={editedVanityUrl}
+                    onChangeText={(text) => {
+                      setEditedVanityUrl(text.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                      setVanityUrlError('');
+                    }}
+                    placeholder="yourname"
+                    placeholderTextColor={Colors.subtleText}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={20}
+                  />
+                </View>
+                {vanityUrlError ? (
+                  <Text style={styles.vanityUrlError}>{vanityUrlError}</Text>
+                ) : null}
+                <View style={styles.vanityUrlActions}>
+                  <TouchableOpacity
+                    style={styles.vanityUrlCancelButton}
+                    onPress={() => {
+                      setIsEditingVanityUrl(false);
+                      setVanityUrlError('');
+                    }}
+                  >
+                    <Text style={styles.vanityUrlCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.vanityUrlSaveButton}
+                    onPress={handleSaveVanityUrl}
+                  >
+                    <Text style={styles.vanityUrlSaveText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <>
+                <View style={styles.vanityUrlDisplay}>
+                  <Share2 size={20} color={Colors.primary} />
+                  <Text style={styles.vanityUrlText}>
+                    {profile?.vanity_url 
+                      ? `cheezus.co/@${profile.vanity_url}`
+                      : 'Set your custom profile URL'}
+                  </Text>
+                </View>
+                <View style={styles.vanityUrlButtonRow}>
+                  {profile?.vanity_url && (
+                    <TouchableOpacity
+                      style={styles.vanityUrlShareButton}
+                      onPress={handleShareProfile}
+                    >
+                      <Share2 size={16} color={Colors.background} />
+                      <Text style={styles.vanityUrlShareText}>Share Profile</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.vanityUrlEditButton}
+                    onPress={() => {
+                      setEditedVanityUrl(profile?.vanity_url || '');
+                      setIsEditingVanityUrl(true);
+                    }}
+                  >
+                    <Pencil size={14} color={Colors.text} />
+                    <Text style={styles.vanityUrlEditText}>
+                      {profile?.vanity_url ? 'Edit' : 'Set URL'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
         </View>
 
         {/* Recent Activity */}
@@ -903,6 +1119,35 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
 
+  // Follow stats
+  followRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Layout.spacing.l,
+    gap: Layout.spacing.m,
+    marginBottom: Layout.spacing.l,
+  },
+  followCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    gap: Layout.spacing.s,
+    ...Layout.shadow.small,
+  },
+  followNumber: {
+    fontSize: Typography.sizes.lg,
+    fontFamily: Typography.fonts.bodyBold,
+    color: Colors.text,
+  },
+  followLabel: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+
   // Sections
   section: {
     paddingHorizontal: Layout.spacing.l,
@@ -1105,5 +1350,112 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     marginTop: 2,
+  },
+
+  // Vanity URL styles
+  vanityUrlCard: {
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.large,
+    padding: Layout.spacing.m,
+    ...Layout.shadow.small,
+  },
+  vanityUrlEditContainer: {
+    gap: Layout.spacing.m,
+  },
+  vanityUrlInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: Layout.borderRadius.medium,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+  },
+  vanityUrlPrefix: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+  },
+  vanityUrlInput: {
+    flex: 1,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+    paddingVertical: 0,
+  },
+  vanityUrlError: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: '#EF4444',
+  },
+  vanityUrlActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Layout.spacing.s,
+  },
+  vanityUrlCancelButton: {
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  vanityUrlCancelText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+  },
+  vanityUrlSaveButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+  },
+  vanityUrlSaveText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  vanityUrlDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+    marginBottom: Layout.spacing.m,
+  },
+  vanityUrlText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    flex: 1,
+  },
+  vanityUrlButtonRow: {
+    flexDirection: 'row',
+    gap: Layout.spacing.s,
+  },
+  vanityUrlEditButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  vanityUrlEditText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+  },
+  vanityUrlShareButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.medium,
+    backgroundColor: Colors.primary,
+  },
+  vanityUrlShareText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.background,
   },
 });

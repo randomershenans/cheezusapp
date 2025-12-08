@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag, Grid, Award } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { getPersonalizedFeed, interleaveFeedItems, getCheeseDisplayName, FeedItem as ApiFeedItem, FeedCheeseItem, FeedArticle, FeedSponsored, UserTasteProfile } from '@/lib/feed-service';
+import { getPersonalizedFeed, interleaveFeedItems, getCheeseDisplayName, searchUsers, FeedItem as ApiFeedItem, FeedCheeseItem, FeedArticle, FeedSponsored, UserTasteProfile } from '@/lib/feed-service';
 import { useAuth } from '@/contexts/AuthContext';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
@@ -91,10 +91,18 @@ type SponsoredPairing = {
   price_range: string;
 };
 
+type UserResult = {
+  id: string;
+  name: string;
+  vanity_url?: string;
+  avatar_url?: string;
+  tagline?: string;
+};
+
 type FeedItem = {
   id: string;
-  type: 'cheese' | 'producer-cheese' | 'featured' | 'nearby' | 'sponsored_pairing' | 'add-cheese-prompt';
-  data: TrendingCheese | FeaturedEntry | SponsoredPairing | null;
+  type: 'cheese' | 'producer-cheese' | 'featured' | 'nearby' | 'sponsored_pairing' | 'add-cheese-prompt' | 'user';
+  data: TrendingCheese | FeaturedEntry | SponsoredPairing | UserResult | null;
 };
 
 export default function HomeScreen() {
@@ -128,7 +136,7 @@ export default function HomeScreen() {
         if ('cheese' in item) {
           const cheeseItem = item as FeedCheeseItem;
           return {
-            id: `cheese-${cheeseItem.cheese.id}`,
+            id: cheeseItem.type === 'following' ? `following-${cheeseItem.cheese.id}` : `cheese-${cheeseItem.cheese.id}`,
             type: 'producer-cheese' as const,
             data: {
               id: cheeseItem.cheese.id,
@@ -146,7 +154,8 @@ export default function HomeScreen() {
               is_producer_cheese: true,
               recommendation_type: cheeseItem.type,
               recommendation_reason: cheeseItem.reason,
-            } as TrendingCheese & { awards_image_url?: string; recommendation_type?: string; recommendation_reason?: string },
+              following_user: cheeseItem.user,
+            } as TrendingCheese & { awards_image_url?: string; recommendation_type?: string; recommendation_reason?: string; following_user?: { id: string; name: string; avatar_url?: string } },
           };
         } else if (item.type === 'article') {
           const articleItem = item as FeedArticle;
@@ -362,6 +371,26 @@ export default function HomeScreen() {
     const searchTerms = expandSearchTerms(query);
     
     try {
+      const feed: FeedItem[] = [];
+
+      // Search for users if query starts with @ or looks like a username
+      if (query.startsWith('@') || query.includes('@')) {
+        const users = await searchUsers(query);
+        users.forEach(u => {
+          feed.push({
+            id: `user-${u.id}`,
+            type: 'user',
+            data: {
+              id: u.id,
+              name: u.name || 'Cheese Lover',
+              vanity_url: u.vanity_url || undefined,
+              avatar_url: u.avatar_url || undefined,
+              tagline: u.tagline || undefined,
+            },
+          });
+        });
+      }
+
       // Build OR conditions for all search terms
       const cheeseOrConditions = searchTerms.flatMap(term => [
         `full_name.ilike.%${term}%`,
@@ -404,9 +433,7 @@ export default function HomeScreen() {
         );
       }).slice(0, 5);
 
-      // Build search results feed
-      const feed: FeedItem[] = [];
-
+      // Add cheese results to feed
       if (producerCheeses) {
         producerCheeses.forEach(pc => {
           const isGeneric = pc.producer_name?.toLowerCase().includes('generic') || 
@@ -804,6 +831,27 @@ export default function HomeScreen() {
     </View>
   );
 
+  const renderUserCard = (user: UserResult) => (
+    <TouchableOpacity
+      style={styles.userCard}
+      onPress={() => router.push(`/profile/${user.id}`)}
+    >
+      <Image
+        source={{ uri: user.avatar_url || 'https://via.placeholder.com/60?text=User' }}
+        style={styles.userAvatar}
+      />
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{user.name}</Text>
+        {user.vanity_url && (
+          <Text style={styles.userHandle}>@{user.vanity_url}</Text>
+        )}
+        {user.tagline && (
+          <Text style={styles.userTagline} numberOfLines={1}>{user.tagline}</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
   const renderFeedItem = (item: FeedItem) => {
     switch (item.type) {
       case 'cheese':
@@ -813,6 +861,8 @@ export default function HomeScreen() {
         return renderFeaturedCard(item.data as FeaturedEntry);
       case 'sponsored_pairing':
         return renderSponsoredPairingCard(item.data as SponsoredPairing);
+      case 'user':
+        return renderUserCard(item.data as UserResult);
       case 'nearby':
         return <NearbyCheeseCard key={item.id} />;
       case 'add-cheese-prompt':
@@ -1323,5 +1373,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  /* -------- user card -------- */
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    padding: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    ...Layout.shadow.small,
+  },
+  userAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: Layout.spacing.m,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  userHandle: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.primary,
+    marginTop: 2,
+  },
+  userTagline: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: 2,
   },
 });

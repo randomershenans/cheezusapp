@@ -1,0 +1,70 @@
+export default {
+  expo: {
+    name: "Cheezus",
+    slug: "cheezus",
+    scheme: "cheezus",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "light",
+    splash: {
+      image: "./assets/splash.png",
+      resizeMode: "contain",
+      backgroundColor: "#FCD95B"
+    },
+    assetBundlePatterns: [
+      "**/*"
+    ],
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: "com.cheezus.app",
+      associatedDomains: [
+        "applinks:cheezus.co"
+      ]
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#FCD95B"
+      },
+      package: "com.cheezus.app",
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "cheezus.co",
+              pathPrefix: "/@"
+            },
+            {
+              scheme: "https",
+              host: "cheezus.co",
+              pathPrefix: "/profile"
+            },
+            {
+              scheme: "cheezus",
+              host: "profile"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    web: {
+      favicon: "./assets/favicon.png",
+      bundler: "metro"
+    },
+    plugins: [
+      "expo-font",
+      "expo-router",
+      "expo-web-browser"
+    ],
+    extra: {
+      router: {
+        origin: false
+      }
+    }
+  }
+};

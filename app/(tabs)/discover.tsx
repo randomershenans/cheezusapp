@@ -25,6 +25,7 @@ import {
   Utensils,
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { searchUsers } from '@/lib/feed-service';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import Colors from '@/constants/Colors';
@@ -39,7 +40,7 @@ type DiscoverItem = {
   title: string;
   description: string;
   image_url: string;
-  type: 'cheese' | 'producer-cheese' | 'article' | 'recipe';
+  type: 'cheese' | 'producer-cheese' | 'article' | 'recipe' | 'user';
   metadata?: {
     origin_country?: string;
     cheese_type?: string;
@@ -48,6 +49,8 @@ type DiscoverItem = {
     reading_time?: number;
     average_rating?: number;
     rating_count?: number;
+    vanity_url?: string;
+    tagline?: string;
   };
 };
 
@@ -194,6 +197,24 @@ export default function DiscoverScreen() {
     setLoading(true);
     try {
       let all: DiscoverItem[] = [];
+
+      /* Users - Search when query starts with @ or contains username-like pattern */
+      if (searchQuery && (searchQuery.startsWith('@') || searchQuery.includes('@'))) {
+        const users = await searchUsers(searchQuery);
+        all.push(
+          ...users.map(u => ({
+            id: u.id,
+            title: u.name || 'Cheese Lover',
+            description: u.vanity_url ? `@${u.vanity_url}` : (u.tagline || 'Cheese enthusiast'),
+            image_url: u.avatar_url || 'https://via.placeholder.com/100?text=User',
+            type: 'user' as const,
+            metadata: {
+              vanity_url: u.vanity_url || undefined,
+              tagline: u.tagline || undefined,
+            },
+          }))
+        );
+      }
 
       /* Cheeses - Show both producer cheeses and cheese types */
       if (activeFilter === 'all' || activeFilter === 'cheese') {
@@ -360,11 +381,14 @@ export default function DiscoverScreen() {
 
   const formatTypeBadge = (type: string): string => {
     if (type === 'producer-cheese') return 'Cheese';
+    if (type === 'user') return 'Person';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   const handlePress = (item: DiscoverItem) => {
-    if (item.type === 'producer-cheese') {
+    if (item.type === 'user') {
+      router.push(`/profile/${item.id}`);
+    } else if (item.type === 'producer-cheese') {
       router.push(`/producer-cheese/${item.id}`);
     } else if (item.type === 'cheese') {
       router.push(`/cheese/${item.id}`);
