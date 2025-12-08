@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { removePushToken } from '@/lib/push-notifications';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -75,6 +76,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Remove push token before signing out
+    if (user) {
+      await removePushToken(user.id);
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };

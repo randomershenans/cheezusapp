@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Alert, TextInput, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { Plus, Star, Trash2, Pen, TrendingUp, Award, Heart, BarChart3, Search, Filter, X, Grid, List } from 'lucide-react-native';
+import { Star, Trash2, Pen, TrendingUp, Award, Heart, BarChart3, Search, Filter, X, Grid, List, Plus } from 'lucide-react-native';
+import NotificationBell from '@/components/NotificationBell';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { supabase } from '@/lib/supabase';
@@ -311,12 +312,7 @@ export default function CheeseBoxScreen() {
           <Text style={styles.title}>My Cheese Box</Text>
           <Text style={styles.subtitle}>Your personal cheese collection</Text>
         </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/add-cheese')}
-        >
-          <Plus size={20} color={Colors.text} />
-        </TouchableOpacity>
+        <NotificationBell />
       </View>
 
       {/* Tab Switcher */}
@@ -672,14 +668,28 @@ const styles = StyleSheet.create({
     color: Colors.subtleText,
     marginTop: 4,
   },
-  addButton: {
-    backgroundColor: '#FCD95B',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  notificationButton: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Layout.shadow.medium,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: Typography.fonts.bodySemiBold,
   },
   // Tab styles
   tabContainer: {

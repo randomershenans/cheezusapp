@@ -7,6 +7,7 @@ import { Share } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import ProfilePictureUpload from '../../components/ProfilePictureUpload';
+import NotificationBell from '@/components/NotificationBell';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -413,6 +414,12 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
+      {/* Top Bar with Notification */}
+      <View style={styles.topBar}>
+        <Text style={styles.topBarTitle}>Profile</Text>
+        <NotificationBell />
+      </View>
+
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
@@ -974,6 +981,20 @@ const styles = StyleSheet.create({
   loginButtonSecondaryText: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+  },
+
+  // Top Bar
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+  },
+  topBarTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.heading,
     color: Colors.text,
   },
 

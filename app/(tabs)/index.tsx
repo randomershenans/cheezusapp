@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import NearbyCheeseCard from '@/components/NearbyCheeseCard';
+import NotificationBell from '@/components/NotificationBell';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -889,10 +890,13 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.header}>
-          <Text style={styles.greeting}>
-            {userProfile ? `Hey there, cheese ${userProfile.tier}!` : 'Hello Cheeky Cheese Lovers!'}
-          </Text>
-          <Text style={styles.title}>Let's Get Cheesy</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>
+              {userProfile ? `Hey there, cheese ${userProfile.tier}!` : 'Hello Cheeky Cheese Lovers!'}
+            </Text>
+            <Text style={styles.title}>Let's Get Cheesy</Text>
+          </View>
+          <NotificationBell />
         </View>
 
         <SearchBar 
@@ -956,8 +960,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     padding: Layout.spacing.m,
     paddingBottom: Layout.spacing.s,
+  },
+  headerLeft: {
+    flex: 1,
   },
   greeting: {
     fontSize: Typography.sizes.base,

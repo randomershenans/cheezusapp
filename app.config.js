@@ -59,7 +59,14 @@ export default {
     plugins: [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FCD95B"
+        }
+      ]
     ],
     extra: {
       router: {

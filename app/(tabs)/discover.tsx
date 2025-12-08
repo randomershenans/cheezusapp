@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { searchUsers } from '@/lib/feed-service';
+import NotificationBell from '@/components/NotificationBell';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import Colors from '@/constants/Colors';
@@ -503,10 +504,11 @@ export default function DiscoverScreen() {
       <StatusBar style="dark" />
 
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.title}>Discover</Text>
           <Text style={styles.subtitle}>Explore the world of cheese</Text>
         </View>
+        <NotificationBell />
       </View>
 
       <SearchBar
@@ -639,6 +641,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
+  },
+  headerLeft: {
+    flex: 1,
   },
 
   /* -------- titles -------- */

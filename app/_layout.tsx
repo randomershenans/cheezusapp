@@ -19,6 +19,7 @@ import {
 import { AuthProvider } from '@/contexts/AuthContext'
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
+import PushNotificationHandler from '@/components/PushNotificationHandler';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -109,6 +110,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <PushNotificationHandler />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth/login" options={{ headerShown: false }} />
