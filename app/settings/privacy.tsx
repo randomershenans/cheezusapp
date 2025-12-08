@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Shield, Lock, Eye, Download, Trash2, Smartphone } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,13 +35,11 @@ export default function PrivacyScreen() {
     biometric_login_enabled: false,
     two_factor_enabled: false,
   });
-  const [sessions, setSessions] = useState<any[]>([]);
 
   useEffect(() => {
     if (user) {
       fetchPrivacySettings();
       checkBiometricAvailability();
-      fetchActiveSessions();
     }
   }, [user]);
 
@@ -93,19 +93,6 @@ export default function PrivacyScreen() {
     }
   };
 
-  const fetchActiveSessions = async () => {
-    // This would fetch from auth.sessions in production
-    // For now, just show current session
-    setSessions([
-      {
-        id: '1',
-        device: 'iPhone 14 Pro',
-        location: 'London, UK',
-        last_active: new Date().toISOString(),
-        current: true,
-      }
-    ]);
-  };
 
   const updateSetting = async (key: keyof PrivacySettings, value: any) => {
     if (!user) return;
@@ -157,17 +144,77 @@ export default function PrivacyScreen() {
     Alert.alert('Coming Soon', 'Two-factor authentication will be available soon');
   };
 
-  const handleExportData = () => {
+  const handleExportData = async () => {
+    if (!user) return;
+
     Alert.alert(
       'Export Your Data',
-      'We\'ll prepare a complete export of your data and send it to your email within 24 hours.',
+      'We\'ll generate a JSON file with all your data that you can download.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Request Export',
+          text: 'Export Now',
           onPress: async () => {
-            // TODO: Trigger data export
-            Alert.alert('Success', 'Your data export has been requested. You\'ll receive an email shortly.');
+            try {
+              // Fetch all user data
+              const [profileRes, cheeseBoxRes, wishlistRes, followersRes, followingRes, badgesRes, ratingsRes] = await Promise.all([
+                supabase.from('profiles').select('*').eq('id', user.id).single(),
+                supabase.from('cheese_box_entries').select('*, producer_cheeses(full_name)').eq('user_id', user.id),
+                supabase.from('wishlists').select('*, producer_cheeses(full_name)').eq('user_id', user.id),
+                supabase.from('follows').select('profiles!follows_follower_id_fkey(name, username)').eq('following_id', user.id),
+                supabase.from('follows').select('profiles!follows_following_id_fkey(name, username)').eq('follower_id', user.id),
+                supabase.from('user_badges').select('*, badges(name, description)').eq('user_id', user.id),
+                supabase.from('cheese_ratings').select('*, producer_cheeses(full_name)').eq('user_id', user.id),
+              ]);
+
+              const exportData = {
+                exported_at: new Date().toISOString(),
+                profile: profileRes.data,
+                cheese_box: cheeseBoxRes.data || [],
+                wishlist: wishlistRes.data || [],
+                followers: followersRes.data || [],
+                following: followingRes.data || [],
+                badges: badgesRes.data || [],
+                ratings: ratingsRes.data || [],
+              };
+
+              // Create downloadable JSON
+              const jsonString = JSON.stringify(exportData, null, 2);
+              const fileName = `cheezus-data-${new Date().toISOString().split('T')[0]}.json`;
+
+              if (Platform.OS === 'web') {
+                // Web: trigger download
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+              } else {
+                // Native: save to file and share
+                const fileUri = FileSystem.documentDirectory + fileName;
+                await FileSystem.writeAsStringAsync(fileUri, jsonString, {
+                  encoding: FileSystem.EncodingType.UTF8,
+                });
+                
+                if (await Sharing.isAvailableAsync()) {
+                  await Sharing.shareAsync(fileUri, {
+                    mimeType: 'application/json',
+                    dialogTitle: 'Export Your Cheezus Data',
+                  });
+                } else {
+                  Alert.alert('Saved', `Data saved to: ${fileUri}`);
+                }
+              }
+
+              Alert.alert('Success', 'Your data has been exported!');
+            } catch (error) {
+              console.error('Error exporting data:', error);
+              Alert.alert('Error', 'Failed to export data. Please try again.');
+            }
           },
         },
       ]
@@ -267,39 +314,17 @@ export default function PrivacyScreen() {
             </View>
           )}
 
-          {/* 2FA */}
-          <TouchableOpacity style={styles.card} onPress={handleSetup2FA}>
+          {/* 2FA - Coming Soon */}
+          <View style={[styles.card, styles.cardDisabled]}>
             <Lock size={20} color={Colors.subtleText} />
             <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Two-Factor Authentication</Text>
+              <Text style={[styles.cardTitle, styles.textDisabled]}>Two-Factor Authentication</Text>
               <Text style={styles.cardDescription}>
-                {settings.two_factor_enabled ? 'Enabled' : 'Add an extra layer of security'}
+                Add an extra layer of security
               </Text>
             </View>
-            <Text style={styles.cardAction}>
-              {settings.two_factor_enabled ? 'Manage' : 'Setup'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Active Sessions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Active Sessions</Text>
-          {sessions.map((session) => (
-            <View key={session.id} style={styles.sessionCard}>
-              <View style={styles.sessionLeft}>
-                <Text style={styles.sessionDevice}>{session.device}</Text>
-                <Text style={styles.sessionInfo}>
-                  {session.location} • {session.current ? 'Current session' : 'Active now'}
-                </Text>
-              </View>
-              {!session.current && (
-                <TouchableOpacity style={styles.sessionLogout}>
-                  <Text style={styles.sessionLogoutText}>Logout</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
+            <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+          </View>
         </View>
 
         {/* Data & Privacy */}
@@ -494,6 +519,21 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.primary,
+  },
+  cardDisabled: {
+    opacity: 0.6,
+  },
+  textDisabled: {
+    color: Colors.subtleText,
+  },
+  comingSoonBadge: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.subtleText,
+    backgroundColor: Colors.border,
+    paddingHorizontal: Layout.spacing.s,
+    paddingVertical: 4,
+    borderRadius: Layout.borderRadius.small,
   },
   sessionCard: {
     flexDirection: 'row',
