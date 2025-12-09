@@ -38,20 +38,28 @@ export default function FollowersScreen() {
   const fetchFollowers = async () => {
     if (!user) return;
     try {
-      const { data, error } = await supabase
+      // Get follower IDs first
+      const { data: followData, error: followError } = await supabase
         .from('follows')
-        .select(`
-          follower:profiles!follower_id (
-            id,
-            name,
-            avatar_url,
-            tagline
-          )
-        `)
+        .select('follower_id')
         .eq('following_id', user.id);
 
-      if (!error && data) {
-        setFollowers(data.map((d: any) => d.follower));
+      if (followError) {
+        console.error('Error fetching follower IDs:', followError);
+        return;
+      }
+
+      if (followData && followData.length > 0) {
+        const followerIds = followData.map(f => f.follower_id);
+        
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url, tagline')
+          .in('id', followerIds);
+
+        if (!profileError && profileData) {
+          setFollowers(profileData);
+        }
       }
     } catch (error) {
       console.error('Error fetching followers:', error);
@@ -63,20 +71,28 @@ export default function FollowersScreen() {
   const fetchFollowing = async () => {
     if (!user) return;
     try {
-      const { data, error } = await supabase
+      // Get following IDs first
+      const { data: followData, error: followError } = await supabase
         .from('follows')
-        .select(`
-          following:profiles!following_id (
-            id,
-            name,
-            avatar_url,
-            tagline
-          )
-        `)
+        .select('following_id')
         .eq('follower_id', user.id);
 
-      if (!error && data) {
-        setFollowing(data.map((d: any) => d.following));
+      if (followError) {
+        console.error('Error fetching following IDs:', followError);
+        return;
+      }
+
+      if (followData && followData.length > 0) {
+        const followingIds = followData.map(f => f.following_id);
+        
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url, tagline')
+          .in('id', followingIds);
+
+        if (!profileError && profileData) {
+          setFollowing(profileData);
+        }
       }
     } catch (error) {
       console.error('Error fetching following:', error);

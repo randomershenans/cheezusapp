@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { X, User, Mail, Lock } from 'lucide-react-native';
@@ -17,6 +17,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleSignup = async () => {
     if (!name || !email || !password) {
@@ -34,7 +35,15 @@ export default function SignupScreen() {
     
     try {
       await signUp(email, password, name);
-      router.replace('/(tabs)/profile');
+      setShowConfirmation(true);
+      // Also try Alert for native
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Check Your Email',
+          'We\'ve sent a confirmation link to your email. Please check your inbox (and spam folder) to verify your account before signing in.',
+          [{ text: 'OK', onPress: () => router.replace('/auth/login') }]
+        );
+      }
     } catch (error) {
       setError('Error creating account. Please try again.');
     } finally {
@@ -79,6 +88,21 @@ export default function SignupScreen() {
           </View>
           
           <View style={styles.formContainer}>
+            {showConfirmation ? (
+              <View style={styles.confirmationContainer}>
+                <Text style={styles.confirmationTitle}>📧 Check Your Email!</Text>
+                <Text style={styles.confirmationText}>
+                  We've sent a confirmation link to {email}. Please check your inbox (and spam folder) to verify your account.
+                </Text>
+                <TouchableOpacity
+                  style={styles.confirmationButton}
+                  onPress={() => router.replace('/auth/login')}
+                >
+                  <Text style={styles.confirmationButtonText}>Go to Login</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <GoogleSignInButton />
@@ -168,6 +192,8 @@ export default function SignupScreen() {
                 <Text style={styles.loginLink}>Log In</Text>
               </TouchableOpacity>
             </View>
+              </>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -337,5 +363,37 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: { cursor: 'pointer' },
     }),
+  },
+  confirmationContainer: {
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.xl,
+  },
+  confirmationTitle: {
+    fontSize: Typography.sizes['2xl'],
+    fontFamily: Typography.fonts.heading,
+    color: Colors.text,
+    marginBottom: Layout.spacing.m,
+    textAlign: 'center',
+  },
+  confirmationText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
+    marginBottom: Layout.spacing.xl,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  confirmationButton: {
+    backgroundColor: '#FCD95B',
+    paddingVertical: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.xxl,
+    borderRadius: Layout.borderRadius.large,
+  },
+  confirmationButtonText: {
+    color: Colors.text,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    textAlign: 'center',
   },
 });

@@ -128,7 +128,7 @@ export default function HomeScreen() {
   const loadPersonalizedFeed = async () => {
     setLoading(true);
     try {
-      const response = await getPersonalizedFeed(user?.id, 20, 0, []);
+      const response = await getPersonalizedFeed(user?.id, 20, []);
       setUserProfile(response.profile);
       const interleaved = interleaveFeedItems(response);
       

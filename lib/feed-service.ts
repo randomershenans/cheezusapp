@@ -80,14 +80,12 @@ export type FeedItem = FeedCheeseItem | FeedArticle | FeedSponsored;
 export const getPersonalizedFeed = async (
   userId?: string,
   limit: number = 20,
-  offset: number = 0,
   excludeIds: string[] = []
 ): Promise<PersonalizedFeedResponse> => {
   try {
     const { data, error } = await supabase.rpc('get_personalized_feed', {
       p_user_id: userId || null,
       p_limit: limit,
-      p_offset: offset,
       p_exclude_ids: excludeIds,
     });
 

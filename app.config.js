@@ -6,10 +6,10 @@ export default {
     scheme: "cheezus",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/icon.png",
+    icon: "./assets/images/icon.png",
     userInterfaceStyle: "light",
     splash: {
-      image: "./assets/splash.png",
+      image: "./assets/images/splash.png",
       resizeMode: "contain",
       backgroundColor: "#FCD95B"
     },
@@ -25,7 +25,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
+        foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FCD95B"
       },
       package: "com.cheezus.app",
@@ -54,7 +54,7 @@ export default {
       ]
     },
     web: {
-      favicon: "./assets/favicon.png",
+      favicon: "./assets/images/icon.png",
       bundler: "metro"
     },
     plugins: [
@@ -64,7 +64,7 @@ export default {
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
+          "icon": "./assets/images/notification-icon.png",
           "color": "#FCD95B"
         }
       ]

@@ -321,7 +321,9 @@ export default function PublicProfileScreen() {
                     {entry.rating && (
                       <View style={styles.ratingBadge}>
                         <Star size={10} color="#FFD700" fill="#FFD700" />
-                        <Text style={styles.ratingText}>{entry.rating}</Text>
+                        <Text style={styles.ratingText}>
+                          {Number(entry.rating) % 1 === 0 ? Number(entry.rating) : Number(entry.rating).toFixed(1)}
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>

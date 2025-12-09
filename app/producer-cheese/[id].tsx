@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Star, MapPin, ArrowLeft, Factory, Package, DollarSign, Award, X, Share2, ChevronRight, Heart } from 'lucide-react-native';
+import { Star, MapPin, ArrowLeft, Factory, Package, DollarSign, Award, X, Share2, ChevronRight, Heart, Pencil } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -49,6 +49,7 @@ export default function ProducerCheeseDetailScreen() {
   const [tempRating, setTempRating] = useState(0);
   const [tempNotes, setTempNotes] = useState('');
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -70,6 +71,21 @@ export default function ProducerCheeseDetailScreen() {
 
       setProducerCheese(cheeseData);
 
+      // Check if user can edit this cheese (owns it and not verified)
+      if (user) {
+        const { data: cheeseOwnership } = await supabase
+          .from('producer_cheeses')
+          .select('added_by, verified')
+          .eq('id', id)
+          .single();
+        
+        if (cheeseOwnership && 
+            cheeseOwnership.added_by === user.id && 
+            !cheeseOwnership.verified) {
+          setCanEdit(true);
+        }
+      }
+
       // Fetch flavor tags
       const tags = await getFlavorTagsForProducerCheese(id as string);
       setFlavorTags(tags);
@@ -86,18 +102,11 @@ export default function ProducerCheeseDetailScreen() {
         setOtherProducerCheeses(otherCheeses);
       }
 
-      // Fetch pairings for this cheese type
-      // Try to find if there's a legacy cheese entry that matches this type
-      try {
-        const { data: legacyCheese, error: legacyError } = await supabase
-          .from('cheeses')
-          .select('id')
-          .ilike('name', cheeseData.cheese_type_name)
-          .maybeSingle();
-
-        if (legacyCheese && !legacyError) {
+      // Fetch pairings for this cheese type via cheese_types
+      if (cheeseData.cheese_type_id) {
+        try {
           const { data: pairingsData, error: pairingsError } = await supabase
-            .from('cheese_pairing_matches')
+            .from('cheese_type_pairing_matches')
             .select(`
               cheese_pairings!inner(
                 id,
@@ -108,15 +117,15 @@ export default function ProducerCheeseDetailScreen() {
                 is_sponsored
               )
             `)
-            .eq('cheese_id', legacyCheese.id);
+            .eq('cheese_type_id', cheeseData.cheese_type_id);
 
           if (!pairingsError && pairingsData) {
             setPairings(pairingsData.map(item => item.cheese_pairings));
           }
+        } catch (pairingError) {
+          // Silently fail if no pairings found - not critical
+          console.log('No pairings found for this cheese type');
         }
-      } catch (pairingError) {
-        // Silently fail if no pairings found - not critical
-        console.log('No pairings found for this cheese type');
       }
     } catch (error) {
       console.error('Error fetching producer cheese:', error);
@@ -336,6 +345,16 @@ export default function ProducerCheeseDetailScreen() {
           >
             <Share2 size={24} color={Colors.background} />
           </TouchableOpacity>
+
+          {/* Edit Button - only show if user can edit */}
+          {canEdit && (
+            <TouchableOpacity
+              style={styles.editButtonContainer}
+              onPress={() => router.push(`/edit-cheese/${id}`)}
+            >
+              <Pencil size={20} color={Colors.background} />
+            </TouchableOpacity>
+          )}
 
           {/* Awards Badge */}
           {producerCheese.awards_image_url && (
@@ -881,6 +900,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
+  editButtonContainer: {
+    position: 'absolute',
+    top: Layout.spacing.m,
+    right: Layout.spacing.m + 50,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
   awardsBadgeContainer: {
     position: 'absolute',
     top: Layout.spacing.m + 50,
@@ -1136,7 +1167,7 @@ const styles = StyleSheet.create({
     gap: Layout.spacing.s,
   },
   pairingTile: {
-    width: (screenWidth - Layout.spacing.m * 3) / 2,
+    width: '48%',
     height: 120,
     borderRadius: Layout.borderRadius.medium,
     overflow: 'hidden',

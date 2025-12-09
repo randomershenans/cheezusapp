@@ -1,36 +1,43 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Animated, Image } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { X, Mail, Lock } from 'lucide-react-native';
+import { ArrowLeft, Mail } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
-import GoogleSignInButton from '@/components/GoogleSignInButton';
 
-export default function LoginScreen() {
+export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please fill in all fields');
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address');
       return;
     }
-    
+
     setIsLoading(true);
     setError('');
-    
+
     try {
-      await signIn(email, password);
-      router.replace('/(tabs)/profile');
-    } catch (error) {
-      setError('Invalid email or password');
+      await resetPassword(email);
+      Alert.alert(
+        'Check Your Email',
+        'We\'ve sent a password reset link to your email. Please check your inbox (and spam folder).',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/auth/login'),
+          },
+        ]
+      );
+    } catch (error: any) {
+      setError(error.message || 'Failed to send reset email. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -45,34 +52,33 @@ export default function LoginScreen() {
         style={styles.container}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.closeButtonContainer}>
+          <View style={styles.header}>
             <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => router.replace('/')}
+              style={styles.backButton}
+              onPress={() => router.back()}
               activeOpacity={0.7}
             >
-              <X size={24} color={Colors.text} />
+              <ArrowLeft size={24} color={Colors.text} />
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.heroSection}>
             <View style={styles.logoContainer}>
-              <Image 
-                source={require('@/assets/images/logo.png')} 
+              <Image
+                source={require('@/assets/images/logo.png')}
                 style={styles.logo}
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.title}>Forgot Password?</Text>
             <Text style={styles.subtitle}>
-              Continue your delicious cheese journey
+              No worries! Enter your email and we'll send you a link to reset your password.
             </Text>
           </View>
-          
+
           <View style={styles.formContainer}>
-            
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            
+
             <View style={styles.formGroup}>
               <Text style={styles.label}>Email</Text>
               <View style={styles.inputContainer}>
@@ -92,70 +98,25 @@ export default function LoginScreen() {
                 />
               </View>
             </View>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputContainer}>
-                <Lock size={20} color={Colors.subtleText} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your password"
-                  placeholderTextColor={Colors.subtleText}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (error) setError('');
-                  }}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.forgotPasswordContainer}
-              onPress={() => router.push('/auth/forgot-password')}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
+
+            <TouchableOpacity
+              style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
+              onPress={handleResetPassword}
               disabled={isLoading}
               activeOpacity={0.8}
             >
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'Logging in...' : 'Log In'}
+              <Text style={styles.resetButtonText}>
+                {isLoading ? 'Sending...' : 'Send Reset Link'}
               </Text>
             </TouchableOpacity>
 
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.divider} />
-            </View>
-            
-            <GoogleSignInButton />
-            
-            <View style={styles.bottomActions}>
-              <TouchableOpacity 
-                style={styles.signupButton}
-                onPress={() => router.replace('/auth/signup')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.signupButtonText}>Create Account</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.laterButton}
-                onPress={() => router.replace('/')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.laterButtonText}>Maybe Later</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.backToLoginButton}
+              onPress={() => router.replace('/auth/login')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backToLoginText}>Back to Login</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -172,10 +133,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: Layout.spacing.xl,
   },
-  closeButtonContainer: {
+  header: {
     padding: Layout.spacing.m,
   },
-  closeButton: {
+  backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -197,11 +158,6 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
   },
-  formContainer: {
-    flex: 1,
-    padding: Layout.spacing.l,
-    marginTop: Layout.spacing.xl,
-  },
   title: {
     fontSize: Typography.sizes['2xl'],
     fontFamily: Typography.fonts.heading,
@@ -216,6 +172,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: Layout.spacing.l,
     lineHeight: Typography.sizes.base * Typography.lineHeights.normal,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  formContainer: {
+    flex: 1,
+    padding: Layout.spacing.l,
   },
   errorText: {
     color: Colors.error,
@@ -242,10 +203,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.backgroundSecondary,
     paddingHorizontal: Layout.spacing.m,
   },
-  inputContainerFocused: {
-    borderColor: '#FCD95B',
-    backgroundColor: '#FFFEF7',
-  },
   inputIcon: {
     marginRight: Layout.spacing.s,
   },
@@ -258,72 +215,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 0,
   },
-  forgotPasswordContainer: {
-    alignSelf: 'flex-end',
-    marginBottom: Layout.spacing.l,
-  },
-  forgotPasswordText: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodyMedium,
-    color: '#FCD95B',
-  },
-  loginButton: {
+  resetButton: {
     backgroundColor: '#FCD95B',
     paddingVertical: Layout.spacing.m + 2,
     borderRadius: Layout.borderRadius.large,
     marginBottom: Layout.spacing.m,
     ...Layout.shadow.medium,
   },
-  loginButtonDisabled: {
+  resetButtonDisabled: {
     backgroundColor: Colors.subtleText,
     opacity: 0.7,
   },
-  loginButtonText: {
+  resetButtonText: {
     color: Colors.text,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
     textAlign: 'center',
   },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Layout.spacing.m,
+  backToLoginButton: {
+    paddingVertical: Layout.spacing.m,
   },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: Layout.spacing.m,
-    color: Colors.subtleText,
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-  },
-  bottomActions: {
-    marginTop: Layout.spacing.l,
-  },
-  signupButton: {
-    backgroundColor: Colors.backgroundSecondary,
-    paddingVertical: Layout.spacing.m + 2,
-    borderRadius: Layout.borderRadius.large,
-    marginBottom: Layout.spacing.m,
-    borderWidth: 2,
-    borderColor: '#FCD95B',
-  },
-  signupButtonText: {
-    color: '#FCD95B',
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    textAlign: 'center',
-  },
-  laterButton: {
-    paddingVertical: Layout.spacing.s,
-  },
-  laterButtonText: {
+  backToLoginText: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodyMedium,
-    color: Colors.subtleText,
+    color: Colors.primary,
     textAlign: 'center',
-  }
+  },
 });

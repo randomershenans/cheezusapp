@@ -11,6 +11,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, name?: string) => Promise<void>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,20 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     if (error) throw error;
-
-    // Create profile if user was created
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: data.user.id,
-            name: name,
-            email: email,
-          },
-        ]);
-      if (profileError) console.error('Error creating profile:', profileError);
-    }
+    // Profile is created automatically by database trigger (handle_new_user)
   };
 
   const signOut = async () => {
@@ -91,6 +80,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'cheezus://auth/reset-password',
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) throw error;
+  };
+
   const value = {
     user,
     session,
@@ -99,6 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     signInWithGoogle,
+    resetPassword,
+    updatePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

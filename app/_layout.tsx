@@ -49,19 +49,33 @@ export default function RootLayout() {
   // Handle deep links
   useEffect(() => {
     const handleDeepLink = async (url: string) => {
+      // Skip localhost URLs - these are normal web navigation, not deep links
+      if (url.includes('localhost') || url.includes('127.0.0.1')) {
+        return;
+      }
+      
       console.log('Deep link received:', url);
+      
+      // UUID regex pattern
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       
       // Handle cheezus://profile/username or cheezus://profile?username=xxx
       const profileMatch = url.match(/profile\/([^/?]+)/);
       if (profileMatch) {
         const username = profileMatch[1];
         
+        // If it's already a UUID, navigate directly
+        if (uuidPattern.test(username)) {
+          router.push(`/profile/${username}`);
+          return;
+        }
+        
         // Look up user by vanity_url
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
           .eq('vanity_url', username)
-          .single();
+          .maybeSingle();
         
         if (profile) {
           router.push(`/profile/${profile.id}`);
@@ -81,7 +95,7 @@ export default function RootLayout() {
           .from('profiles')
           .select('id')
           .eq('vanity_url', username)
-          .single();
+          .maybeSingle();
         
         if (profile) {
           router.push(`/profile/${profile.id}`);
