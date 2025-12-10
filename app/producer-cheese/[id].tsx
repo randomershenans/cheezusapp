@@ -14,6 +14,7 @@ import {
   Modal,
   TextInput,
   Share,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -261,10 +262,12 @@ export default function ProducerCheeseDetailScreen() {
     if (!producerCheese) return;
 
     try {
-      const message = `Check out ${producerCheese.full_name} on Cheezus! ${producerCheese.description?.substring(0, 100) || 'A delicious cheese'}...`;
+      const cheeseUrl = `https://cheezus.co/cheese/${producerCheese.id}`;
+      const message = `Check out ${producerCheese.full_name} on Cheezus! ${producerCheese.description?.substring(0, 100) || 'A delicious cheese'}...\n\n${cheeseUrl}`;
       
       await Share.share({
         message,
+        url: cheeseUrl, // iOS uses this for the link
         title: producerCheese.full_name,
       });
     } catch (error) {
@@ -767,7 +770,10 @@ export default function ProducerCheeseDetailScreen() {
         animationType="slide"
         onRequestClose={() => setShowRatingModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <TouchableOpacity
               style={styles.floatingCloseButton}
@@ -841,7 +847,7 @@ export default function ProducerCheeseDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

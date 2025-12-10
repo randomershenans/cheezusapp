@@ -8,6 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import Typography from '@/constants/Typography';
@@ -340,7 +344,13 @@ export const CheeseSearch: React.FC<CheeseSearchProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.innerContainer}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
@@ -413,7 +423,9 @@ export const CheeseSearch: React.FC<CheeseSearchProps> = ({
           <Text style={styles.addNewText}>Add New Cheese</Text>
         </TouchableOpacity>
       </View>
-    </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -421,6 +433,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  innerContainer: {
+    flex: 1,
   },
   header: {
     paddingHorizontal: Layout.spacing.l,

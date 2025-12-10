@@ -56,6 +56,43 @@ export default function RootLayout() {
       
       console.log('Deep link received:', url);
       
+      // Handle password recovery deep link (from Supabase email)
+      // URL format: cheezus://#access_token=...&type=recovery
+      if (url.includes('type=recovery') || url.includes('recovery')) {
+        console.log('Password recovery deep link detected');
+        
+        // Extract tokens from the URL hash fragment
+        // Supabase redirects with tokens in the hash: #access_token=...&refresh_token=...&type=recovery
+        const hashPart = url.split('#')[1];
+        if (hashPart) {
+          const params = new URLSearchParams(hashPart);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            // Set the session with the tokens from the URL
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            
+            if (error) {
+              console.error('Error setting session from recovery link:', error);
+            } else {
+              console.log('Session set successfully, navigating to reset password');
+              router.replace('/auth/reset-password');
+              return;
+            }
+          }
+        }
+        
+        // Fallback: try navigating anyway in case session was set another way
+        setTimeout(() => {
+          router.replace('/auth/reset-password');
+        }, 500);
+        return;
+      }
+      
       // UUID regex pattern
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       
@@ -99,6 +136,16 @@ export default function RootLayout() {
         
         if (profile) {
           router.push(`/profile/${profile.id}`);
+        }
+        return;
+      }
+
+      // Handle cheese deep links: cheezus://cheese/[id] or https://cheezus.co/cheese/[id]
+      const cheeseMatch = url.match(/cheese\/([^/?]+)/);
+      if (cheeseMatch) {
+        const cheeseId = cheeseMatch[1];
+        if (uuidPattern.test(cheeseId)) {
+          router.push(`/producer-cheese/${cheeseId}`);
         }
         return;
       }
