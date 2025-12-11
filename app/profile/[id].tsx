@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, User, MapPin, Lock, Users, Star, Award } from 'lucide-react-native';
@@ -30,6 +30,14 @@ type CheeseEntry = {
   };
 };
 
+type Badge = {
+  id: string;
+  name: string;
+  description: string | null;
+  img_url: string | null;
+  category: string;
+};
+
 export default function PublicProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,6 +54,8 @@ export default function PublicProfileScreen() {
     badges: 0,
   });
   const [recentCheeses, setRecentCheeses] = useState<CheeseEntry[]>([]);
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
 
   const isOwnProfile = user?.id === id;
 
@@ -54,6 +64,7 @@ export default function PublicProfileScreen() {
       fetchProfile();
       fetchStats();
       fetchRecentCheeses();
+      fetchBadges();
       if (user && !isOwnProfile) {
         checkFollowStatus();
       }
@@ -134,6 +145,52 @@ export default function PublicProfileScreen() {
       }
     } catch (error) {
       console.error('Error fetching recent cheeses:', error);
+    }
+  };
+
+  const fetchBadges = async () => {
+    try {
+      // Fetch completed badges, prioritizing special/event categories
+      const { data, error } = await supabase
+        .from('user_badges')
+        .select(`
+          badge:badges (
+            id,
+            name,
+            description,
+            img_url,
+            category
+          )
+        `)
+        .eq('user_id', id)
+        .eq('completed', true);
+
+      if (!error && data) {
+        // Sort badges: OG/Old World first, then special/event, then others
+        const sortedBadges = data
+          .map((ub: any) => ub.badge)
+          .filter(Boolean)
+          .sort((a: Badge, b: Badge) => {
+            // Priority names first (OG, Old World)
+            const priorityNames = ['og', 'old world'];
+            const aIsPriority = priorityNames.some(p => a.name.toLowerCase().includes(p));
+            const bIsPriority = priorityNames.some(p => b.name.toLowerCase().includes(p));
+            if (aIsPriority && !bIsPriority) return -1;
+            if (!aIsPriority && bIsPriority) return 1;
+            
+            // Then by category
+            const priorityOrder = ['special', 'event', 'achievement'];
+            const aIndex = priorityOrder.indexOf(a.category);
+            const bIndex = priorityOrder.indexOf(b.category);
+            if (aIndex !== -1 && bIndex === -1) return -1;
+            if (aIndex === -1 && bIndex !== -1) return 1;
+            if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+            return a.name.localeCompare(b.name);
+          });
+        setBadges(sortedBadges);
+      }
+    } catch (error) {
+      console.error('Error fetching badges:', error);
     }
   };
 
@@ -301,6 +358,31 @@ export default function PublicProfileScreen() {
           </View>
         </View>
 
+        {/* Badges */}
+        {badges.length > 0 && (
+          <View style={styles.badgesSection}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.badgesRow}
+            >
+              {badges.map((badge) => (
+                <TouchableOpacity 
+                  key={badge.id} 
+                  style={styles.badgeCircle}
+                  onPress={() => setSelectedBadge(badge)}
+                >
+                  {badge.img_url ? (
+                    <Image source={{ uri: badge.img_url }} style={styles.badgeImageLarge} resizeMode="cover" />
+                  ) : (
+                    <Text style={styles.badgeEmoji}>🏅</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Recent Cheeses */}
         {recentCheeses.length > 0 && (
           <View style={styles.section}>
@@ -335,6 +417,36 @@ export default function PublicProfileScreen() {
 
         <View style={{ height: Layout.spacing.xl }} />
       </ScrollView>
+
+      {/* Badge Detail Modal */}
+      <Modal
+        visible={selectedBadge !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedBadge(null)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setSelectedBadge(null)}
+        >
+          <View style={styles.badgeModalContent}>
+            {selectedBadge?.img_url ? (
+              <Image 
+                source={{ uri: selectedBadge.img_url }} 
+                style={styles.badgeModalImage} 
+                resizeMode="contain" 
+              />
+            ) : (
+              <Text style={styles.badgeModalEmoji}>🏅</Text>
+            )}
+            <Text style={styles.badgeModalTitle}>{selectedBadge?.name}</Text>
+            {selectedBadge?.description && (
+              <Text style={styles.badgeModalDescription}>{selectedBadge.description}</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -471,7 +583,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.primary,
     padding: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
     alignItems: 'center',
@@ -484,9 +596,29 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: Typography.sizes.xs,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
     marginTop: 2,
+  },
+  badgesSection: {
+    marginBottom: Layout.spacing.l,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Layout.spacing.m,
+    gap: Layout.spacing.m,
+  },
+  badgeCircle: {
+    width: 100,
+    height: 100,
+  },
+  badgeImageLarge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  badgeEmoji: {
+    fontSize: 32,
   },
   section: {
     paddingHorizontal: Layout.spacing.m,
@@ -530,5 +662,41 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Typography.fonts.bodySemiBold,
     color: '#FFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeModalContent: {
+    backgroundColor: Colors.background,
+    borderRadius: Layout.borderRadius.large,
+    padding: Layout.spacing.xl,
+    alignItems: 'center',
+    maxWidth: 300,
+    width: '80%',
+  },
+  badgeModalImage: {
+    width: 150,
+    height: 150,
+    marginBottom: Layout.spacing.m,
+  },
+  badgeModalEmoji: {
+    fontSize: 80,
+    marginBottom: Layout.spacing.m,
+  },
+  badgeModalTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.heading,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: Layout.spacing.s,
+  },
+  badgeModalDescription: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
 });
