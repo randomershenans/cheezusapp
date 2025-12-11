@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { removePushToken } from '@/lib/push-notifications';
+import { router } from 'expo-router';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -33,10 +34,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // Handle password recovery - navigate to reset password screen
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('Password recovery event detected, navigating to reset password');
+        router.replace('/auth/reset-password');
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -82,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'cheezus://auth/reset-password',
+      redirectTo: 'cheezus://reset-password',
     });
     if (error) throw error;
   };
