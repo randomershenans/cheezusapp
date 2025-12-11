@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'cheezus://reset-password',
+      redirectTo: 'https://cheezus.co/auth/callback',
     });
     if (error) throw error;
   };
