@@ -8,12 +8,9 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { useProtectedRoute } from '../../hooks/useProtectedRoute';
 import Colors from '@/constants/Colors';
 
 export default function TabLayout() {
-  useProtectedRoute();
-
   const router = useRouter();
   const { user } = useAuth();
 
@@ -67,7 +64,7 @@ export default function TabLayout() {
           name="cheese-box"
           options={{
             title: 'Cheese Box',
-            href: user ? '/cheese-box' : '/auth/login',
+            href: '/cheese-box',
             tabBarIcon: ({ color, size }) => (
               <PackageOpen size={size} color={color} />
             ),
@@ -86,14 +83,16 @@ export default function TabLayout() {
         />
       </Tabs>
 
-      {/* Floating "+" button that routes to /add-cheese */}
-      <TouchableOpacity
-        style={styles.floatingAddButton}
-        onPress={() => router.push('/add-cheese')}
-        activeOpacity={0.8}
-      >
-        <Plus size={28} color="#2C3E50" />
-      </TouchableOpacity>
+      {/* Floating "+" button that routes to /add-cheese - only show when logged in */}
+      {user && (
+        <TouchableOpacity
+          style={styles.floatingAddButton}
+          onPress={() => router.push('/add-cheese')}
+          activeOpacity={0.8}
+        >
+          <Plus size={28} color="#2C3E50" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

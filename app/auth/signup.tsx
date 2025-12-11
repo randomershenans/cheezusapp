@@ -7,7 +7,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
-import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -104,14 +103,6 @@ export default function SignupScreen() {
             ) : (
               <>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <GoogleSignInButton />
-
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.divider} />
-            </View>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Full Name</Text>

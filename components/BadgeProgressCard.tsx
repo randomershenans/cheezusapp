@@ -68,7 +68,7 @@ export default function BadgeProgressCard({
             />
           </View>
           <Text style={styles.progressText}>
-            {progress}/{threshold} {completed && '✓'}
+            {Math.min(progress, threshold)}/{threshold} {completed && '✓'}
           </Text>
         </View>
       </View>
