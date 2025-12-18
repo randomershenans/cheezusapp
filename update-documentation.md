@@ -1,5 +1,63 @@
 # Cheezus App - Update Documentation
 
+## Label Scanner Feature (December 18, 2025)
+
+### Added AI-Powered Cheese Label Scanner
+- Created `lib/label-scanner.ts` - OpenAI Vision integration for label analysis:
+  - `scanCheeseLabel()` - Sends image to OpenAI GPT-4o Vision
+  - Extracts: cheese name, producer, origin country, cheese type, milk types, description
+  - Returns confidence level (high/medium/low)
+  - Supports both Edge Function and direct API calls
+  - Comprehensive error handling for various failure cases
+
+### Updated NewCheeseForm with Scanner UI
+- Replaced "Identify" button with "Scan Label" button
+- Added scanner modal with:
+  - Clear instructions for best photo results
+  - Tips: ensure label visible, good lighting, text in focus
+  - "Take Photo of Label" primary action
+  - "Choose from Gallery" secondary option
+  - Loading state with "Analyzing label..." message
+  - Error display with retry option
+- Form auto-prefills with scanned data:
+  - Cheese name, producer, origin, type, milk types, description
+  - Shows confidence-based success message
+
+### How It Works
+1. User taps "Scan Label" button
+2. Modal opens with photo tips
+3. User takes photo or selects from gallery
+4. Image sent to OpenAI Vision API
+5. AI extracts label information
+6. Form fields auto-populate
+7. User reviews and submits
+
+## Interactive Notifications (December 18, 2025)
+
+### Made Notifications Clickable with Navigation
+- Updated `app/notifications.tsx` with comprehensive notification handling:
+  - **Profile navigation**: `follow`, `friend_milestone` → opens user profile
+  - **Cheese navigation**: `following_logged_cheese`, `following_added_wishlist`, `cheese_copied`, `trending_cheese`, `similar_recommendation`, `new_from_producer`, `award_winner`, `seasonal_cheese`, `cheese_near_you`, `wishlist_reminder`, `cheese_approved` → opens cheese detail
+  - **Badge modal**: `badge_earned`, `following_earned_badge` → shows badge detail modal
+
+### Added Badge Detail Modal
+- Created modal overlay for badge notifications
+- Shows badge icon (emoji), name, and description
+- "View All Badges" button navigates to badges screen
+- Clean close button to dismiss
+
+### Expanded Notification Types
+- Added full type definitions for all notification types from push notification system
+- Added data fields for badge info: `badge_name`, `badge_description`, `badge_icon`
+- Updated icon colors for different notification categories
+
+## Email Confirmation Deep Link Fix (December 18, 2025)
+
+### Fixed Post-Email-Confirmation Redirect
+- Updated `app/_layout.tsx` deep link handler
+- Added handling for `type=signup` and `type=email` deep links
+- Users now land on login screen after confirming email (instead of homescreen)
+
 ## Personalized Feed Algorithm (December 2, 2025)
 
 ### Added Smart Recommendation Engine

@@ -56,6 +56,14 @@ export default function RootLayout() {
       
       console.log('Deep link received:', url);
       
+      // Handle email confirmation deep link (from Supabase signup email)
+      // URL format: cheezus://#access_token=...&type=signup
+      if (url.includes('type=signup') || url.includes('type=email')) {
+        console.log('Email confirmation deep link detected');
+        router.replace('/auth/login');
+        return;
+      }
+      
       // Handle password recovery deep link (from Supabase email)
       // URL format: cheezus://#access_token=...&type=recovery
       if (url.includes('type=recovery') || url.includes('recovery')) {

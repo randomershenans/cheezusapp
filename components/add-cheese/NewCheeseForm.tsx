@@ -8,15 +8,18 @@ import {
   StyleSheet,
   Image,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Typography from '@/constants/Typography';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
-import { Camera, Image as ImageIcon, Star, ArrowLeft, Search, ChevronDown, Info, Check } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, Star, ArrowLeft, ScanLine, ChevronDown, Info, Check, X, AlertCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { FlavorTagSelector } from './FlavorTagSelector';
 import { supabase } from '@/lib/supabase';
+import { scanCheeseLabel, LabelScanResult } from '@/lib/label-scanner';
 
 export interface NewCheeseFormData {
   // Cheese info
@@ -71,6 +74,11 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   const [producerSuggestions, setProducerSuggestions] = useState<Producer[]>([]);
   const [showProducerSuggestions, setShowProducerSuggestions] = useState(false);
   const [isSearchingProducers, setIsSearchingProducers] = useState(false);
+  
+  // Label scanner state
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   // Search for producers as user types
   useEffect(() => {
@@ -156,12 +164,97 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
     }
   };
 
-  const handleAnalyze = () => {
-    Alert.alert(
-      'AI Cheese Analysis',
-      'This feature is coming soon! Take a photo and our AI will identify the cheese and fill in the details for you.',
-      [{ text: 'Got it!' }]
-    );
+  const handleScanLabel = () => {
+    setShowScannerModal(true);
+    setScanError(null);
+  };
+
+  const takeLabelPhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'We need permission to access your camera');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      await processLabelImage(result.assets[0].base64, result.assets[0].uri);
+    }
+  };
+
+  const pickLabelFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'We need permission to access your photos');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      await processLabelImage(result.assets[0].base64, result.assets[0].uri);
+    }
+  };
+
+  const processLabelImage = async (base64: string, uri: string) => {
+    setIsScanning(true);
+    setScanError(null);
+
+    try {
+      const result = await scanCheeseLabel(base64);
+
+      if (!result.success) {
+        setScanError(result.error.message);
+        return;
+      }
+
+      // Prefill the form with scanned data
+      const data = result.data;
+      
+      setFormData(prev => ({
+        ...prev,
+        cheeseName: data.cheeseName || prev.cheeseName,
+        producerName: data.producerName || prev.producerName,
+        originCountry: data.originCountry || prev.originCountry,
+        cheeseType: data.cheeseType || prev.cheeseType,
+        milkTypes: data.milkTypes.length > 0 ? data.milkTypes : prev.milkTypes,
+        description: data.description || prev.description,
+        imageUri: uri,
+      }));
+
+      // Update producer search field
+      if (data.producerName) {
+        setProducerSearch(data.producerName);
+      }
+
+      setShowScannerModal(false);
+      
+      // Show success message with confidence
+      const confidenceMsg = data.confidence === 'high' 
+        ? 'All details captured!' 
+        : data.confidence === 'medium'
+        ? 'Most details captured - please review.'
+        : 'Some details captured - please verify and complete.';
+      
+      Alert.alert('Label Scanned! 🎉', confidenceMsg);
+    } catch (error) {
+      console.error('Scan error:', error);
+      setScanError('Something went wrong. Please try again.');
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleSubmit = () => {
@@ -175,7 +268,99 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <>
+      {/* Label Scanner Modal */}
+      <Modal
+        visible={showScannerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !isScanning && setShowScannerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.scannerModal}>
+            {/* Close Button */}
+            {!isScanning && (
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowScannerModal(false)}
+              >
+                <X size={24} color={Colors.text} />
+              </TouchableOpacity>
+            )}
+
+            {isScanning ? (
+              <View style={styles.scanningContainer}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.scanningText}>Analyzing label...</Text>
+                <Text style={styles.scanningSubtext}>This may take a few seconds</Text>
+              </View>
+            ) : (
+              <>
+                {/* Header */}
+                <View style={styles.scannerHeader}>
+                  <ScanLine size={40} color={Colors.primary} />
+                  <Text style={styles.scannerTitle}>Scan Cheese Label</Text>
+                  <Text style={styles.scannerSubtitle}>
+                    Take a photo of the cheese label and we'll fill in the details automatically
+                  </Text>
+                </View>
+
+                {/* Instructions */}
+                <View style={styles.instructionsContainer}>
+                  <Text style={styles.instructionsTitle}>📸 Tips for best results:</Text>
+                  <View style={styles.instructionItem}>
+                    <Text style={styles.instructionBullet}>•</Text>
+                    <Text style={styles.instructionText}>
+                      Make sure the <Text style={styles.instructionBold}>entire label</Text> is visible
+                    </Text>
+                  </View>
+                  <View style={styles.instructionItem}>
+                    <Text style={styles.instructionBullet}>•</Text>
+                    <Text style={styles.instructionText}>
+                      Use <Text style={styles.instructionBold}>good lighting</Text> - avoid shadows
+                    </Text>
+                  </View>
+                  <View style={styles.instructionItem}>
+                    <Text style={styles.instructionBullet}>•</Text>
+                    <Text style={styles.instructionText}>
+                      Hold steady and ensure text is <Text style={styles.instructionBold}>in focus</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.instructionItem}>
+                    <Text style={styles.instructionBullet}>•</Text>
+                    <Text style={styles.instructionText}>
+                      Capture the <Text style={styles.instructionBold}>product name & producer</Text> info
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Error Message */}
+                {scanError && (
+                  <View style={styles.scanErrorContainer}>
+                    <AlertCircle size={20} color="#DC2626" />
+                    <Text style={styles.scanErrorText}>{scanError}</Text>
+                  </View>
+                )}
+
+                {/* Action Buttons */}
+                <View style={styles.scannerActions}>
+                  <TouchableOpacity style={styles.scannerPrimaryButton} onPress={takeLabelPhoto}>
+                    <Camera size={24} color="#1F2937" />
+                    <Text style={styles.scannerPrimaryButtonText}>Take Photo of Label</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={styles.scannerSecondaryButton} onPress={pickLabelFromGallery}>
+                    <ImageIcon size={20} color={Colors.text} />
+                    <Text style={styles.scannerSecondaryButtonText}>Choose from Gallery</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -211,9 +396,9 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
               <ImageIcon size={28} color="#92400E" />
               <Text style={styles.photoButtonText}>Gallery</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.photoButton} onPress={handleAnalyze}>
-              <Search size={28} color="#92400E" />
-              <Text style={styles.photoButtonText}>Identify</Text>
+            <TouchableOpacity style={styles.photoButton} onPress={handleScanLabel}>
+              <ScanLine size={28} color="#92400E" />
+              <Text style={styles.photoButtonText}>Scan Label</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -501,6 +686,7 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
 
       <View style={styles.bottomPadding} />
     </ScrollView>
+    </>
   );
 };
 
@@ -711,7 +897,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   photoButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: Typography.fonts.bodyMedium,
     color: '#92400E',
     marginTop: 8,
@@ -793,5 +979,143 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  // Scanner Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  scannerModal: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: Layout.spacing.xl,
+    paddingBottom: 40,
+    minHeight: '60%',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: Layout.spacing.m,
+    right: Layout.spacing.m,
+    padding: Layout.spacing.s,
+    zIndex: 10,
+  },
+  scanningContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.xxl,
+  },
+  scanningText: {
+    fontSize: 18,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.text,
+    marginTop: Layout.spacing.l,
+  },
+  scanningSubtext: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: Layout.spacing.s,
+  },
+  scannerHeader: {
+    alignItems: 'center',
+    marginBottom: Layout.spacing.xl,
+    paddingTop: Layout.spacing.m,
+  },
+  scannerTitle: {
+    fontSize: 22,
+    fontFamily: Typography.fonts.headingMedium,
+    color: Colors.text,
+    marginTop: Layout.spacing.m,
+  },
+  scannerSubtitle: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginTop: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.m,
+  },
+  instructionsContainer: {
+    backgroundColor: '#FEF9E7',
+    borderRadius: 16,
+    padding: Layout.spacing.l,
+    marginBottom: Layout.spacing.xl,
+  },
+  instructionsTitle: {
+    fontSize: 15,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#92400E',
+    marginBottom: Layout.spacing.m,
+  },
+  instructionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Layout.spacing.s,
+  },
+  instructionBullet: {
+    fontSize: 14,
+    color: '#92400E',
+    marginRight: Layout.spacing.s,
+    lineHeight: 20,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: Typography.fonts.body,
+    color: '#78350F',
+    lineHeight: 20,
+  },
+  instructionBold: {
+    fontFamily: Typography.fonts.bodyMedium,
+  },
+  scanErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: Layout.spacing.m,
+    marginBottom: Layout.spacing.l,
+    gap: Layout.spacing.s,
+  },
+  scanErrorText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: Typography.fonts.body,
+    color: '#DC2626',
+  },
+  scannerActions: {
+    gap: Layout.spacing.m,
+  },
+  scannerPrimaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FCD95B',
+    borderRadius: 16,
+    padding: Layout.spacing.l,
+    gap: Layout.spacing.s,
+    ...Layout.shadow.medium,
+  },
+  scannerPrimaryButtonText: {
+    fontSize: 16,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#1F2937',
+  },
+  scannerSecondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: Layout.spacing.m,
+    gap: Layout.spacing.s,
+  },
+  scannerSecondaryButtonText: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
   },
 });

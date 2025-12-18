@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -18,9 +19,29 @@ import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
+type NotificationType = 
+  | 'follow'
+  | 'like'
+  | 'comment'
+  | 'badge_earned'
+  | 'following_earned_badge'
+  | 'following_logged_cheese'
+  | 'following_added_wishlist'
+  | 'cheese_copied'
+  | 'friend_milestone'
+  | 'trending_cheese'
+  | 'similar_recommendation'
+  | 'new_from_producer'
+  | 'award_winner'
+  | 'seasonal_cheese'
+  | 'cheese_near_you'
+  | 'wishlist_reminder'
+  | 'cheese_approved'
+  | 'system';
+
 type Notification = {
   id: string;
-  type: 'follow' | 'like' | 'comment' | 'badge' | 'cheese_recommendation' | 'system';
+  type: NotificationType;
   title: string;
   body: string;
   data?: {
@@ -29,10 +50,20 @@ type Notification = {
     user_avatar?: string;
     cheese_id?: string;
     badge_id?: string;
+    badge_name?: string;
+    badge_description?: string;
+    badge_icon?: string;
+    producer_id?: string;
   };
   read: boolean;
   created_at: string;
 };
+
+type BadgeModalData = {
+  name: string;
+  description: string;
+  icon: string;
+} | null;
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -40,6 +71,7 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [badgeModal, setBadgeModal] = useState<BadgeModalData>(null);
 
   useEffect(() => {
     if (user) {
@@ -112,21 +144,47 @@ export default function NotificationsScreen() {
 
     // Navigate based on type
     switch (notification.type) {
+      // Profile navigation
       case 'follow':
+      case 'friend_milestone':
         if (notification.data?.user_id) {
           router.push(`/profile/${notification.data.user_id}`);
         }
         break;
+      
+      // Cheese navigation
       case 'like':
       case 'comment':
-      case 'cheese_recommendation':
+      case 'following_logged_cheese':
+      case 'following_added_wishlist':
+      case 'cheese_copied':
+      case 'trending_cheese':
+      case 'similar_recommendation':
+      case 'new_from_producer':
+      case 'award_winner':
+      case 'seasonal_cheese':
+      case 'cheese_near_you':
+      case 'wishlist_reminder':
+      case 'cheese_approved':
         if (notification.data?.cheese_id) {
           router.push(`/producer-cheese/${notification.data.cheese_id}`);
         }
         break;
-      case 'badge':
-        router.push('/badges');
+      
+      // Badge modal
+      case 'badge_earned':
+      case 'following_earned_badge':
+        if (notification.data?.badge_name) {
+          setBadgeModal({
+            name: notification.data.badge_name,
+            description: notification.data.badge_description || 'Achievement unlocked!',
+            icon: notification.data.badge_icon || '🏆',
+          });
+        } else {
+          router.push('/badges');
+        }
         break;
+      
       default:
         break;
     }
@@ -135,14 +193,27 @@ export default function NotificationsScreen() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'follow':
+      case 'friend_milestone':
         return <UserPlus size={20} color="#3B82F6" />;
       case 'like':
         return <Heart size={20} color="#EF4444" />;
       case 'comment':
         return <MessageCircle size={20} color="#10B981" />;
-      case 'badge':
+      case 'badge_earned':
+      case 'following_earned_badge':
         return <Award size={20} color="#F59E0B" />;
-      case 'cheese_recommendation':
+      case 'following_logged_cheese':
+      case 'following_added_wishlist':
+      case 'cheese_copied':
+        return <Star size={20} color="#8B5CF6" />;
+      case 'trending_cheese':
+      case 'similar_recommendation':
+      case 'new_from_producer':
+      case 'award_winner':
+      case 'seasonal_cheese':
+      case 'cheese_near_you':
+      case 'wishlist_reminder':
+      case 'cheese_approved':
         return <Star size={20} color={Colors.primary} />;
       default:
         return <Bell size={20} color={Colors.subtleText} />;
@@ -169,6 +240,41 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* Badge Detail Modal */}
+      <Modal
+        visible={badgeModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBadgeModal(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setBadgeModal(null)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalIcon}>{badgeModal?.icon}</Text>
+            <Text style={styles.modalTitle}>{badgeModal?.name}</Text>
+            <Text style={styles.modalDescription}>{badgeModal?.description}</Text>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setBadgeModal(null);
+                router.push('/badges');
+              }}
+            >
+              <Text style={styles.modalButtonText}>View All Badges</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setBadgeModal(null)}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -368,5 +474,61 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     marginLeft: Layout.spacing.s,
     marginTop: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Layout.spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderRadius: Layout.borderRadius.large,
+    padding: Layout.spacing.xl,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+  },
+  modalIcon: {
+    fontSize: 64,
+    marginBottom: Layout.spacing.m,
+  },
+  modalTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.heading,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: Layout.spacing.s,
+  },
+  modalDescription: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginBottom: Layout.spacing.l,
+    lineHeight: Typography.sizes.base * 1.5,
+  },
+  modalButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.xl,
+    borderRadius: Layout.borderRadius.medium,
+    marginBottom: Layout.spacing.s,
+    width: '100%',
+  },
+  modalButtonText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  modalCloseButton: {
+    paddingVertical: Layout.spacing.s,
+  },
+  modalCloseText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
   },
 });

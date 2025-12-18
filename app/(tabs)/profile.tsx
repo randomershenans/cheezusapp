@@ -222,10 +222,12 @@ export default function ProfileScreen() {
         .from('cheese_box_entries')
         .select(`
           id,
+          cheese_id,
           created_at,
           rating,
           notes,
           producer_cheese:producer_cheeses(
+            id,
             full_name, 
             producer_name, 
             product_name,
@@ -516,18 +518,27 @@ export default function ProfileScreen() {
 
         {/* Stats Cards */}
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => router.push('/(tabs)/cheese-box')}
+          >
             <Text style={styles.statNumber}>{stats.cheesesTried}</Text>
             <Text style={styles.statLabel}>Cheeses</Text>
-          </View>
-          <View style={styles.statCard}>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => router.push('/(tabs)/cheese-box')}
+          >
             <Text style={styles.statNumber}>{stats.reviews}</Text>
             <Text style={styles.statLabel}>Reviews</Text>
-          </View>
-          <View style={styles.statCard}>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => router.push('/badges')}
+          >
             <Text style={styles.statNumber}>{stats.badgesEarned}</Text>
             <Text style={styles.statLabel}>Badges</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Followers/Following */}
@@ -777,7 +788,11 @@ export default function ProfileScreen() {
                 const timeAgo = formatTimeAgo(date);
                 
                 return (
-                  <View key={activity.id} style={styles.activityItem}>
+                  <TouchableOpacity 
+                    key={activity.id} 
+                    style={styles.activityItem}
+                    onPress={() => activity.cheese_id && router.push(`/producer-cheese/${activity.cheese_id}`)}
+                  >
                     <View style={styles.activityIconCircle}>
                       <Text style={styles.activityEmoji}>🧀</Text>
                     </View>
@@ -789,11 +804,15 @@ export default function ProfileScreen() {
                         {activity.rating ? `⭐ ${Number(activity.rating) % 1 === 0 ? Number(activity.rating) : Number(activity.rating).toFixed(1)}/5 • ` : ''}{timeAgo}
                       </Text>
                     </View>
-                  </View>
+                    <ChevronRight size={16} color={Colors.subtleText} />
+                  </TouchableOpacity>
                 );
               })}
               {stats.badgesEarned > 0 && (
-                <View style={styles.activityItem}>
+                <TouchableOpacity 
+                  style={styles.activityItem}
+                  onPress={() => router.push('/badges')}
+                >
                   <View style={styles.activityIconCircle}>
                     <Text style={styles.activityEmoji}>🏆</Text>
                   </View>
@@ -803,7 +822,8 @@ export default function ProfileScreen() {
                       {stats.badgesEarned} {stats.badgesEarned === 1 ? 'badge' : 'badges'} earned
                     </Text>
                   </View>
-                </View>
+                  <ChevronRight size={16} color={Colors.subtleText} />
+                </TouchableOpacity>
               )}
             </View>
           ) : (

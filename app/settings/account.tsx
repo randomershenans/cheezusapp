@@ -13,12 +13,19 @@ export default function AccountSettingsScreen() {
   const { user } = useAuth();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailChanged, setEmailChanged] = useState(false);
 
   useEffect(() => {
     if (user) {
       setEmail(user.email || '');
+      setEmailChanged(false);
     }
   }, [user]);
+
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    setEmailChanged(text !== user?.email);
+  };
 
   const handleUpdateEmail = async () => {
     if (!email || email === user?.email) return;
@@ -42,7 +49,11 @@ export default function AccountSettingsScreen() {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(user.email);
       if (error) throw error;
-      Alert.alert('Success', 'Password reset link sent to your email');
+      Alert.alert(
+        'Check Your Email 📧',
+        `We've sent a password reset link to ${user.email}. Please check your inbox (and spam folder) to reset your password.`,
+        [{ text: 'Got it', style: 'default' }]
+      );
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -86,7 +97,7 @@ export default function AccountSettingsScreen() {
             <TextInput
               style={styles.input}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
               placeholder="your@email.com"
               placeholderTextColor={Colors.subtleText}
               keyboardType="email-address"
@@ -94,15 +105,15 @@ export default function AccountSettingsScreen() {
               editable={!loading}
             />
           </View>
-          {email !== user?.email && (
-            <TouchableOpacity 
-              style={styles.button}
-              onPress={handleUpdateEmail}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>Update Email</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity 
+            style={[styles.button, !emailChanged && styles.buttonDisabled]}
+            onPress={handleUpdateEmail}
+            disabled={loading || !emailChanged}
+          >
+            <Text style={[styles.buttonText, !emailChanged && styles.buttonTextDisabled]}>
+              {emailChanged ? 'Save Email' : 'Email Saved'}
+            </Text>
+          </TouchableOpacity>
           <Text style={styles.helperText}>
             You'll receive a confirmation email to verify the change
           </Text>
@@ -215,7 +226,13 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.background,
+    color: Colors.text,
+  },
+  buttonDisabled: {
+    backgroundColor: Colors.lightGray,
+  },
+  buttonTextDisabled: {
+    color: Colors.subtleText,
   },
   helperText: {
     fontSize: Typography.sizes.sm,
