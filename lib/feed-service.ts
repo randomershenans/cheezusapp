@@ -284,7 +284,7 @@ export const getFollowingActivity = async (userId: string): Promise<FeedCheeseIt
           rating_count: 1,
         },
         reason: entry.rating 
-          ? `${userName} rated this ${entry.rating}/5`
+          ? `${userName} rated this ${Number(entry.rating) % 1 === 0 ? Math.round(entry.rating) : Number(entry.rating).toFixed(1)}/5`
           : `${userName} tried this cheese`,
         user: {
           id: profile?.id || entry.user_id,
