@@ -449,33 +449,7 @@ export default function ProfileScreen() {
                 </View>
               </TouchableOpacity>
               
-              {isEditing ? (
-                <View style={styles.profileEditForm}>
-                  <TextInput
-                    style={styles.editInput}
-                    value={editedName}
-                    onChangeText={setEditedName}
-                    placeholder="Your name"
-                    placeholderTextColor={Colors.subtleText}
-                  />
-                  <TextInput
-                    style={[styles.editInput, styles.editInputSmall]}
-                    value={editedLocation}
-                    onChangeText={setEditedLocation}
-                    placeholder="Location"
-                    placeholderTextColor={Colors.subtleText}
-                  />
-                  <TextInput
-                    style={[styles.editInput, styles.editInputMulti]}
-                    value={editedTagline}
-                    onChangeText={setEditedTagline}
-                    placeholder="Tell us about your cheese journey..."
-                    placeholderTextColor={Colors.subtleText}
-                    multiline
-                    numberOfLines={2}
-                  />
-                </View>
-              ) : (
+              {!isEditing && (
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{profile?.name || 'Cheese Lover'}</Text>
                   {profile?.location && (
@@ -514,6 +488,34 @@ export default function ProfileScreen() {
               )}
             </View>
           </View>
+          
+          {isEditing && (
+            <View style={styles.profileEditForm}>
+              <TextInput
+                style={styles.editInput}
+                value={editedName}
+                onChangeText={setEditedName}
+                placeholder="Your name"
+                placeholderTextColor={Colors.subtleText}
+              />
+              <TextInput
+                style={styles.editInput}
+                value={editedLocation}
+                onChangeText={setEditedLocation}
+                placeholder="Location"
+                placeholderTextColor={Colors.subtleText}
+              />
+              <TextInput
+                style={[styles.editInput, styles.editInputMulti]}
+                value={editedTagline}
+                onChangeText={setEditedTagline}
+                placeholder="Tell us about your cheese journey..."
+                placeholderTextColor={Colors.subtleText}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+          )}
         </View>
 
         {/* Stats Cards */}
@@ -1088,8 +1090,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   profileEditForm: {
-    flex: 1,
+    width: '100%',
     gap: Layout.spacing.s,
+    marginTop: Layout.spacing.m,
   },
   editInput: {
     fontSize: Typography.sizes.base,
@@ -1102,11 +1105,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  editInputSmall: {
-    fontSize: Typography.sizes.sm,
-  },
   editInputMulti: {
-    minHeight: 60,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   headerActions: {
