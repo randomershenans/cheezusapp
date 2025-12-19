@@ -237,39 +237,37 @@ export const getFollowingActivity = async (userId: string): Promise<FeedCheeseIt
     // Get recent cheese box entries from followed users
     const { data: entries, error: entriesError } = await supabase
       .from('cheese_box_entries')
-      .select(`
-        id,
-        rating,
-        created_at,
-        user_id,
-        profiles!user_id (
-          id,
-          name,
-          avatar_url
-        ),
-        producer_cheese:producer_cheeses!cheese_id (
-          id,
-          full_name,
-          producer_name,
-          image_url,
-          cheese_type:cheese_types!cheese_type_id (
-            name,
-            family
-          )
-        )
-      `)
+      .select('id, rating, created_at, user_id, cheese_id')
       .in('user_id', followingIds)
       .order('created_at', { ascending: false })
       .limit(10);
-
-    if (entriesError || !entries) {
+    
+    if (entriesError || !entries || entries.length === 0) {
       return [];
     }
 
+    // Fetch cheese details separately
+    const cheeseIds = entries.map(e => e.cheese_id).filter(Boolean);
+    const { data: cheeses } = await supabase
+      .from('producer_cheeses')
+      .select('id, full_name, producer_name, image_url, family')
+      .in('id', cheeseIds);
+
+    // Fetch profile details separately
+    const userIds = [...new Set(entries.map(e => e.user_id))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, avatar_url')
+      .in('id', userIds);
+
+    // Create lookup maps
+    const cheeseMap = new Map((cheeses || []).map(c => [c.id, c]));
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
     // Convert to FeedCheeseItem format
     return entries.map((entry: any) => {
-      const cheese = entry.producer_cheese;
-      const profile = entry.profiles;
+      const cheese = cheeseMap.get(entry.cheese_id);
+      const profile = profileMap.get(entry.user_id);
       const userName = profile?.name || 'Someone you follow';
       
       return {
@@ -278,8 +276,8 @@ export const getFollowingActivity = async (userId: string): Promise<FeedCheeseIt
         cheese: {
           id: cheese?.id || '',
           full_name: cheese?.full_name || '',
-          cheese_type_name: cheese?.cheese_type?.name || '',
-          cheese_family: cheese?.cheese_type?.family,
+          cheese_type_name: '',
+          cheese_family: cheese?.family,
           producer_name: cheese?.producer_name,
           image_url: cheese?.image_url,
           average_rating: entry.rating || 0,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Alert, TouchableOpacity, Modal, TextInput, ActivityIndicator, Dimensions, SafeAreaView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, Alert, TouchableOpacity, Modal, TextInput, ActivityIndicator, Dimensions, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Star, Heart, Calendar, MapPin, Info, Award, Edit3, Plus, X, Trash2, ArrowLeft, Share2, Clock, Users } from 'lucide-react-native';
@@ -365,79 +365,90 @@ export default function CheeseDetailScreen() {
       transparent={true}
       onRequestClose={() => setShowEditModal(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          {/* Floating close button positioned at top-right corner */}
-          <TouchableOpacity
-            style={styles.floatingCloseButton}
-            onPress={() => setShowEditModal(false)}
-          >
-            <X size={18} color={Colors.subtleText} strokeWidth={2} />
-          </TouchableOpacity>
-          
-          <Text style={styles.modalTitle}>
-            {cheeseBoxEntry ? 'Edit your tasting' : 'Add to cheese box'}
-          </Text>
-          
-          <View style={styles.modalDivider} />
-
-          <View style={styles.modalSection}>
-            <Text style={styles.modalSectionTitle}>Your rating</Text>
-            <View style={styles.ratingContainer}>
-              {renderDecimalRating()}
-            </View>
-            <View style={styles.ratingBadge}>
-              <Text style={styles.ratingText}>
-                {editRating > 0 ? `${editRating.toFixed(1)}/5` : 'Slide to rate'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.modalSection}>
-            <Text style={styles.modalSectionTitle}>Tasting notes</Text>
-            <View style={styles.textInputContainer}>
-              <TextInput
-                style={styles.notesInput}
-                placeholder="Share your thoughts about this cheese..."
-                placeholderTextColor={Colors.subtleText}
-                value={editNotes}
-                onChangeText={setEditNotes}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-          </View>
-
-          <View style={styles.modalActions}>
-            {cheeseBoxEntry && (
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={handleRemoveFromCheeseBox}
-              >
-                <Trash2 size={18} color={Colors.error} strokeWidth={2} />
-                <Text style={styles.removeButtonText}>Remove</Text>
-              </TouchableOpacity>
-            )}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+        keyboardVerticalOffset={10}
+      >
+        <ScrollView 
+          style={styles.modalScrollView}
+          contentContainerStyle={styles.modalScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.modalContent}>
+            {/* Floating close button positioned at top-right corner */}
             <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleSaveEntry}
+              style={styles.floatingCloseButton}
+              onPress={() => setShowEditModal(false)}
             >
-              {cheeseBoxEntry ? (
-                <>
-                  <Edit3 size={18} color={Colors.background} strokeWidth={2} />
-                  <Text style={styles.saveButtonText}>Update</Text>
-                </>
-              ) : (
-                <>
-                  <Plus size={18} color={Colors.background} strokeWidth={2.5} />
-                  <Text style={styles.saveButtonText}>Add to box</Text>
-                </>
-              )}
+              <X size={18} color={Colors.subtleText} strokeWidth={2} />
             </TouchableOpacity>
+            
+            <Text style={styles.modalTitle}>
+              {cheeseBoxEntry ? 'Edit your tasting' : 'Add to cheese box'}
+            </Text>
+            
+            <View style={styles.modalDivider} />
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Your rating</Text>
+              <View style={styles.ratingContainer}>
+                {renderDecimalRating()}
+              </View>
+              <View style={styles.ratingBadge}>
+                <Text style={styles.ratingText}>
+                  {editRating > 0 ? `${editRating.toFixed(1)}/5` : 'Slide to rate'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Tasting notes</Text>
+              <View style={styles.textInputContainer}>
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="Share your thoughts about this cheese..."
+                  placeholderTextColor={Colors.subtleText}
+                  value={editNotes}
+                  onChangeText={setEditNotes}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              {cheeseBoxEntry && (
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={handleRemoveFromCheeseBox}
+                >
+                  <Trash2 size={18} color={Colors.error} strokeWidth={2} />
+                  <Text style={styles.removeButtonText}>Remove</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveEntry}
+              >
+                {cheeseBoxEntry ? (
+                  <>
+                    <Edit3 size={18} color={Colors.background} strokeWidth={2} />
+                    <Text style={styles.saveButtonText}>Update</Text>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={18} color={Colors.background} strokeWidth={2.5} />
+                    <Text style={styles.saveButtonText}>Add to box</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -1113,6 +1124,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  modalScrollView: {
+    maxHeight: '85%',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+  },
   modalContent: {
     position: 'relative',
     backgroundColor: Colors.background,
@@ -1120,7 +1138,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: Layout.spacing.xl,
     paddingTop: Layout.spacing.xl,
-    maxHeight: '80%',
+    paddingBottom: Layout.spacing.xl + 20,
     ...Layout.shadow.large,
   },
   floatingCloseButton: {

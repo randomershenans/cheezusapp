@@ -773,80 +773,88 @@ export default function ProducerCheeseDetailScreen() {
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
+          keyboardVerticalOffset={10}
         >
-          <View style={styles.modalContent}>
-            <TouchableOpacity
-              style={styles.floatingCloseButton}
-              onPress={() => setShowRatingModal(false)}
-            >
-              <X size={20} color={Colors.text} />
-            </TouchableOpacity>
-
-            <Text style={styles.modalTitle}>
-              {userEntry ? 'Update Your Rating' : 'Rate This Cheese'}
-            </Text>
-            <View style={styles.modalDivider} />
-
-            {/* Star Display */}
-            <View style={styles.starDisplayContainer}>
-              <View style={styles.starsDisplay}>
-                {renderStars(Math.floor(tempRating), 32)}
-                {tempRating % 1 !== 0 && (
-                  <View style={styles.halfStarWrapper}>
-                    <Star size={32} color="#FFD700" fill="#FFD700" style={{ opacity: 0.5 }} />
-                  </View>
-                )}
-              </View>
-              <Text style={styles.ratingValueText}>{tempRating.toFixed(1)} / 5.0</Text>
-            </View>
-
-            {/* Slider */}
-            <View style={styles.sliderContainer}>
-              <Slider
-                style={styles.ratingSlider}
-                minimumValue={0}
-                maximumValue={5}
-                step={0.1}
-                value={tempRating}
-                onValueChange={setTempRating}
-                minimumTrackTintColor="#FFD700"
-                maximumTrackTintColor="#E0E0E0"
-                thumbTintColor="#FCD95B"
-              />
-            </View>
-
-            {/* Notes */}
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Tasting Notes (Optional)</Text>
-              <View style={styles.textInputContainer}>
-                <TextInput
-                  style={styles.notesInput}
-                  placeholder="What did you think? Creamy, nutty, sharp..."
-                  value={tempNotes}
-                  onChangeText={setTempNotes}
-                  multiline
-                  placeholderTextColor={Colors.subtleText}
-                />
-              </View>
-            </View>
-
-            {/* Actions */}
-            <View style={styles.modalActions}>
+          <ScrollView 
+            style={styles.modalScrollView}
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.modalContent}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.floatingCloseButton}
                 onPress={() => setShowRatingModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <X size={20} color={Colors.text} />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleSaveRating}
-              >
-                <Star size={18} color={Colors.background} fill={Colors.background} />
-                <Text style={styles.saveButtonText}>Save Rating</Text>
-              </TouchableOpacity>
+
+              <Text style={styles.modalTitle}>
+                {userEntry ? 'Update Your Rating' : 'Rate This Cheese'}
+              </Text>
+              <View style={styles.modalDivider} />
+
+              {/* Star Display */}
+              <View style={styles.starDisplayContainer}>
+                <View style={styles.starsDisplay}>
+                  {renderStars(Math.floor(tempRating), 32)}
+                  {tempRating % 1 !== 0 && (
+                    <View style={styles.halfStarWrapper}>
+                      <Star size={32} color="#FFD700" fill="#FFD700" style={{ opacity: 0.5 }} />
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.ratingValueText}>{tempRating.toFixed(1)} / 5.0</Text>
+              </View>
+
+              {/* Slider */}
+              <View style={styles.sliderContainer}>
+                <Slider
+                  style={styles.ratingSlider}
+                  minimumValue={0}
+                  maximumValue={5}
+                  step={0.1}
+                  value={tempRating}
+                  onValueChange={setTempRating}
+                  minimumTrackTintColor="#FFD700"
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor="#FCD95B"
+                />
+              </View>
+
+              {/* Notes */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Tasting Notes (Optional)</Text>
+                <View style={styles.textInputContainer}>
+                  <TextInput
+                    style={styles.notesInput}
+                    placeholder="What did you think? Creamy, nutty, sharp..."
+                    value={tempNotes}
+                    onChangeText={setTempNotes}
+                    multiline
+                    placeholderTextColor={Colors.subtleText}
+                  />
+                </View>
+              </View>
+
+              {/* Actions */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowRatingModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleSaveRating}
+                >
+                  <Star size={18} color={Colors.background} fill={Colors.background} />
+                  <Text style={styles.saveButtonText}>Save Rating</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
@@ -1265,13 +1273,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  modalScrollView: {
+    maxHeight: '85%',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+  },
   modalContent: {
     backgroundColor: Colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: Layout.spacing.xl,
     paddingTop: Layout.spacing.xl,
-    maxHeight: '80%',
+    paddingBottom: Layout.spacing.xl + 20,
     ...Layout.shadow.large,
   },
   floatingCloseButton: {

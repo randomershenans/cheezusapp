@@ -572,51 +572,90 @@ export default function HomeScreen() {
   };
 
   const extractFilterOptions = (): FilterOptions => {
-    const countries = [...new Set(
-      allFeedItems
-        .filter(item => item.type === 'producer-cheese' || item.type === 'cheese')
-        .map(item => (item.data as TrendingCheese)?.origin_country)
-        .filter(Boolean)
-    )].sort();
-
-    const cheeseTypes = [...new Set(
-      allFeedItems
-        .filter(item => item.type === 'producer-cheese' || item.type === 'cheese')
-        .map(item => (item.data as TrendingCheese)?.cheese_family)
-        .filter(Boolean)
-    )].sort();
-
+    // Standard filter options - these query ALL cheese in database when applied
     return {
-      countries: countries as string[],
+      countries: ['Australia', 'Canada', 'England', 'France', 'Germany', 'Greece', 'Ireland', 'Italy', 'Netherlands', 'New Zealand', 'Scotland', 'Slovenia', 'Spain', 'Switzerland', 'United Kingdom', 'United States', 'Wales'],
       milkTypes: ['Cow', 'Goat', 'Sheep', 'Buffalo'],
-      cheeseTypes: cheeseTypes as string[],
+      cheeseTypes: ['Soft', 'Semi-soft', 'Semi-hard', 'Hard', 'Fresh', 'Blue', 'Processed'],
       pairings: ['Wine', 'Beer', 'Fruit', 'Bread', 'Nuts'],
     };
   };
 
-  const handleApplyFilters = (filters: SelectedFilters) => {
+  const handleApplyFilters = async (filters: SelectedFilters) => {
     setSelectedFilters(filters);
-    let filtered = allFeedItems;
+    
+    // If no filters selected, show normal feed
+    if (!filters.country && !filters.cheeseType && !filters.milkType) {
+      setFeedItems(allFeedItems);
+      return;
+    }
+
+    // Query database for ALL cheese matching filters - join cheese_types for type info
+    let query = supabase
+      .from('producer_cheeses')
+      .select(`
+        id, 
+        full_name, 
+        product_name, 
+        producer_name, 
+        origin_country, 
+        description, 
+        image_url, 
+        milk_type,
+        family,
+        cheese_types (
+          name,
+          type
+        )
+      `)
+      .limit(100);
 
     if (filters.country) {
-      filtered = filtered.filter(item => {
-        if (item.type === 'producer-cheese' || item.type === 'cheese') {
-          return (item.data as TrendingCheese).origin_country === filters.country;
-        }
-        return false;
-      });
+      query = query.ilike('origin_country', `%${filters.country}%`);
     }
 
+    if (filters.milkType) {
+      query = query.ilike('milk_type', `%${filters.milkType}%`);
+    }
+
+    const { data: filteredCheeses, error } = await query;
+
+    if (error) {
+      console.error('Filter query error:', error);
+      return;
+    }
+
+    // Filter by cheese type after fetch (since it's from joined table)
+    let results = filteredCheeses || [];
     if (filters.cheeseType) {
-      filtered = filtered.filter(item => {
-        if (item.type === 'producer-cheese' || item.type === 'cheese') {
-          return (item.data as TrendingCheese).cheese_family === filters.cheeseType;
-        }
-        return false;
+      results = results.filter(cheese => {
+        const cheeseType = (cheese.cheese_types as any)?.type;
+        return cheeseType?.toLowerCase().includes(filters.cheeseType!.toLowerCase());
       });
     }
 
-    setFeedItems(filtered);
+    // Map to feed format
+    const filteredItems: FeedItem[] = results.map(cheese => {
+      const cheeseTypeData = cheese.cheese_types as any;
+      return {
+        id: cheese.id,
+        type: 'producer-cheese' as const,
+        data: {
+          id: cheese.id,
+          name: cheese.full_name || cheese.product_name,
+          type: cheeseTypeData?.type || '',
+          origin_country: cheese.origin_country,
+          description: cheese.description,
+          image_url: cheese.image_url,
+          producer_name: cheese.producer_name,
+          cheese_type_name: cheeseTypeData?.name || '',
+          cheese_family: cheese.family,
+          is_producer_cheese: true,
+        } as TrendingCheese,
+      };
+    });
+
+    setFeedItems(filteredItems);
   };
 
   // Format content type for display (remove underscores, capitalize words)
