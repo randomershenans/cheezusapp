@@ -7,7 +7,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
-import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -131,14 +130,7 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.divider} />
-            </View>
-            
-            <GoogleSignInButton />
-            
+                        
             <View style={styles.bottomActions}>
               <TouchableOpacity 
                 style={styles.signupButton}

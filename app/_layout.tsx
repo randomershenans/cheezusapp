@@ -57,10 +57,23 @@ export default function RootLayout() {
       console.log('Deep link received:', url);
       
       // Handle email confirmation deep link (from Supabase signup email)
-      // URL format: cheezus://#access_token=...&type=signup
-      if (url.includes('type=signup') || url.includes('type=email')) {
-        console.log('Email confirmation deep link detected');
-        router.replace('/auth/login');
+      // URL formats can vary:
+      // - cheezus://#access_token=...&type=signup
+      // - cheezus://auth/confirm?token=...&type=signup
+      // - https://cheezus.co/auth/confirm#access_token=...&type=signup
+      const isEmailConfirmation = 
+        url.includes('type=signup') || 
+        url.includes('type=email') ||
+        url.includes('type=magiclink') ||
+        url.includes('auth/confirm') ||
+        (url.includes('access_token') && !url.includes('type=recovery'));
+      
+      if (isEmailConfirmation) {
+        console.log('Email confirmation deep link detected:', url);
+        // Small delay to ensure app is fully loaded before navigation
+        setTimeout(() => {
+          router.replace('/auth/login');
+        }, 100);
         return;
       }
       
