@@ -615,20 +615,6 @@ export default function ProducerCheeseDetailScreen() {
             </View>
           )}
 
-          {/* Flavor Tags */}
-          {flavorTags.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Flavor Profile</Text>
-              <View style={styles.tagsContainer}>
-                {flavorTags.map((tag) => (
-                  <View key={tag.id} style={styles.tag}>
-                    <Text style={styles.tagText}>{tag.name}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
           {/* Pairings */}
           {pairings.length > 0 && (
             <View style={styles.section}>

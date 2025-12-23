@@ -138,7 +138,12 @@ export default function SavedItemsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.filterContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScrollView}
+        contentContainerStyle={styles.filterContainer}
+      >
         <TouchableOpacity
           style={[styles.filterButton, activeFilter === 'all' && styles.filterButtonActive]}
           onPress={() => setActiveFilter('all')}
@@ -171,7 +176,7 @@ export default function SavedItemsScreen() {
             🍷 Pairings ({counts.pairing})
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       <ScrollView
         style={styles.content}
@@ -265,13 +270,16 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
   },
+  filterScrollView: {
+    flexGrow: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.m,
     gap: Layout.spacing.s,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   filterButton: {
     paddingHorizontal: Layout.spacing.m,

@@ -214,7 +214,11 @@ export const interleaveFeedItems = (
 export const getCheeseDisplayName = (cheese: FeedCheese): string => {
   const isGeneric = cheese.producer_name?.toLowerCase().includes('generic') ||
                     cheese.producer_name?.toLowerCase().includes('unknown');
-  return isGeneric ? cheese.cheese_type_name : cheese.full_name;
+  // If generic and cheese_type_name exists, use it; otherwise use full_name
+  if (isGeneric && cheese.cheese_type_name) {
+    return cheese.cheese_type_name;
+  }
+  return cheese.full_name || cheese.cheese_type_name || '';
 };
 
 /**
@@ -246,11 +250,22 @@ export const getFollowingActivity = async (userId: string): Promise<FeedCheeseIt
       return [];
     }
 
-    // Fetch cheese details separately
+    // Fetch cheese details separately with cheese_types join
     const cheeseIds = entries.map(e => e.cheese_id).filter(Boolean);
     const { data: cheeses } = await supabase
       .from('producer_cheeses')
-      .select('id, full_name, producer_name, image_url, family')
+      .select(`
+        id, 
+        full_name, 
+        product_name,
+        producer_name, 
+        image_url, 
+        family, 
+        origin_country,
+        cheese_types (
+          name
+        )
+      `)
       .in('id', cheeseIds);
 
     // Fetch profile details separately
@@ -264,35 +279,81 @@ export const getFollowingActivity = async (userId: string): Promise<FeedCheeseIt
     const cheeseMap = new Map((cheeses || []).map(c => [c.id, c]));
     const profileMap = new Map((profiles || []).map(p => [p.id, p]));
 
-    // Convert to FeedCheeseItem format
-    return entries.map((entry: any) => {
-      const cheese = cheeseMap.get(entry.cheese_id);
-      const profile = profileMap.get(entry.user_id);
-      const userName = profile?.name || 'Someone you follow';
+    // Group entries by cheese_id to combine multiple friends rating same cheese
+    const cheeseGroups = new Map<string, any[]>();
+    entries.forEach((entry: any) => {
+      const key = entry.cheese_id;
+      if (!cheeseGroups.has(key)) {
+        cheeseGroups.set(key, []);
+      }
+      cheeseGroups.get(key)!.push(entry);
+    });
+
+    // Convert to FeedCheeseItem format, combining duplicate cheeses
+    const results: FeedCheeseItem[] = [];
+    cheeseGroups.forEach((groupEntries, cheeseId) => {
+      const cheese = cheeseMap.get(cheeseId) as any;
+      if (!cheese) return;
+
+      // Get cheese type name from joined table
+      const cheeseTypeName = cheese.cheese_types?.name || '';
       
-      return {
-        id: `following-${entry.id}`,
+      // Build display name - use product_name or cheese type name, never show "Generic"
+      let displayName = cheese.product_name || cheese.full_name || '';
+      if (displayName.toLowerCase().includes('generic')) {
+        displayName = cheeseTypeName || displayName.replace(/generic\s*/i, '').trim();
+      }
+      if (!displayName || displayName.toLowerCase() === 'generic') {
+        displayName = cheeseTypeName;
+      }
+
+      // Build reason text combining all users who rated this cheese
+      const userNames = groupEntries.map((entry: any) => {
+        const profile = profileMap.get(entry.user_id);
+        return profile?.name || 'Someone';
+      });
+      
+      // Get the first entry's rating for display
+      const firstEntry = groupEntries[0];
+      const firstProfile = profileMap.get(firstEntry.user_id);
+      const firstName = firstProfile?.name || 'Someone you follow';
+      
+      let reason: string;
+      if (groupEntries.length > 1) {
+        const otherCount = groupEntries.length - 1;
+        reason = firstEntry.rating
+          ? `${firstName} and ${otherCount} other${otherCount > 1 ? 's' : ''} rated this`
+          : `${firstName} and ${otherCount} other${otherCount > 1 ? 's' : ''} tried this`;
+      } else {
+        reason = firstEntry.rating 
+          ? `${firstName} rated this ${Number(firstEntry.rating) % 1 === 0 ? Math.round(firstEntry.rating) : Number(firstEntry.rating).toFixed(1)}/5`
+          : `${firstName} tried this cheese`;
+      }
+
+      results.push({
+        id: `following-${cheeseId}`,
         type: 'following' as const,
         cheese: {
-          id: cheese?.id || '',
-          full_name: cheese?.full_name || '',
-          cheese_type_name: '',
-          cheese_family: cheese?.family,
-          producer_name: cheese?.producer_name,
-          image_url: cheese?.image_url,
-          average_rating: entry.rating || 0,
-          rating_count: 1,
+          id: cheese.id || '',
+          full_name: displayName,
+          cheese_type_name: cheeseTypeName,
+          cheese_family: cheese.family,
+          producer_name: cheese.producer_name,
+          origin_country: cheese.origin_country,
+          image_url: cheese.image_url,
+          average_rating: firstEntry.rating || 0,
+          rating_count: groupEntries.length,
         },
-        reason: entry.rating 
-          ? `${userName} rated this ${Number(entry.rating) % 1 === 0 ? Math.round(entry.rating) : Number(entry.rating).toFixed(1)}/5`
-          : `${userName} tried this cheese`,
+        reason,
         user: {
-          id: profile?.id || entry.user_id,
-          name: userName,
-          avatar_url: profile?.avatar_url,
+          id: firstProfile?.id || firstEntry.user_id,
+          name: firstName,
+          avatar_url: firstProfile?.avatar_url,
         },
-      };
+      });
     });
+
+    return results;
   } catch (error) {
     console.error('Error fetching following activity:', error);
     return [];

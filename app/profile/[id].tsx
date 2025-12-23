@@ -342,19 +342,19 @@ export default function PublicProfileScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>{stats.cheeses}</Text>
-            <Text style={styles.statLabel}>Cheeses</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Cheeses</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>{stats.followers}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Followers</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>{stats.following}</Text>
-            <Text style={styles.statLabel}>Following</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Following</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>{stats.badges}</Text>
-            <Text style={styles.statLabel}>Badges</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Badges</Text>
           </View>
         </View>
 
@@ -595,10 +595,11 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   statLabel: {
-    fontSize: Typography.sizes.xs,
+    fontSize: 11,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
     marginTop: 2,
+    textAlign: 'center',
   },
   badgesSection: {
     marginBottom: Layout.spacing.l,
