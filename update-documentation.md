@@ -1,5 +1,30 @@
 # Cheezus App - Update Documentation
 
+## Cheese Type Selection Fix (December 26, 2025)
+
+### Fixed "Failed to add cheese to your box" Error
+- **Root Cause**: When users searched and clicked a cheese type tile (showing "New" badge), the app tried to insert the `cheese_type.id` into `cheese_box_entries.cheese_id`, which has a foreign key constraint requiring a `producer_cheese.id`
+- **Solution**: Cheese type selections now redirect to the "Add New Cheese" form with prefilled data
+
+### Changes Made
+- Updated `components/add-cheese/NewCheeseForm.tsx`:
+  - Added `CheeseTypePrefill` interface export
+  - Added `prefillData` prop to accept cheese type info
+  - Form initializes with prefilled cheese name, type, and origin country
+
+- Updated `app/add-cheese.tsx`:
+  - Added `cheeseTypePrefill` state
+  - Modified `handleSelectExisting()` to check `cheese.type`:
+    - If `cheese_type`: Redirects to NewCheeseForm with prefilled data
+    - If `producer_cheese`: Goes to AddToBoxForm (existing behavior)
+  - Clear prefill data on back navigation
+
+### User Experience
+- Search for "Brie", "Camembert", "Gouda" etc. shows cheese types with "New" badge
+- Clicking redirects to add form with cheese name pre-filled
+- User adds their producer/version details and rating
+- Creates a new producer_cheese under that cheese_type
+
 ## Label Scanner Feature (December 18, 2025)
 
 ### Added AI-Powered Cheese Label Scanner

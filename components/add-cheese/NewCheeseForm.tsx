@@ -41,10 +41,18 @@ interface Producer {
   count: number;
 }
 
+export interface CheeseTypePrefill {
+  cheeseTypeId: string;
+  cheeseName: string;
+  cheeseType?: string;
+  originCountry?: string;
+}
+
 interface NewCheeseFormProps {
   onSubmit: (data: NewCheeseFormData) => void;
   onBack: () => void;
   isSubmitting?: boolean;
+  prefillData?: CheeseTypePrefill;
 }
 
 const CHEESE_TYPES = ['Soft', 'Semi-soft', 'Semi-firm', 'Hard', 'Blue', 'Fresh', 'Processed'];
@@ -54,12 +62,13 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   onSubmit,
   onBack,
   isSubmitting = false,
+  prefillData,
 }) => {
   const [formData, setFormData] = useState<NewCheeseFormData>({
-    cheeseName: '',
+    cheeseName: prefillData?.cheeseName || '',
     producerName: '',
-    originCountry: '',
-    cheeseType: '',
+    originCountry: prefillData?.originCountry || '',
+    cheeseType: prefillData?.cheeseType || '',
     milkTypes: [],
     description: '',
     flavorTagIds: [],

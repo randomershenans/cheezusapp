@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadImageToStorage } from '@/lib/storage';
 import { CheeseSearch, CheeseSearchResult } from '@/components/add-cheese/CheeseSearch';
 import { AddToBoxForm, AddToBoxFormData } from '@/components/add-cheese/AddToBoxForm';
-import { NewCheeseForm, NewCheeseFormData } from '@/components/add-cheese/NewCheeseForm';
+import { NewCheeseForm, NewCheeseFormData, CheeseTypePrefill } from '@/components/add-cheese/NewCheeseForm';
 import Colors from '@/constants/Colors';
 
 type Step = 'search' | 'add-existing' | 'add-new';
@@ -15,11 +15,24 @@ export default function AddCheeseScreen() {
   const [step, setStep] = useState<Step>('search');
   const [selectedCheese, setSelectedCheese] = useState<CheeseSearchResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cheeseTypePrefill, setCheeseTypePrefill] = useState<CheeseTypePrefill | undefined>(undefined);
 
   // Handle selecting an existing cheese
   const handleSelectExisting = (cheese: CheeseSearchResult) => {
-    setSelectedCheese(cheese);
-    setStep('add-existing');
+    if (cheese.type === 'cheese_type') {
+      // Cheese type selected - redirect to add new with prefilled data
+      setCheeseTypePrefill({
+        cheeseTypeId: cheese.id,
+        cheeseName: cheese.name,
+        cheeseType: cheese.subtext?.split(' • ')[0] || undefined,
+        originCountry: cheese.origin_country,
+      });
+      setStep('add-new');
+    } else {
+      // Producer cheese selected - go to add to box
+      setSelectedCheese(cheese);
+      setStep('add-existing');
+    }
   };
 
   // Handle adding to cheese box (existing cheese)
@@ -301,6 +314,7 @@ export default function AddCheeseScreen() {
     if (step === 'add-existing' || step === 'add-new') {
       setStep('search');
       setSelectedCheese(null);
+      setCheeseTypePrefill(undefined);
     } else {
       router.back();
     }
@@ -329,6 +343,7 @@ export default function AddCheeseScreen() {
           onSubmit={handleCreateNewCheese}
           onBack={handleBack}
           isSubmitting={isSubmitting}
+          prefillData={cheeseTypePrefill}
         />
       )}
     </SafeAreaView>
