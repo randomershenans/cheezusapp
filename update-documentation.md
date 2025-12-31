@@ -1,5 +1,32 @@
 # Cheezus App - Update Documentation
 
+## iOS App Store Privacy Purpose Strings (December 31, 2025)
+
+### Fixed App Store Rejection - Guideline 5.1.1
+- **Issue**: Apple rejected the app because privacy purpose strings did not sufficiently explain how protected resources are used
+- **Solution**: Added detailed, example-based purpose strings for all permissions
+
+### Permissions Configured in `app.config.js`
+
+| Permission | iOS Key | Purpose String |
+|------------|---------|----------------|
+| **Camera** | NSCameraUsageDescription | "Cheezus uses your camera to take photos of cheese for your cheese box entries and to scan cheese labels for automatic identification. For example, you can photograph a cheese wheel to add it to your collection or scan a label to auto-fill cheese details." |
+| **Photo Library** | NSPhotoLibraryUsageDescription | "Cheezus accesses your photo library so you can select existing photos of cheese to add to your cheese box entries and set your profile picture. For example, you can choose a photo you took earlier at a cheese shop." |
+| **Location** | NSLocationWhenInUseUsageDescription | "Cheezus uses your location to show you cheese shops, producers, and cheese events near you. For example, you can discover local artisan cheese makers in your area." |
+| **Microphone** | NSMicrophoneUsageDescription | "Cheezus may use the microphone when recording video of cheese tastings to share with the community." |
+
+### Changes Made
+- Added `ios.infoPlist` section with all privacy purpose strings
+- Added plugin configurations for:
+  - `expo-image-picker` (photosPermission, cameraPermission)
+  - `expo-location` (locationWhenInUsePermission)
+  - `expo-camera` (cameraPermission, microphonePermission)
+
+### Notes
+- Sharing (expo-sharing) does NOT require special permissions on iOS - uses native share sheet
+- Contacts are NOT accessed by this app
+- Notifications permissions are handled by expo-notifications plugin
+
 ## Cheese Type Selection Fix (December 26, 2025)
 
 ### Fixed "Failed to add cheese to your box" Error
