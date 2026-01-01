@@ -1,5 +1,26 @@
 # Cheezus App - Update Documentation
 
+## Android App Links Verification Fix (January 1, 2026)
+
+### Fixed Play Store Domain Verification Error
+- **Issue**: Play Console showed "Domain ownership not verified" for cheezus.co
+- **Root Cause**: Missing Digital Asset Links file + custom scheme in autoVerify intent filter
+
+### Changes Made
+1. **Created `assetlinks.json`** for cheezus.co domain:
+   - File location on web: `https://cheezus.co/.well-known/assetlinks.json`
+   - Contains SHA256 fingerprint: `03:D4:5D:7B:3C:94:96:47:B2:09:AE:C4:35:C4:8D:18:D8:22:1B:2E:B2:6E:18:2B:1C:63:CF:12:C0:4F:BD:E8`
+
+2. **Updated `app.config.js`** - Separated intent filters:
+   - HTTPS App Links (with `autoVerify: true`) - requires domain verification
+   - Custom scheme `cheezus://` (without autoVerify) - no verification needed
+
+### Verified Links
+- `https://cheezus.co/@` → Profile deep link
+- `https://cheezus.co/profile` → Profile page
+- `cheezus://cheezus.co/@` → Custom scheme profile
+- `cheezus://cheezus.co/profile` → Custom scheme profile
+
 ## iOS App Store Privacy Purpose Strings (December 31, 2025)
 
 ### Fixed App Store Rejection - Guideline 5.1.1

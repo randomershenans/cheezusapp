@@ -49,10 +49,22 @@ export default {
               scheme: "https",
               host: "cheezus.co",
               pathPrefix: "/profile"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          action: "VIEW",
+          data: [
+            {
+              scheme: "cheezus",
+              host: "cheezus.co",
+              pathPrefix: "/@"
             },
             {
               scheme: "cheezus",
-              host: "profile"
+              host: "cheezus.co",
+              pathPrefix: "/profile"
             }
           ],
           category: ["BROWSABLE", "DEFAULT"]

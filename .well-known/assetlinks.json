@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.cheezus.app",
+      "sha256_cert_fingerprints": [
+        "03:D4:5D:7B:3C:94:96:47:B2:09:AE:C4:35:C4:8D:18:D8:22:1B:2E:B2:6E:18:2B:1C:63:CF:12:C0:4F:BD:E8"
+      ]
+    }
+  }
+]
