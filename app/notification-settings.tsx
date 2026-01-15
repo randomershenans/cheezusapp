@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Bell, Users, Award, Sparkles, Clock, MessageCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -98,6 +99,15 @@ export default function NotificationSettingsScreen() {
     
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
+    
+    // Track push notification enable/disable
+    if (key === 'push_enabled') {
+      if (value) {
+        Analytics.trackNotificationsEnabled(user?.id);
+      } else {
+        Analytics.trackNotificationsDisabled(user?.id);
+      }
+    }
     
     try {
       await supabase

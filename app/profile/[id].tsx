@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, User, MapPin, Lock, Users, Star, Award } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -65,6 +66,7 @@ export default function PublicProfileScreen() {
       fetchStats();
       fetchRecentCheeses();
       fetchBadges();
+      Analytics.trackProfileView(id as string, user?.id);
       if (user && !isOwnProfile) {
         checkFollowStatus();
       }
@@ -226,12 +228,14 @@ export default function PublicProfileScreen() {
           .eq('following_id', id);
         setIsFollowing(false);
         setStats(prev => ({ ...prev, followers: prev.followers - 1 }));
+        Analytics.trackUserUnfollow(id as string, user?.id);
       } else {
         await supabase
           .from('follows')
           .insert({ follower_id: user.id, following_id: id });
         setIsFollowing(true);
         setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
+        Analytics.trackUserFollow(id as string, user?.id);
       }
     } catch (error) {
       console.error('Error toggling follow:', error);

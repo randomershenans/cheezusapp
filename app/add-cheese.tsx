@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView, Alert } from 'react-native';
+import { StyleSheet, SafeAreaView, Alert, Modal, View, Text, TouchableOpacity } from 'react-native';
+import { Box, Heart } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { uploadImageToStorage } from '@/lib/storage';
@@ -9,6 +10,7 @@ import { NewCheeseForm, NewCheeseFormData, CheeseTypePrefill } from '@/component
 import Colors from '@/constants/Colors';
 
 type Step = 'search' | 'add-existing' | 'add-new';
+type AddDestination = 'cheese_box' | 'wishlist';
 
 export default function AddCheeseScreen() {
   const router = useRouter();
@@ -16,6 +18,8 @@ export default function AddCheeseScreen() {
   const [selectedCheese, setSelectedCheese] = useState<CheeseSearchResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cheeseTypePrefill, setCheeseTypePrefill] = useState<CheeseTypePrefill | undefined>(undefined);
+  const [showDestinationModal, setShowDestinationModal] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<NewCheeseFormData | null>(null);
 
   // Handle selecting an existing cheese
   const handleSelectExisting = (cheese: CheeseSearchResult) => {
@@ -107,8 +111,21 @@ export default function AddCheeseScreen() {
     }
   };
 
+  // Handle form submission - show choice modal
+  const handleNewCheeseSubmit = (formData: NewCheeseFormData) => {
+    setPendingFormData(formData);
+    setShowDestinationModal(true);
+  };
+
+  // Handle destination choice
+  const handleDestinationChoice = async (destination: AddDestination) => {
+    setShowDestinationModal(false);
+    if (!pendingFormData) return;
+    await handleCreateNewCheese(pendingFormData, destination);
+  };
+
   // Handle creating a new cheese
-  const handleCreateNewCheese = async (formData: NewCheeseFormData) => {
+  const handleCreateNewCheese = async (formData: NewCheeseFormData, destination: AddDestination = 'cheese_box') => {
     setIsSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -271,35 +288,58 @@ export default function AddCheeseScreen() {
           .upsert(flavorTagInserts, { onConflict: 'producer_cheese_id,flavor_tag_id' });
       }
 
-      // 4. Add to cheese box (check if already exists first)
-      const { data: existingEntry } = await supabase
-        .from('cheese_box_entries')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('cheese_id', producerCheeseId)
-        .single();
+      // 4. Add to cheese box OR wishlist based on user choice
+      if (destination === 'cheese_box') {
+        const { data: existingEntry } = await supabase
+          .from('cheese_box_entries')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('cheese_id', producerCheeseId)
+          .single();
 
-      if (existingEntry) {
-        // Already in cheese box - just navigate to it
-        router.replace(`/producer-cheese/${producerCheeseId}`);
-        return;
+        if (existingEntry) {
+          router.replace(`/producer-cheese/${producerCheeseId}`);
+          return;
+        }
+
+        const { error: boxError } = await supabase
+          .from('cheese_box_entries')
+          .insert({
+            user_id: user.id,
+            cheese_id: producerCheeseId,
+            rating: formData.rating || null,
+            notes: formData.notes || null,
+          });
+
+        if (boxError) throw boxError;
+
+        // Update badges for cheese box additions
+        await supabase.rpc('update_all_badges_for_user', { p_user_id: user.id });
+      } else {
+        // Add to wishlist
+        const { data: existingWishlist } = await supabase
+          .from('wishlist')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('cheese_id', producerCheeseId)
+          .single();
+
+        if (existingWishlist) {
+          router.replace(`/producer-cheese/${producerCheeseId}`);
+          return;
+        }
+
+        const { error: wishlistError } = await supabase
+          .from('wishlist')
+          .insert({
+            user_id: user.id,
+            cheese_id: producerCheeseId,
+          });
+
+        if (wishlistError) throw wishlistError;
       }
 
-      const { error: boxError } = await supabase
-        .from('cheese_box_entries')
-        .insert({
-          user_id: user.id,
-          cheese_id: producerCheeseId,
-          rating: formData.rating || null,
-          notes: formData.notes || null,
-        });
-
-      if (boxError) throw boxError;
-
-      // 5. Update badges
-      await supabase.rpc('update_all_badges_for_user', { p_user_id: user.id });
-
-      // Navigate directly to the cheese page
+      // Navigate to the cheese page
       router.replace(`/producer-cheese/${producerCheeseId}`);
     } catch (error) {
       console.error('Error creating cheese:', error);
@@ -340,12 +380,60 @@ export default function AddCheeseScreen() {
 
       {step === 'add-new' && (
         <NewCheeseForm
-          onSubmit={handleCreateNewCheese}
+          onSubmit={handleNewCheeseSubmit}
           onBack={handleBack}
           isSubmitting={isSubmitting}
           prefillData={cheeseTypePrefill}
         />
       )}
+
+      {/* Destination Choice Modal */}
+      <Modal
+        visible={showDestinationModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDestinationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Where would you like to add this?</Text>
+            <Text style={styles.modalSubtitle}>Have you tried this cheese?</Text>
+
+            <TouchableOpacity
+              style={styles.destinationButton}
+              onPress={() => handleDestinationChoice('cheese_box')}
+            >
+              <View style={styles.destinationIconBox}>
+                <Box size={28} color="#FFFFFF" />
+              </View>
+              <View style={styles.destinationTextContainer}>
+                <Text style={styles.destinationTitle}>Add to Cheese Box</Text>
+                <Text style={styles.destinationDescription}>I've tried this cheese</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.destinationButton}
+              onPress={() => handleDestinationChoice('wishlist')}
+            >
+              <View style={[styles.destinationIconBox, styles.wishlistIconBox]}>
+                <Heart size={28} color="#FFFFFF" />
+              </View>
+              <View style={styles.destinationTextContainer}>
+                <Text style={styles.destinationTitle}>Add to Wishlist</Text>
+                <Text style={styles.destinationDescription}>I want to try this later</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowDestinationModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -354,5 +442,75 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  destinationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  destinationIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  wishlistIconBox: {
+    backgroundColor: '#E91E63',
+  },
+  destinationTextContainer: {
+    flex: 1,
+  },
+  destinationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  destinationDescription: {
+    fontSize: 13,
+    color: Colors.subtleText,
+  },
+  cancelButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    color: Colors.subtleText,
+    fontWeight: '500',
   },
 });

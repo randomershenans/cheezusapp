@@ -20,6 +20,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { FlavorTagSelector } from './FlavorTagSelector';
 import { supabase } from '@/lib/supabase';
 import { scanCheeseLabel, LabelScanResult } from '@/lib/label-scanner';
+import { Analytics } from '@/lib/analytics';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface NewCheeseFormData {
   // Cheese info
@@ -64,6 +66,7 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   isSubmitting = false,
   prefillData,
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<NewCheeseFormData>({
     cheeseName: prefillData?.cheeseName || '',
     producerName: '',
@@ -220,14 +223,18 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   const processLabelImage = async (base64: string, uri: string) => {
     setIsScanning(true);
     setScanError(null);
+    Analytics.trackAIScanStart(user?.id);
 
     try {
       const result = await scanCheeseLabel(base64);
 
       if (!result.success) {
         setScanError(result.error.message);
+        Analytics.trackAIScanFail(result.error.message, user?.id);
         return;
       }
+      
+      Analytics.trackAIScanSuccess(result.data.confidence, user?.id);
 
       // Prefill the form with scanned data
       const data = result.data;

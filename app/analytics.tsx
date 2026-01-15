@@ -6,6 +6,7 @@ import { ArrowLeft, TrendingUp, Globe, Milk, Target, Award, Sparkles } from 'luc
 import Svg, { Polygon, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -133,6 +134,7 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     if (user) {
       fetchData();
+      Analytics.trackAnalyticsPageView(user.id);
     }
   }, [user]);
 

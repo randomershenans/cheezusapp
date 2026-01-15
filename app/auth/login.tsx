@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { X, Mail, Lock } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -27,6 +28,7 @@ export default function LoginScreen() {
     
     try {
       await signIn(email, password);
+      Analytics.trackLogin(); // User ID tracked after auth state updates
       router.replace('/(tabs)/profile');
     } catch (error) {
       setError('Invalid email or password');

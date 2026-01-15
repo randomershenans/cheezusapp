@@ -24,6 +24,7 @@ import Slider from '@react-native-community/slider';
 const { width: screenWidth } = Dimensions.get('window');
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import {
   getProducerCheeseById,
   getFlavorTagsForProducerCheese,
@@ -55,6 +56,7 @@ export default function ProducerCheeseDetailScreen() {
   useEffect(() => {
     if (id) {
       fetchProducerCheeseDetails();
+      Analytics.trackCheeseView(id as string, user?.id);
       if (user) {
         fetchUserEntry();
         fetchWishlistStatus();
@@ -194,6 +196,7 @@ export default function ProducerCheeseDetailScreen() {
 
         if (error) throw error;
         setIsWishlisted(false);
+        Analytics.trackCheeseWishlistRemove(id as string, user?.id);
       } else {
         // Add to wishlist
         const { error } = await supabase
@@ -202,6 +205,7 @@ export default function ProducerCheeseDetailScreen() {
 
         if (error) throw error;
         setIsWishlisted(true);
+        Analytics.trackCheeseWishlistAdd(id as string, user?.id);
       }
     } catch (error) {
       console.error('Error toggling wishlist:', error);
@@ -241,6 +245,13 @@ export default function ProducerCheeseDetailScreen() {
       await fetchUserEntry();
       await fetchProducerCheeseDetails();
       
+      // Track the rating action
+      if (userEntry) {
+        Analytics.trackCheeseRate(producerCheese.id, tempRating, user?.id);
+      } else {
+        Analytics.trackCheeseAddToBox(producerCheese.id, tempRating, user?.id);
+      }
+      
       setShowRatingModal(false);
       Alert.alert('Success', 'Your rating has been saved!');
     } catch (error) {
@@ -265,11 +276,15 @@ export default function ProducerCheeseDetailScreen() {
       const cheeseUrl = `https://cheezus.co/cheese/${producerCheese.id}`;
       const message = `Check out ${producerCheese.full_name} on Cheezus! ${producerCheese.description?.substring(0, 100) || 'A delicious cheese'}...\n\n${cheeseUrl}`;
       
-      await Share.share({
+      const result = await Share.share({
         message,
         url: cheeseUrl, // iOS uses this for the link
         title: producerCheese.full_name,
       });
+      
+      if (result.action === Share.sharedAction) {
+        Analytics.trackCheeseShare(producerCheese.id, result.activityType, user?.id);
+      }
     } catch (error) {
       console.error('Error sharing:', error);
     }
@@ -437,46 +452,73 @@ export default function ProducerCheeseDetailScreen() {
         {/* Content Container */}
         <View style={styles.contentContainer}>
 
-          {/* Action Buttons */}
-          {user && (
-            <View style={styles.section}>
-              <View style={styles.actionButtonsRow}>
-                {/* Add to Box / Update Rating Button */}
+          {/* Action Buttons - Always show, prompt login if not authenticated */}
+          <View style={styles.section}>
+            <View style={styles.actionButtonsRow}>
+              {/* Add to Box / Update Rating Button */}
+              <TouchableOpacity
+                style={[styles.addToBoxButton, { flex: 1 }]}
+                onPress={() => {
+                  if (!user) {
+                    Alert.alert(
+                      'Join Cheezus!',
+                      'Create a free account to save this cheese to your Cheese Box and track your tasting journey.',
+                      [
+                        { text: 'Not Now', style: 'cancel' },
+                        { text: 'Sign Up', onPress: () => router.push('/login') }
+                      ]
+                    );
+                    return;
+                  }
+                  setTempRating(userEntry?.rating || 0);
+                  setTempNotes(userEntry?.notes || '');
+                  setShowRatingModal(true);
+                }}
+              >
+                <Star size={20} color="#FFF" fill={userEntry ? "#FFF" : "none"} />
+                <Text style={styles.addToBoxButtonText}>
+                  {userEntry ? 'Update Rating' : 'Add to Cheese Box'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Wishlist Button - only show if not already in cheese box */}
+              {!userEntry && (
                 <TouchableOpacity
-                  style={[styles.addToBoxButton, { flex: 1 }]}
+                  style={styles.wishlistButton}
                   onPress={() => {
-                    setTempRating(userEntry?.rating || 0);
-                    setTempNotes(userEntry?.notes || '');
-                    setShowRatingModal(true);
+                    if (!user) {
+                      Alert.alert(
+                        'Join Cheezus!',
+                        'Create a free account to add cheeses to your wishlist.',
+                        [
+                          { text: 'Not Now', style: 'cancel' },
+                          { text: 'Sign Up', onPress: () => router.push('/login') }
+                        ]
+                      );
+                      return;
+                    }
+                    handleToggleWishlist();
                   }}
                 >
-                  <Star size={20} color="#FFF" fill={userEntry ? "#FFF" : "none"} />
-                  <Text style={styles.addToBoxButtonText}>
-                    {userEntry ? 'Update Rating' : 'Add to Cheese Box'}
-                  </Text>
+                  <Heart 
+                    size={20} 
+                    color={Colors.primary} 
+                    fill={isWishlisted ? Colors.primary : "none"} 
+                  />
                 </TouchableOpacity>
-
-                {/* Wishlist Button - only show if not already in cheese box */}
-                {!userEntry && (
-                  <TouchableOpacity
-                    style={styles.wishlistButton}
-                    onPress={handleToggleWishlist}
-                  >
-                    <Heart 
-                      size={20} 
-                      color={Colors.primary} 
-                      fill={isWishlisted ? Colors.primary : "none"} 
-                    />
-                  </TouchableOpacity>
-                )}
-              </View>
-              {!userEntry && (
-                <Text style={styles.wishlistHint}>
-                  {isWishlisted ? '♥ On your wishlist' : 'Tap ♡ to add to wishlist'}
-                </Text>
               )}
             </View>
-          )}
+            {!userEntry && user && (
+              <Text style={styles.wishlistHint}>
+                {isWishlisted ? '♥ On your wishlist' : 'Tap ♡ to add to wishlist'}
+              </Text>
+            )}
+            {!user && (
+              <Text style={styles.wishlistHint}>
+                Sign up to start your cheese journey!
+              </Text>
+            )}
+          </View>
 
           {/* Description */}
           {(producerCheese.description || (producerCheese as any).cheese_type_description) && (

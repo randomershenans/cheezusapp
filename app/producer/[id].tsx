@@ -32,6 +32,8 @@ import {
   ProducerWithStats,
   ProducerCheeseSummary,
 } from '@/lib';
+import { Analytics } from '@/lib/analytics';
+import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -41,6 +43,7 @@ const { width: screenWidth } = Dimensions.get('window');
 export default function ProducerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
 
   const [producer, setProducer] = useState<ProducerWithStats | null>(null);
   const [cheeses, setCheeses] = useState<ProducerCheeseSummary[]>([]);
@@ -50,6 +53,7 @@ export default function ProducerDetailScreen() {
   useEffect(() => {
     if (id) {
       fetchProducerDetails();
+      Analytics.trackProducerView(id as string, user?.id);
     }
   }, [id]);
 

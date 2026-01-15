@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions, Modal, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions, Modal, RefreshControl, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag, Grid, Award } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { getPersonalizedFeed, interleaveFeedItems, getCheeseDisplayName, searchUsers, FeedItem as ApiFeedItem, FeedCheeseItem, FeedArticle, FeedSponsored, UserTasteProfile } from '@/lib/feed-service';
+import { getPersonalizedFeed, interleaveFeedItems, getCheeseDisplayName, searchUsers, loadMoreCheeses, FeedItem as ApiFeedItem, FeedCheeseItem, FeedArticle, FeedSponsored, UserTasteProfile } from '@/lib/feed-service';
+import { Analytics } from '@/lib/analytics';
 import { useAuth } from '@/contexts/AuthContext';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
@@ -115,27 +116,36 @@ export default function HomeScreen() {
   const [personalizedFeed, setPersonalizedFeed] = useState<ApiFeedItem[]>([]);
   const [userProfile, setUserProfile] = useState<UserTasteProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
   const [seenIds, setSeenIds] = useState<string[]>([]);
+  const [hasMoreContent, setHasMoreContent] = useState(true);
 
   useEffect(() => {
     loadPersonalizedFeed();
+    Analytics.trackFeedView(user?.id);
   }, [user]);
 
   const loadPersonalizedFeed = async () => {
     setLoading(true);
+    setHasMoreContent(true);
+    setSeenIds([]);
     try {
-      const response = await getPersonalizedFeed(user?.id, 20, []);
+      const response = await getPersonalizedFeed(user?.id, 20, [], 0, true);
       setUserProfile(response.profile);
       const interleaved = interleaveFeedItems(response);
+      
+      // Track seen cheese IDs for infinite scroll
+      const newSeenIds: string[] = [];
       
       // Convert to legacy format
       const converted: FeedItem[] = interleaved.map(item => {
         if ('cheese' in item) {
           const cheeseItem = item as FeedCheeseItem;
+          newSeenIds.push(cheeseItem.cheese.id);
           return {
             id: cheeseItem.type === 'following' ? `following-${cheeseItem.cheese.id}` : `cheese-${cheeseItem.cheese.id}`,
             type: 'producer-cheese' as const,
@@ -193,6 +203,7 @@ export default function HomeScreen() {
         }
       });
       
+      setSeenIds(newSeenIds);
       setAllFeedItems(converted);
       setFeedItems(converted);
     } catch (error) {
@@ -201,6 +212,66 @@ export default function HomeScreen() {
       setLoading(false);
     }
   };
+
+  // Load more content for infinite scroll
+  const loadMoreContent = useCallback(async () => {
+    if (loadingMore || !hasMoreContent || searchQuery.trim()) return;
+    
+    setLoadingMore(true);
+    Analytics.trackFeedLoadMore(user?.id);
+    try {
+      const moreCheeses = await loadMoreCheeses(seenIds, 15);
+      
+      if (moreCheeses.length === 0) {
+        setHasMoreContent(false);
+        return;
+      }
+      
+      // Track new IDs
+      const newIds = moreCheeses.map(item => item.cheese.id);
+      setSeenIds(prev => [...prev, ...newIds]);
+      
+      // Convert to feed format
+      const newItems: FeedItem[] = moreCheeses.map(item => ({
+        id: `cheese-${item.cheese.id}-${Date.now()}`,
+        type: 'producer-cheese' as const,
+        data: {
+          id: item.cheese.id,
+          name: item.cheese.full_name,
+          type: item.cheese.cheese_type_name,
+          origin_country: item.cheese.origin_country || '',
+          description: item.reason,
+          image_url: item.cheese.image_url || '',
+          producer_name: item.cheese.producer_name,
+          cheese_type_name: item.cheese.cheese_type_name,
+          cheese_family: item.cheese.cheese_family,
+          average_rating: item.cheese.average_rating,
+          rating_count: item.cheese.rating_count,
+          awards_image_url: item.cheese.awards_image_url,
+          is_producer_cheese: true,
+          recommendation_type: item.type,
+          recommendation_reason: item.reason,
+        } as TrendingCheese & { awards_image_url?: string; recommendation_type?: string; recommendation_reason?: string },
+      }));
+      
+      setFeedItems(prev => [...prev, ...newItems]);
+      setAllFeedItems(prev => [...prev, ...newItems]);
+    } catch (error) {
+      console.error('Error loading more content:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMoreContent, seenIds, searchQuery]);
+
+  // Handle scroll to detect when near bottom
+  const handleScroll = useCallback((event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 500; // Load more when 500px from bottom
+    
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      loadMoreContent();
+    }
+  }, [loadMoreContent]);
 
   useEffect(() => {
     if (searchQuery && searchQuery.trim()) {
@@ -276,6 +347,7 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    Analytics.trackFeedRefresh(user?.id);
     await loadPersonalizedFeed();
     setRefreshing(false);
   }, [user]);
@@ -471,6 +543,16 @@ export default function HomeScreen() {
 
       // Add "Can't find your cheese?" prompt at the end of search results
       feed.push({ id: 'add-cheese-prompt', type: 'add-cheese-prompt' as any, data: null });
+
+      // Track search
+      const cheeseCount = feed.filter(f => f.type === 'producer-cheese').length;
+      const userCount = feed.filter(f => f.type === 'user').length;
+      if (userCount > 0) {
+        Analytics.trackSearchUser(query, userCount, user?.id);
+      }
+      if (cheeseCount > 0 || userCount === 0) {
+        Analytics.trackSearchCheese(query, cheeseCount, user?.id);
+      }
 
       setFeedItems(feed);
     } catch (error) {
@@ -671,6 +753,7 @@ export default function HomeScreen() {
     const cardHeight = screenWidth * 0.75; // 75% of screen width for better aspect ratio
 
     const handlePress = () => {
+      Analytics.trackFeedCheeseClick(cheese.id, 0, user?.id);
       if (cheese.is_producer_cheese) {
         router.push(`/producer-cheese/${cheese.id}`);
       } else {
@@ -919,6 +1002,8 @@ export default function HomeScreen() {
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -956,6 +1041,14 @@ export default function HomeScreen() {
                 {renderFeedItem(item)}
               </View>
             ))}
+            
+            {/* Loading more indicator */}
+            {loadingMore && (
+              <View style={styles.loadingMoreContainer}>
+                <View style={styles.loadingSpinner} />
+                <Text style={styles.loadingMoreText}>Loading more cheeses...</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -993,7 +1086,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    paddingTop: Platform.OS === 'web' ? Layout.spacing.m : 0,
+    paddingTop: Platform.OS === 'web' ? Layout.spacing.m : Platform.OS === 'android' ? (RNStatusBar.currentHeight || 0) + 10 : 0,
   },
   scrollView: {
     flex: 1,
@@ -1038,6 +1131,16 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodyMedium,
     color: Colors.subtleText,
+  },
+  loadingMoreContainer: {
+    paddingVertical: Layout.spacing.xl,
+    alignItems: 'center',
+  },
+  loadingMoreText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: Layout.spacing.s,
   },
   feedContainer: {
     paddingTop: Layout.spacing.s,

@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { TouchableOpacity } from 'react-native';
 import { Trophy, ArrowLeft, CheckCircle, Circle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Typography from '@/constants/Typography';
 import Layout from '@/constants/Layout';
@@ -33,6 +35,7 @@ interface Badge {
 
 export default function BadgeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,6 +87,7 @@ export default function BadgeScreen() {
   // Initial load and refresh handler
   useEffect(() => {
     fetchBadges();
+    Analytics.trackBadgesPageView(user?.id);
   }, []);
   
   const onRefresh = () => {

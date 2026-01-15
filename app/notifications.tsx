@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Bell, UserPlus, Heart, Star, MessageCircle, Award, Check, CheckCheck, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -141,6 +142,9 @@ export default function NotificationsScreen() {
     if (!notification.read) {
       markAsRead(notification.id);
     }
+
+    // Track notification click
+    Analytics.trackNotificationClick(notification.type, notification.id, user?.id);
 
     // Navigate based on type
     switch (notification.type) {

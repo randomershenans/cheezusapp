@@ -75,12 +75,26 @@ export interface PersonalizedFeedResponse {
 export type FeedItem = FeedCheeseItem | FeedArticle | FeedSponsored;
 
 /**
- * Get personalized feed for a user
+ * Shuffle array using Fisher-Yates algorithm for variety
+ */
+const shuffleArray = <T>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
+/**
+ * Get personalized feed for a user with pagination support
  */
 export const getPersonalizedFeed = async (
   userId?: string,
   limit: number = 20,
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
+  offset: number = 0,
+  shuffle: boolean = true
 ): Promise<PersonalizedFeedResponse> => {
   try {
     const { data, error } = await supabase.rpc('get_personalized_feed', {
@@ -91,20 +105,27 @@ export const getPersonalizedFeed = async (
 
     if (error) throw error;
 
-    // Fetch following activity separately
+    // Fetch following activity separately (only on first load)
     let followingItems: FeedCheeseItem[] = [];
-    if (userId) {
+    if (userId && offset === 0) {
       followingItems = await getFollowingActivity(userId);
     }
 
+    // Shuffle results for variety if requested
+    const recommendations = shuffle ? shuffleArray(data?.recommendations || []) : (data?.recommendations || []);
+    const trending = shuffle ? shuffleArray(data?.trending || []) : (data?.trending || []);
+    const discovery = shuffle ? shuffleArray(data?.discovery || []) : (data?.discovery || []);
+    const awards = shuffle ? shuffleArray(data?.awards || []) : (data?.awards || []);
+    const articles = shuffle ? shuffleArray(data?.articles || []) : (data?.articles || []);
+
     return {
       profile: data?.profile || null,
-      recommendations: data?.recommendations || [],
-      trending: data?.trending || [],
-      discovery: data?.discovery || [],
-      awards: data?.awards || [],
+      recommendations,
+      trending,
+      discovery,
+      awards,
       following: followingItems,
-      articles: data?.articles || [],
+      articles,
       sponsored: data?.sponsored || [],
     };
   } catch (error) {
@@ -119,6 +140,68 @@ export const getPersonalizedFeed = async (
       articles: [],
       sponsored: [],
     };
+  }
+};
+
+/**
+ * Load more cheeses for infinite scroll - fetches random cheeses excluding already seen
+ */
+export const loadMoreCheeses = async (
+  excludeIds: string[],
+  limit: number = 15
+): Promise<FeedCheeseItem[]> => {
+  try {
+    // Fetch random cheeses that haven't been seen yet
+    const { data: cheeses, error } = await supabase
+      .from('producer_cheese_stats')
+      .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, awards_image_url, average_rating, rating_count')
+      .not('id', 'in', `(${excludeIds.length > 0 ? excludeIds.join(',') : 'null'})`)
+      .limit(limit * 3); // Fetch more to allow for shuffling variety
+
+    if (error) throw error;
+    if (!cheeses || cheeses.length === 0) return [];
+
+    // Shuffle and take the limit
+    const shuffled = shuffleArray(cheeses).slice(0, limit);
+
+    // Convert to FeedCheeseItem format with random types for variety
+    const types: Array<'discovery' | 'trending'> = ['discovery', 'trending'];
+    const reasons = [
+      'Discover something new',
+      'Popular with cheese lovers',
+      'Highly rated',
+      'You might enjoy this',
+      'A cheese lover favorite',
+      'Worth trying',
+      'Explore this one',
+    ];
+
+    return shuffled.map(cheese => {
+      const isGeneric = cheese.producer_name?.toLowerCase().includes('generic') ||
+                        cheese.producer_name?.toLowerCase().includes('unknown');
+      const displayName = isGeneric ? cheese.cheese_type_name : cheese.full_name;
+
+      return {
+        id: cheese.id,
+        type: types[Math.floor(Math.random() * types.length)],
+        cheese: {
+          id: cheese.id,
+          full_name: displayName,
+          cheese_type_name: cheese.cheese_type_name,
+          cheese_family: cheese.cheese_family,
+          producer_name: cheese.producer_name,
+          origin_country: cheese.origin_country,
+          image_url: cheese.image_url,
+          awards_image_url: cheese.awards_image_url,
+          average_rating: cheese.average_rating || 0,
+          rating_count: cheese.rating_count || 0,
+        },
+        reason: reasons[Math.floor(Math.random() * reasons.length)],
+      };
+    });
+  } catch (error) {
+    console.error('Error loading more cheeses:', error);
+    return [];
   }
 };
 

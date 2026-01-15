@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { X, User, Mail, Lock } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -34,6 +35,7 @@ export default function SignupScreen() {
     
     try {
       await signUp(email, password, name);
+      Analytics.trackSignup();
       setShowConfirmation(true);
       // Also try Alert for native
       if (Platform.OS !== 'web') {

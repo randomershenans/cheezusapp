@@ -6,6 +6,7 @@ import { ArrowLeft, Clock, Bookmark, Share2 } from 'lucide-react-native';
 import Markdown from 'react-native-markdown-display';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -37,6 +38,9 @@ export default function CheezeEntryScreen() {
 
   useEffect(() => {
     fetchEntry();
+    if (id) {
+      Analytics.trackArticleView(id as string, user?.id);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -136,11 +140,7 @@ export default function CheezeEntryScreen() {
       });
 
       if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          // Shared with activity type of result.activityType
-        } else {
-          // Shared successfully
-        }
+        Analytics.trackArticleShare(entry.id, result.activityType, user?.id);
       } else if (result.action === Share.dismissedAction) {
         // Dismissed
       }
