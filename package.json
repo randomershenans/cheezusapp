@@ -18,6 +18,7 @@
     "@react-navigation/native": "^7.1.6",
     "@supabase/supabase-js": "2.39.3",
     "base64-arraybuffer": "1.0.2",
+    "baseline-browser-mapping": "^2.9.14",
     "date-fns": "4.1.0",
     "expo": "~54.0.25",
     "expo-auth-session": "~7.0.9",

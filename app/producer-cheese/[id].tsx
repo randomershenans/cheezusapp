@@ -465,7 +465,7 @@ export default function ProducerCheeseDetailScreen() {
                       'Create a free account to save this cheese to your Cheese Box and track your tasting journey.',
                       [
                         { text: 'Not Now', style: 'cancel' },
-                        { text: 'Sign Up', onPress: () => router.push('/login') }
+                        { text: 'Sign Up', onPress: () => router.push('/auth/login') }
                       ]
                     );
                     return;
@@ -492,7 +492,7 @@ export default function ProducerCheeseDetailScreen() {
                         'Create a free account to add cheeses to your wishlist.',
                         [
                           { text: 'Not Now', style: 'cancel' },
-                          { text: 'Sign Up', onPress: () => router.push('/login') }
+                          { text: 'Sign Up', onPress: () => router.push('/auth/login') }
                         ]
                       );
                       return;

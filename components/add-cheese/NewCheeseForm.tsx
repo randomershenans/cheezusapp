@@ -628,63 +628,6 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
         />
       </View>
 
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>Your Review</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Rating */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Rating</Text>
-        
-        {/* Star Display */}
-        <View style={styles.starDisplayContainer}>
-          <View style={styles.starsDisplay}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Star
-                key={star}
-                size={32}
-                color="#FFD700"
-                fill={formData.rating >= star ? '#FFD700' : 'transparent'}
-              />
-            ))}
-          </View>
-          <Text style={styles.ratingValueText}>{formData.rating.toFixed(1)} / 5.0</Text>
-        </View>
-
-        {/* Slider */}
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={styles.ratingSlider}
-            minimumValue={0}
-            maximumValue={5}
-            step={0.1}
-            value={formData.rating}
-            onValueChange={(value) => updateField('rating', value)}
-            minimumTrackTintColor="#FFD700"
-            maximumTrackTintColor="#E0E0E0"
-            thumbTintColor="#FCD95B"
-          />
-        </View>
-      </View>
-
-      {/* Notes */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Tasting Notes</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="What did you think?"
-          placeholderTextColor="#9CA3AF"
-          value={formData.notes}
-          onChangeText={(text) => updateField('notes', text)}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-        />
-      </View>
-
       {/* Submit Button */}
       <TouchableOpacity
         style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
@@ -693,9 +636,9 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
         activeOpacity={0.8}
       >
         <View style={styles.submitButtonContent}>
-          <Star size={20} color="#1F2937" />
+          <Check size={20} color="#1F2937" />
           <Text style={styles.submitText}>
-            {isSubmitting ? 'Adding...' : 'Add to Cheese Box'}
+            {isSubmitting ? 'Adding...' : 'Add Cheese'}
           </Text>
         </View>
       </TouchableOpacity>

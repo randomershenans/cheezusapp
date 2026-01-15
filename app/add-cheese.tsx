@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView, Alert, Modal, View, Text, TouchableOpacity } from 'react-native';
-import { Box, Heart } from 'lucide-react-native';
+import { StyleSheet, SafeAreaView, Alert, Modal, View, Text, TouchableOpacity, TextInput } from 'react-native';
+import { Box, Heart, Star } from 'lucide-react-native';
+import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { uploadImageToStorage } from '@/lib/storage';
@@ -20,6 +21,9 @@ export default function AddCheeseScreen() {
   const [cheeseTypePrefill, setCheeseTypePrefill] = useState<CheeseTypePrefill | undefined>(undefined);
   const [showDestinationModal, setShowDestinationModal] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<NewCheeseFormData | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [tempRating, setTempRating] = useState(0);
+  const [tempNotes, setTempNotes] = useState('');
 
   // Handle selecting an existing cheese
   const handleSelectExisting = (cheese: CheeseSearchResult) => {
@@ -121,11 +125,32 @@ export default function AddCheeseScreen() {
   const handleDestinationChoice = async (destination: AddDestination) => {
     setShowDestinationModal(false);
     if (!pendingFormData) return;
-    await handleCreateNewCheese(pendingFormData, destination);
+    
+    if (destination === 'cheese_box') {
+      // Show rating modal for cheese box
+      setTempRating(0);
+      setTempNotes('');
+      setShowRatingModal(true);
+    } else {
+      // Wishlist - no rating needed
+      await handleCreateNewCheese(pendingFormData, destination, 0, '');
+    }
+  };
+
+  // Handle rating submission
+  const handleRatingSubmit = async () => {
+    setShowRatingModal(false);
+    if (!pendingFormData) return;
+    await handleCreateNewCheese(pendingFormData, 'cheese_box', tempRating, tempNotes);
   };
 
   // Handle creating a new cheese
-  const handleCreateNewCheese = async (formData: NewCheeseFormData, destination: AddDestination = 'cheese_box') => {
+  const handleCreateNewCheese = async (
+    formData: NewCheeseFormData, 
+    destination: AddDestination = 'cheese_box',
+    rating: number = 0,
+    notes: string = ''
+  ) => {
     setIsSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -307,8 +332,8 @@ export default function AddCheeseScreen() {
           .insert({
             user_id: user.id,
             cheese_id: producerCheeseId,
-            rating: formData.rating || null,
-            notes: formData.notes || null,
+            rating: rating || null,
+            notes: notes || null,
           });
 
         if (boxError) throw boxError;
@@ -434,6 +459,78 @@ export default function AddCheeseScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Rating Modal - shown after selecting Cheese Box */}
+      <Modal
+        visible={showRatingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRatingModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rate this cheese</Text>
+            <Text style={styles.modalSubtitle}>How did you like it?</Text>
+
+            {/* Star Display */}
+            <View style={styles.starDisplayContainer}>
+              <View style={styles.starsDisplay}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    size={32}
+                    color="#FFD700"
+                    fill={tempRating >= star ? '#FFD700' : 'transparent'}
+                  />
+                ))}
+              </View>
+              <Text style={styles.ratingValueText}>{tempRating.toFixed(1)} / 5.0</Text>
+            </View>
+
+            {/* Slider */}
+            <View style={styles.sliderContainer}>
+              <Slider
+                style={styles.ratingSlider}
+                minimumValue={0}
+                maximumValue={5}
+                step={0.1}
+                value={tempRating}
+                onValueChange={setTempRating}
+                minimumTrackTintColor="#FFD700"
+                maximumTrackTintColor="#E0E0E0"
+                thumbTintColor="#FCD95B"
+              />
+            </View>
+
+            {/* Notes */}
+            <Text style={styles.notesLabel}>Tasting Notes (optional)</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="What did you think?"
+              placeholderTextColor="#9CA3AF"
+              value={tempNotes}
+              onChangeText={setTempNotes}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={styles.submitRatingButton}
+              onPress={handleRatingSubmit}
+            >
+              <Text style={styles.submitRatingText}>Add to Cheese Box</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowRatingModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -512,5 +609,55 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.subtleText,
     fontWeight: '500',
+  },
+  starDisplayContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  starsDisplay: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 4,
+  },
+  ratingValueText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  sliderContainer: {
+    width: '100%',
+    paddingHorizontal: 8,
+    marginBottom: 16,
+  },
+  ratingSlider: {
+    width: '100%',
+    height: 40,
+  },
+  notesLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  notesInput: {
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: Colors.text,
+    minHeight: 80,
+    marginBottom: 16,
+  },
+  submitRatingButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  submitRatingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
   },
 });
