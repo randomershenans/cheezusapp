@@ -7,6 +7,7 @@ import Markdown from 'react-native-markdown-display';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Analytics } from '@/lib/analytics';
+import CheeseTileGrid, { LinkedCheese } from '@/components/CheeseTileGrid';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -35,9 +36,11 @@ export default function CheezeEntryScreen() {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [savingBookmark, setSavingBookmark] = useState(false);
+  const [linkedCheeses, setLinkedCheeses] = useState<LinkedCheese[]>([]);
 
   useEffect(() => {
     fetchEntry();
+    fetchLinkedCheeses();
     if (id) {
       Analytics.trackArticleView(id as string, user?.id);
     }
@@ -66,6 +69,29 @@ export default function CheezeEntryScreen() {
       console.error('Error fetching entry:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLinkedCheeses = async () => {
+    if (!id) return;
+    
+    try {
+      console.log('Fetching linked cheeses for content:', id);
+      const { data, error } = await supabase
+        .rpc('get_content_cheeses', { p_content_id: id, p_limit: 6 });
+      
+      console.log('Linked cheeses response:', { data, error });
+      
+      if (error) {
+        console.error('Error fetching linked cheeses:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        setLinkedCheeses(data);
+      }
+    } catch (error) {
+      console.error('Exception fetching linked cheeses:', error);
     }
   };
 
@@ -297,6 +323,15 @@ export default function CheezeEntryScreen() {
             <View>
               <Markdown style={markdownStyles}>{entry.content || ''}</Markdown>
             </View>
+          )}
+
+          {/* Linked Cheeses Section */}
+          {linkedCheeses.length > 0 && (
+            <CheeseTileGrid 
+              cheeses={linkedCheeses} 
+              title="Featured Cheeses" 
+              maxDisplay={6} 
+            />
           )}
         </View>
       </ScrollView>

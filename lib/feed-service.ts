@@ -152,11 +152,17 @@ export const loadMoreCheeses = async (
 ): Promise<FeedCheeseItem[]> => {
   try {
     // Fetch random cheeses that haven't been seen yet
-    const { data: cheeses, error } = await supabase
+    let query = supabase
       .from('producer_cheese_stats')
-      .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, awards_image_url, average_rating, rating_count')
-      .not('id', 'in', `(${excludeIds.length > 0 ? excludeIds.join(',') : 'null'})`)
-      .limit(limit * 3); // Fetch more to allow for shuffling variety
+      .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, awards_image_url, average_rating, rating_count');
+    
+    // Only add the exclusion filter if we have valid IDs to exclude
+    const validIds = excludeIds.filter(id => id && id !== 'null' && id !== 'undefined');
+    if (validIds.length > 0) {
+      query = query.not('id', 'in', `(${validIds.join(',')})`);
+    }
+    
+    const { data: cheeses, error } = await query.limit(limit * 3); // Fetch more to allow for shuffling variety
 
     if (error) throw error;
     if (!cheeses || cheeses.length === 0) return [];

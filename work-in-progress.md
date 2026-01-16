@@ -1,5 +1,64 @@
 # Cheezus App - Work In Progress
 
+## 🔗 Content-Cheese Bi-directional Linking (Jan 16, 2026)
+
+### Overview
+New feature enabling bi-directional linking between content (articles, recipes, guides) and cheeses:
+- **On articles/recipes**: Show linked cheese tiles at the bottom (max 6)
+- **On cheese detail pages**: Show related content (recipes, articles, pairings) with "See more" (max 4 tiles)
+
+### Database
+- Created `db/content-cheese-links-schema.sql` - Junction table and helper functions
+- Links support both `cheese_types` (broad) and `producer_cheeses` (specific)
+- RPC functions: `get_content_cheeses()`, `get_cheese_content()`, `count_cheese_content()`
+
+### Components Created
+- `components/CheeseTileGrid.tsx` - Reusable grid for displaying cheese tiles
+- `components/ContentTileGrid.tsx` - Reusable grid for displaying content tiles with "See more"
+
+### Pages Updated
+- `app/cheezopedia/[id].tsx` - Added "Featured Cheeses" section at bottom
+- `app/producer-cheese/[id].tsx` - Added "What to do with this cheese" section
+
+### Admin Portal (User Handling)
+- User will add cheese links when creating articles on the web portal
+
+### Status: COMPLETE ✅
+- SQL functions deployed and working
+- Cheese tiles display on articles/recipes with images
+- Content tiles display on cheese detail pages
+- Links navigate correctly to producer-cheese pages
+- "Generic" producer name hidden from display
+
+---
+
+## 🗺️ Mapbox Location-Based Discovery (Jan 16, 2026)
+
+### Overview
+Map-based discovery showing shops and producers around the user's location.
+
+### Completed ✅
+- [x] Installed `@rnmapbox/maps` with access token
+- [x] Added lat/lng columns to `producers` table (`db/add-location-columns.sql`)
+- [x] Created `find_nearby_producers()` and `find_nearby_shops()` SQL functions
+- [x] Built `components/CheeseMap.tsx` - Reusable map component with styled pins
+- [x] Created `app/shop/[id].tsx` - Shop detail page (like producer page)
+- [x] Rewrote `app/(tabs)/discover.tsx` - Map-first "around you" design
+- [x] Added `constants/Mapbox.ts` - Mapbox config and styles
+
+### Features
+- **List/Map Toggle**: Switch between list view and map view
+- **Location Services**: Request user location for nearby discovery
+- **Nearby Shops & Producers**: Shows places sorted by distance
+- **Interactive Map Pins**: Tap to see details, tap again to navigate
+- **Distance Display**: Shows "Xkm away" for each place
+
+### Pending
+- [ ] User to geocode existing addresses → lat/lng (backend task)
+- [ ] Add more shops and producers with locations
+
+---
+
 ## 🎉 Producer Pages Complete! (Dec 2, 2025)
 - ✅ Created `lib/producer-service.ts` - Full producer CRUD & stats
 - ✅ Built `app/producer/[id].tsx` - Sick producer showcase page

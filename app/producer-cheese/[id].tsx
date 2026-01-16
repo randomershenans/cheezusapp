@@ -30,6 +30,7 @@ import {
   getFlavorTagsForProducerCheese,
   ProducerCheeseWithStats,
 } from '@/lib';
+import ContentTileGrid, { LinkedContent } from '@/components/ContentTileGrid';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -52,6 +53,8 @@ export default function ProducerCheeseDetailScreen() {
   const [tempNotes, setTempNotes] = useState('');
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [relatedContent, setRelatedContent] = useState<LinkedContent[]>([]);
+  const [contentCount, setContentCount] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -105,6 +108,9 @@ export default function ProducerCheeseDetailScreen() {
         setOtherProducerCheeses(otherCheeses);
       }
 
+      // Fetch related content (articles, recipes) for this cheese
+      fetchRelatedContent(cheeseData.cheese_type_id || null);
+
       // Fetch pairings for this cheese type via cheese_types
       if (cheeseData.cheese_type_id) {
         try {
@@ -135,6 +141,48 @@ export default function ProducerCheeseDetailScreen() {
       Alert.alert('Error', 'Failed to load cheese details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelatedContent = async (cheeseTypeId: string | null) => {
+    if (!id) return;
+    
+    try {
+      console.log('Fetching related content for cheese:', id, 'cheese_type:', cheeseTypeId);
+      
+      // Fetch related content (articles, recipes, pairings)
+      const { data, error } = await supabase
+        .rpc('get_cheese_content', { 
+          p_cheese_type_id: cheeseTypeId,
+          p_producer_cheese_id: id,
+          p_limit: 4 
+        });
+      
+      console.log('Related content response:', { data, error });
+      
+      if (error) {
+        console.error('Error fetching related content:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        setRelatedContent(data);
+      }
+
+      // Get total count for "see more" functionality
+      const { data: countData, error: countError } = await supabase
+        .rpc('count_cheese_content', { 
+          p_cheese_type_id: cheeseTypeId,
+          p_producer_cheese_id: id 
+        });
+      
+      console.log('Content count response:', { countData, countError });
+      
+      if (countData) {
+        setContentCount(countData);
+      }
+    } catch (error) {
+      console.error('Exception fetching related content:', error);
     }
   };
 
@@ -786,8 +834,20 @@ export default function ProducerCheeseDetailScreen() {
             </View>
           )}
 
-        </View>
+          {/* Related Content Section */}
+          {relatedContent.length > 0 && (
+            <View style={styles.section}>
+              <ContentTileGrid 
+                content={relatedContent}
+                title="What to do with this cheese"
+                maxDisplay={4}
+                totalCount={contentCount}
+                cheeseId={id}
+              />
+            </View>
+          )}
 
+        </View>
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
