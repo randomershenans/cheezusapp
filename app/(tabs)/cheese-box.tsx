@@ -532,7 +532,7 @@ export default function CheeseBoxScreen() {
                     {entry.rating ? (
                       <View style={styles.ratingContainer}>
                         {renderStars(entry.rating)}
-                        <Text style={styles.ratingText}>({entry.rating}/5)</Text>
+                        <Text style={styles.ratingText}>({entry.rating.toFixed(1)}/5)</Text>
                       </View>
                     ) : null}
                     {entry.notes ? (

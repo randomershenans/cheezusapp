@@ -535,7 +535,7 @@ export default function AnalyticsScreen() {
                     <Text style={styles.topRatedType}>{entry.cheese.type} • {entry.cheese.origin_country}</Text>
                   </View>
                   <View style={styles.topRatedRating}>
-                    <Text style={styles.topRatedRatingText}>{entry.rating}</Text>
+                    <Text style={styles.topRatedRatingText}>{entry.rating?.toFixed(1)}</Text>
                     <Text style={styles.topRatedRatingStar}>★</Text>
                   </View>
                 </View>

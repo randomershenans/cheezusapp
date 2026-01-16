@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView, Alert, Modal, View, Text, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, SafeAreaView, Alert, Modal, View, Text, TouchableOpacity, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { Box, Heart, Star } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
@@ -25,6 +25,9 @@ export default function AddCheeseScreen() {
   const [tempRating, setTempRating] = useState(0);
   const [tempNotes, setTempNotes] = useState('');
 
+  // State for existing cheese destination choice
+  const [showExistingDestinationModal, setShowExistingDestinationModal] = useState(false);
+
   // Handle selecting an existing cheese
   const handleSelectExisting = (cheese: CheeseSearchResult) => {
     if (cheese.type === 'cheese_type') {
@@ -37,9 +40,72 @@ export default function AddCheeseScreen() {
       });
       setStep('add-new');
     } else {
-      // Producer cheese selected - go to add to box
+      // Producer cheese selected - show destination choice
       setSelectedCheese(cheese);
+      setShowExistingDestinationModal(true);
+    }
+  };
+
+  // Handle destination choice for existing cheese
+  const handleExistingDestinationChoice = async (destination: AddDestination) => {
+    setShowExistingDestinationModal(false);
+    
+    if (destination === 'cheese_box') {
+      // Go to add-existing step for rating/notes
       setStep('add-existing');
+    } else {
+      // Add directly to wishlist
+      if (!selectedCheese) return;
+      
+      setIsSubmitting(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        // Check if already in wishlist
+        const { data: existing } = await supabase
+          .from('wishlist')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('cheese_id', selectedCheese.id)
+          .single();
+
+        if (existing) {
+          Alert.alert('Already saved', 'This cheese is already in your wishlist');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Add to wishlist
+        const { error } = await supabase
+          .from('wishlist')
+          .insert({
+            user_id: user.id,
+            cheese_id: selectedCheese.id,
+          });
+
+        if (error) throw error;
+
+        Alert.alert(
+          'Added to Wishlist! ❤️',
+          `${selectedCheese.name} is now on your wishlist`,
+          [
+            {
+              text: 'View Cheese',
+              onPress: () => router.replace(`/producer-cheese/${selectedCheese.id}`),
+            },
+            {
+              text: 'Done',
+              onPress: () => router.back(),
+            },
+          ]
+        );
+      } catch (error) {
+        console.error('Error adding to wishlist:', error);
+        Alert.alert('Error', 'Failed to add to wishlist. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -221,13 +287,13 @@ export default function AddCheeseScreen() {
         cheeseTypeId = newCheeseType.id;
       }
 
-      // 2. Handle producer - check if exists in producers table, otherwise create
+      // 2. Handle producer - use existing if selected, otherwise check/create
       const producerName = formData.producerName?.trim() || 'Generic';
       const productName = formData.cheeseName.trim();
-      let producerId: string | null = null;
+      let producerId: string | null = formData.producerId || null;
 
-      if (producerName !== 'Generic') {
-        // Check if producer exists
+      if (producerName !== 'Generic' && !producerId) {
+        // No producer ID provided - check if exists by name or create new
         const { data: existingProducer } = await supabase
           .from('producers')
           .select('id')
@@ -412,7 +478,7 @@ export default function AddCheeseScreen() {
         />
       )}
 
-      {/* Destination Choice Modal */}
+      {/* Destination Choice Modal - for new cheeses */}
       <Modal
         visible={showDestinationModal}
         transparent
@@ -460,6 +526,56 @@ export default function AddCheeseScreen() {
         </View>
       </Modal>
 
+      {/* Destination Choice Modal - for existing cheeses from search */}
+      <Modal
+        visible={showExistingDestinationModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExistingDestinationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Where would you like to add this?</Text>
+            <Text style={styles.modalSubtitle}>
+              {selectedCheese?.name ? `"${selectedCheese.name}"` : 'Have you tried this cheese?'}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.destinationButton}
+              onPress={() => handleExistingDestinationChoice('cheese_box')}
+            >
+              <View style={styles.destinationIconBox}>
+                <Box size={28} color="#FFFFFF" />
+              </View>
+              <View style={styles.destinationTextContainer}>
+                <Text style={styles.destinationTitle}>Add to Cheese Box</Text>
+                <Text style={styles.destinationDescription}>I've tried this cheese</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.destinationButton}
+              onPress={() => handleExistingDestinationChoice('wishlist')}
+            >
+              <View style={[styles.destinationIconBox, styles.wishlistIconBox]}>
+                <Heart size={28} color="#FFFFFF" />
+              </View>
+              <View style={styles.destinationTextContainer}>
+                <Text style={styles.destinationTitle}>Add to Wishlist</Text>
+                <Text style={styles.destinationDescription}>I want to try this later</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowExistingDestinationModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Rating Modal - shown after selecting Cheese Box */}
       <Modal
         visible={showRatingModal}
@@ -467,69 +583,78 @@ export default function AddCheeseScreen() {
         animationType="fade"
         onRequestClose={() => setShowRatingModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Rate this cheese</Text>
-            <Text style={styles.modalSubtitle}>How did you like it?</Text>
+        <KeyboardAvoidingView 
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView 
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Rate this cheese</Text>
+              <Text style={styles.modalSubtitle}>How did you like it?</Text>
 
-            {/* Star Display */}
-            <View style={styles.starDisplayContainer}>
-              <View style={styles.starsDisplay}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    size={32}
-                    color="#FFD700"
-                    fill={tempRating >= star ? '#FFD700' : 'transparent'}
-                  />
-                ))}
+              {/* Star Display */}
+              <View style={styles.starDisplayContainer}>
+                <View style={styles.starsDisplay}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      size={32}
+                      color="#FFD700"
+                      fill={tempRating >= star ? '#FFD700' : 'transparent'}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.ratingValueText}>{tempRating.toFixed(1)} / 5.0</Text>
               </View>
-              <Text style={styles.ratingValueText}>{tempRating.toFixed(1)} / 5.0</Text>
-            </View>
 
-            {/* Slider */}
-            <View style={styles.sliderContainer}>
-              <Slider
-                style={styles.ratingSlider}
-                minimumValue={0}
-                maximumValue={5}
-                step={0.1}
-                value={tempRating}
-                onValueChange={setTempRating}
-                minimumTrackTintColor="#FFD700"
-                maximumTrackTintColor="#E0E0E0"
-                thumbTintColor="#FCD95B"
+              {/* Slider */}
+              <View style={styles.sliderContainer}>
+                <Slider
+                  style={styles.ratingSlider}
+                  minimumValue={0}
+                  maximumValue={5}
+                  step={0.1}
+                  value={tempRating}
+                  onValueChange={setTempRating}
+                  minimumTrackTintColor="#FFD700"
+                  maximumTrackTintColor="#E0E0E0"
+                  thumbTintColor="#FCD95B"
+                />
+              </View>
+
+              {/* Notes */}
+              <Text style={styles.notesLabel}>Tasting Notes (optional)</Text>
+              <TextInput
+                style={styles.notesInput}
+                placeholder="What did you think?"
+                placeholderTextColor="#9CA3AF"
+                value={tempNotes}
+                onChangeText={setTempNotes}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
               />
+
+              <TouchableOpacity
+                style={styles.submitRatingButton}
+                onPress={handleRatingSubmit}
+              >
+                <Text style={styles.submitRatingText}>Add to Cheese Box</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowRatingModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
-
-            {/* Notes */}
-            <Text style={styles.notesLabel}>Tasting Notes (optional)</Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="What did you think?"
-              placeholderTextColor="#9CA3AF"
-              value={tempNotes}
-              onChangeText={setTempNotes}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-
-            <TouchableOpacity
-              style={styles.submitRatingButton}
-              onPress={handleRatingSubmit}
-            >
-              <Text style={styles.submitRatingText}>Add to Cheese Box</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowRatingModal(false)}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -543,6 +668,9 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
