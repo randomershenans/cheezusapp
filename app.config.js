@@ -34,6 +34,7 @@ export default {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FCD95B"
       },
+      versionCode: 12,
       package: "com.cheezus.app",
       intentFilters: [
         {
