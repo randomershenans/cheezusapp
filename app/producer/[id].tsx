@@ -302,7 +302,7 @@ export default function ProducerDetailScreen() {
   const hasShowcase = sections.length > 0 || showcase?.hero_video_url || showcase?.tagline;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar style="light" />
 
       <ScrollView
@@ -521,7 +521,7 @@ export default function ProducerDetailScreen() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

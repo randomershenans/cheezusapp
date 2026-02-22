@@ -160,20 +160,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
-    backgroundColor: 'transparent',
-    // Simulate gradient with semi-transparent overlay
-    ...Platform.select({
-      ios: {
-        backgroundColor: 'rgba(0,0,0,0.15)',
-      },
-      android: {
-        backgroundColor: 'rgba(0,0,0,0.15)',
-      },
-      web: {
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 100%)',
-      },
-    }),
+    height: 140,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   gradientBottom: {
     position: 'absolute',
@@ -185,7 +173,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 8 : Layout.spacing.m,
+    top: Platform.OS === 'ios' ? 54 : Layout.spacing.m,
     left: Layout.spacing.m,
     right: Layout.spacing.m,
     flexDirection: 'row',

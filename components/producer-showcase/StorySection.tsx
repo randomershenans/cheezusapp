@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Image,
   Dimensions,
-  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Colors from '@/constants/Colors';
@@ -13,7 +13,8 @@ import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SECTION_HEIGHT = 400;
+const MIN_MEDIA_HEIGHT = 420;
+const TEXT_COLLAPSE_LINES = 5;
 
 interface StorySectionProps {
   title?: string;
@@ -34,8 +35,10 @@ export default function StorySection({
   backgroundColor,
   isVisible,
 }: StorySectionProps) {
+  const [textExpanded, setTextExpanded] = useState(false);
   const hasMedia = !!mediaUrl;
   const isVideo = mediaType === 'video' && mediaUrl;
+  const isLongText = bodyText && bodyText.length > 200;
 
   const player = useVideoPlayer(isVideo ? mediaUrl : null, (p) => {
     p.loop = true;
@@ -69,7 +72,24 @@ export default function StorySection({
         <View style={styles.mediaContent}>
           {subtitle && <Text style={styles.mediaSuperTitle}>{subtitle}</Text>}
           {title && <Text style={styles.mediaTitle}>{title}</Text>}
-          {bodyText && <Text style={styles.mediaBody}>{bodyText}</Text>}
+          {bodyText && (
+            <Text
+              style={styles.mediaBody}
+              numberOfLines={textExpanded ? undefined : 4}
+            >
+              {bodyText}
+            </Text>
+          )}
+          {isLongText && (
+            <TouchableOpacity
+              onPress={() => setTextExpanded(!textExpanded)}
+              style={styles.viewMoreBtn}
+            >
+              <Text style={styles.viewMoreMedia}>
+                {textExpanded ? 'View Less' : 'View More'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -80,33 +100,47 @@ export default function StorySection({
     <View style={[styles.textContainer, backgroundColor ? { backgroundColor } : null]}>
       {subtitle && <Text style={styles.textSuperTitle}>{subtitle}</Text>}
       {title && <Text style={styles.textTitle}>{title}</Text>}
-      {bodyText && <Text style={styles.textBody}>{bodyText}</Text>}
+      {bodyText && (
+        <Text
+          style={styles.textBody}
+          numberOfLines={textExpanded ? undefined : TEXT_COLLAPSE_LINES}
+        >
+          {bodyText}
+        </Text>
+      )}
+      {isLongText && (
+        <TouchableOpacity
+          onPress={() => setTextExpanded(!textExpanded)}
+          style={styles.viewMoreBtn}
+        >
+          <Text style={styles.viewMoreText}>
+            {textExpanded ? 'View Less' : 'View More'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Full-bleed media variant
+  // Full-bleed media variant — auto-height, minimum ensures image shows
   mediaContainer: {
-    height: SECTION_HEIGHT,
+    minHeight: MIN_MEDIA_HEIGHT,
     position: 'relative',
     overflow: 'hidden',
   },
   media: {
     ...StyleSheet.absoluteFillObject,
     width: SCREEN_WIDTH,
-    height: SECTION_HEIGHT,
+    height: '100%',
   },
   mediaOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   mediaContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: Layout.spacing.l,
+    paddingTop: Layout.spacing.xl,
     paddingBottom: Layout.spacing.xl,
   },
   mediaSuperTitle: {
@@ -135,6 +169,14 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  viewMoreBtn: {
+    marginTop: Layout.spacing.s,
+  },
+  viewMoreMedia: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.primary,
+  },
 
   // Text-only variant
   textContainer: {
@@ -161,5 +203,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     color: Colors.textSecondary,
     lineHeight: Typography.sizes.base * 1.7,
+  },
+  viewMoreText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.primaryDark,
   },
 });
