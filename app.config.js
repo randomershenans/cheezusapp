@@ -4,7 +4,7 @@ export default {
     slug: "cheezus",
     owner: "cheezus-group",
     scheme: "cheezus",
-    version: "1.0.1",
+    version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "light",
