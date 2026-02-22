@@ -106,7 +106,8 @@ export default {
           "cameraPermission": "Cheezus uses your camera to take photos of cheese for your cheese box entries and to scan cheese labels for automatic identification. For example, you can photograph a cheese wheel to add it to your collection or scan a label to auto-fill cheese details.",
           "microphonePermission": "Cheezus may use the microphone when recording video of cheese tastings to share with the community."
         }
-      ]
+      ],
+      "expo-video"
     ],
     extra: {
       router: {

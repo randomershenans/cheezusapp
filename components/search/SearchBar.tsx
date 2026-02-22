@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, TextInput } from 'react-native';
 import { Search, Filter, X } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
@@ -9,10 +9,16 @@ import { SearchBarProps } from './types';
 
 export default function SearchBar({ 
   placeholder = 'Search cheeses, articles, pairings...', 
+  initialValue = '',
   onSearch, 
   onFilter 
 }: SearchBarProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialValue);
+
+  // Sync query when initialValue changes (e.g. navigating from different flavor tags)
+  useEffect(() => {
+    setQuery(initialValue);
+  }, [initialValue]);
 
   // Handle search input change
   const handleSearch = (searchQuery: string) => {

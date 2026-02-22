@@ -602,9 +602,13 @@ export default function CheeseDetailScreen() {
               <Text style={styles.sectionTitle}>Flavor profile</Text>
               <View style={styles.tagsContainer}>
                 {cheese.flavors.map((flavor, index) => (
-                  <View key={index} style={styles.flavorTag}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.flavorTag}
+                    onPress={() => router.push(`/(tabs)/discover?search=${encodeURIComponent(flavor.flavor.trim())}`)}
+                  >
                     <Text style={styles.flavorTagText}>{flavor.flavor}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>

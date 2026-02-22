@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
   Platform,
   Dimensions,
   Linking,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  LayoutChangeEvent,
+  Share,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  ArrowLeft,
   MapPin,
   Globe,
   Phone,
@@ -23,14 +26,18 @@ import {
   Star,
   ChevronRight,
   Award,
-  Factory,
+  Navigation,
+  ExternalLink,
 } from 'lucide-react-native';
 
 import {
   getProducerById,
   getProducerCheeses,
+  getProducerSections,
+  getProducerShowcaseData,
   ProducerWithStats,
   ProducerCheeseSummary,
+  ProducerSection,
 } from '@/lib';
 import { Analytics } from '@/lib/analytics';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,8 +45,35 @@ import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
-const { width: screenWidth } = Dimensions.get('window');
+import {
+  VideoHero,
+  StorySection,
+  ProcessSection,
+  TeamSection,
+  GallerySection,
+  AwardsSection,
+  QuoteSection,
+} from '@/components/producer-showcase';
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+/* ── Types ── */
+interface ShowcaseData {
+  hero_video_url?: string;
+  logo_url?: string;
+  tagline?: string;
+  founded_year?: number;
+  latitude?: number;
+  longitude?: number;
+  is_verified?: boolean;
+}
+
+interface SectionLayout {
+  y: number;
+  height: number;
+}
+
+/* ── Component ── */
 export default function ProducerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,8 +81,15 @@ export default function ProducerDetailScreen() {
 
   const [producer, setProducer] = useState<ProducerWithStats | null>(null);
   const [cheeses, setCheeses] = useState<ProducerCheeseSummary[]>([]);
+  const [sections, setSections] = useState<ProducerSection[]>([]);
+  const [showcase, setShowcase] = useState<ShowcaseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  // Scroll-based visibility tracking for video auto-play
+  const [scrollY, setScrollY] = useState(0);
+  const sectionLayouts = useRef<Record<string, SectionLayout>>({});
+  const heroLayout = useRef<SectionLayout>({ y: 0, height: 0 });
 
   useEffect(() => {
     if (id) {
@@ -60,22 +101,49 @@ export default function ProducerDetailScreen() {
   const fetchProducerDetails = async () => {
     try {
       setLoading(true);
-
-      const [producerData, cheesesData] = await Promise.all([
+      const [producerData, cheesesData, sectionsData, showcaseData] = await Promise.all([
         getProducerById(id as string),
         getProducerCheeses(id as string),
+        getProducerSections(id as string),
+        getProducerShowcaseData(id as string),
       ]);
 
       if (!producerData) throw new Error('Producer not found');
 
       setProducer(producerData);
       setCheeses(cheesesData);
+      setSections(sectionsData);
+      setShowcase(showcaseData);
     } catch (error) {
       console.error('Error fetching producer:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  /* ── Helpers ── */
+  const isSectionVisible = useCallback(
+    (key: string) => {
+      const layout = key === 'hero' ? heroLayout.current : sectionLayouts.current[key];
+      if (!layout) return false;
+      const viewTop = scrollY;
+      const viewBottom = scrollY + screenHeight;
+      return layout.y < viewBottom && layout.y + layout.height > viewTop;
+    },
+    [scrollY]
+  );
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setScrollY(e.nativeEvent.contentOffset.y);
+  }, []);
+
+  const onHeroLayout = useCallback((e: LayoutChangeEvent) => {
+    heroLayout.current = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height };
+  }, []);
+
+  const onSectionLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
+    sectionLayouts.current[key] = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height };
+  }, []);
 
   const handleOpenWebsite = () => {
     if (producer?.website) {
@@ -87,28 +155,123 @@ export default function ProducerDetailScreen() {
   };
 
   const handleCall = () => {
-    if (producer?.phone) {
-      Linking.openURL(`tel:${producer.phone}`);
-    }
+    if (producer?.phone) Linking.openURL(`tel:${producer.phone}`);
   };
 
   const handleEmail = () => {
-    if (producer?.email) {
-      Linking.openURL(`mailto:${producer.email}`);
+    if (producer?.email) Linking.openURL(`mailto:${producer.email}`);
+  };
+
+  const handleShowOnMap = () => {
+    if (!showcase?.latitude || !showcase?.longitude) return;
+    const label = encodeURIComponent(producer?.name || 'Producer');
+    const lat = showcase.latitude;
+    const lng = showcase.longitude;
+    const url = Platform.select({
+      ios: `maps:0,0?q=${label}@${lat},${lng}`,
+      android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+      default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+    });
+    if (url) Linking.openURL(url);
+  };
+
+  const handleShare = async () => {
+    if (!producer) return;
+    try {
+      await Share.share({
+        message: `Check out ${producer.name} on Cheezus! 🧀`,
+        title: producer.name,
+      });
+    } catch (e) {
+      // user cancelled
     }
   };
 
-  const renderStars = (rating: number, size: number = 14) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <Star
-        key={index}
-        size={size}
-        color="#FFD700"
-        fill={index < Math.round(rating) ? '#FFD700' : 'none'}
-      />
-    ));
+  /* ── Render section by type ── */
+  const renderSection = (section: ProducerSection, index: number) => {
+    const key = `section-${section.id}`;
+    const visible = isSectionVisible(key);
+
+    switch (section.section_type) {
+      case 'story':
+        return (
+          <View key={key} onLayout={onSectionLayout(key)}>
+            <StorySection
+              title={section.title || undefined}
+              subtitle={section.subtitle || undefined}
+              bodyText={section.body_text || undefined}
+              mediaUrl={section.media_url || undefined}
+              mediaType={section.media_type || undefined}
+              backgroundColor={section.background_color || undefined}
+              isVisible={visible}
+            />
+          </View>
+        );
+
+      case 'process':
+        return (
+          <View key={key} onLayout={onSectionLayout(key)}>
+            <ProcessSection
+              title={section.title || undefined}
+              subtitle={section.subtitle || undefined}
+              steps={section.metadata?.steps || []}
+            />
+          </View>
+        );
+
+      case 'team':
+        return (
+          <View key={key} onLayout={onSectionLayout(key)}>
+            <TeamSection
+              title={section.title || undefined}
+              subtitle={section.subtitle || undefined}
+              members={section.metadata?.members || []}
+            />
+          </View>
+        );
+
+      case 'gallery':
+        return (
+          <View key={key} onLayout={onSectionLayout(key)}>
+            <GallerySection
+              title={section.title || undefined}
+              subtitle={section.subtitle || undefined}
+              images={section.metadata?.images || []}
+            />
+          </View>
+        );
+
+      case 'awards':
+        return (
+          <View key={key} onLayout={onSectionLayout(key)}>
+            <AwardsSection
+              title={section.title || undefined}
+              subtitle={section.subtitle || undefined}
+              awards={section.metadata?.awards || []}
+            />
+          </View>
+        );
+
+      case 'quote':
+        return (
+          <View key={key} onLayout={onSectionLayout(key)}>
+            <QuoteSection
+              bodyText={section.body_text || undefined}
+              mediaUrl={section.media_url || undefined}
+              mediaType={section.media_type || undefined}
+              backgroundColor={section.background_color || undefined}
+              author={section.metadata?.author}
+              role={section.metadata?.role}
+            />
+          </View>
+        );
+
+      default:
+        return null;
+    }
   };
 
+  /* ── Loading / Error states ── */
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -136,51 +299,37 @@ export default function ProducerDetailScreen() {
     );
   }
 
+  const hasShowcase = sections.length > 0 || showcase?.hero_video_url || showcase?.tagline;
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
-        <View style={styles.heroContainer}>
-          <Image
-            source={{
-              uri: producer.image_url || 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?q=80&w=800',
-            }}
-            style={styles.heroImage}
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {/* ── Video Hero ── */}
+        <View onLayout={onHeroLayout}>
+          <VideoHero
+            name={producer.name}
+            country={producer.country}
+            region={producer.region}
+            tagline={showcase?.tagline}
+            foundedYear={showcase?.founded_year}
+            imageUrl={producer.image_url}
+            videoUrl={showcase?.hero_video_url}
+            logoUrl={showcase?.logo_url}
+            isVerified={showcase?.is_verified}
+            isVisible={isSectionVisible('hero')}
+            onBack={() => router.canGoBack() ? router.back() : router.push('/(tabs)')}
+            onShare={handleShare}
           />
-          <View style={styles.heroOverlay} />
-
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)')}
-          >
-            <ArrowLeft size={24} color={Colors.background} />
-          </TouchableOpacity>
-
-          {/* Hero Content */}
-          <View style={styles.heroContent}>
-            <View style={styles.producerBadge}>
-              <Factory size={14} color={Colors.background} />
-              <Text style={styles.producerBadgeText}>Producer</Text>
-            </View>
-
-            <Text style={styles.heroTitle}>{producer.name}</Text>
-
-            {(producer.country || producer.region) && (
-              <View style={styles.locationRow}>
-                <MapPin size={18} color="rgba(255, 255, 255, 0.9)" />
-                <Text style={styles.locationText}>
-                  {producer.region && `${producer.region}, `}
-                  {producer.country}
-                </Text>
-              </View>
-            )}
-          </View>
         </View>
 
-        {/* Stats Bar */}
+        {/* ── Stats Bar ── */}
         <View style={styles.statsBar}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{producer.cheese_count}</Text>
@@ -203,102 +352,40 @@ export default function ProducerDetailScreen() {
           </View>
         </View>
 
-        {/* Content */}
-        <View style={styles.contentContainer}>
-          {/* About Section */}
-          {producer.description && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>About</Text>
-              <Text
-                style={styles.description}
-                numberOfLines={descriptionExpanded ? undefined : 4}
+        {/* ── About (always shown) ── */}
+        {producer.description && (
+          <View style={styles.aboutSection}>
+            <Text style={styles.sectionTitle}>About</Text>
+            <Text
+              style={styles.description}
+              numberOfLines={descriptionExpanded ? undefined : 4}
+            >
+              {producer.description}
+            </Text>
+            {producer.description.length > 200 && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                onPress={() => setDescriptionExpanded(!descriptionExpanded)}
               >
-                {producer.description}
-              </Text>
-              {producer.description.length > 200 && (
-                <TouchableOpacity
-                  style={styles.viewMoreButton}
-                  onPress={() => setDescriptionExpanded(!descriptionExpanded)}
-                >
-                  <Text style={styles.viewMoreText}>
-                    {descriptionExpanded ? 'View Less' : 'View More'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+                <Text style={styles.viewMoreText}>
+                  {descriptionExpanded ? 'View Less' : 'View More'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
-          {/* Contact Section */}
-          {(producer.website || producer.phone || producer.email || producer.address) && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Contact</Text>
-              <View style={styles.contactGrid}>
-                {producer.website && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleOpenWebsite}>
-                    <View style={styles.contactIconContainer}>
-                      <Globe size={20} color={Colors.primary} />
-                    </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Website</Text>
-                      <Text style={styles.contactValue} numberOfLines={1}>
-                        {producer.website.replace(/^https?:\/\//, '')}
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
-                  </TouchableOpacity>
-                )}
+        {/* ── Dynamic Showcase Sections ── */}
+        {sections.map((section, index) => renderSection(section, index))}
 
-                {producer.phone && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleCall}>
-                    <View style={styles.contactIconContainer}>
-                      <Phone size={20} color={Colors.primary} />
-                    </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Phone</Text>
-                      <Text style={styles.contactValue}>{producer.phone}</Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
-                  </TouchableOpacity>
-                )}
-
-                {producer.email && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
-                    <View style={styles.contactIconContainer}>
-                      <Mail size={20} color={Colors.primary} />
-                    </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Email</Text>
-                      <Text style={styles.contactValue} numberOfLines={1}>
-                        {producer.email}
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
-                  </TouchableOpacity>
-                )}
-
-                {producer.address && (
-                  <View style={styles.contactCard}>
-                    <View style={styles.contactIconContainer}>
-                      <MapPin size={20} color={Colors.primary} />
-                    </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Address</Text>
-                      <Text style={styles.contactValue}>{producer.address}</Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Cheeses Section */}
-          {cheeses.length > 0 && (
+        {/* ── Their Cheeses ── */}
+        <View style={styles.contentContainer}>
+          {cheeses.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Their Cheeses</Text>
                 <Text style={styles.cheeseCount}>{cheeses.length} cheeses</Text>
               </View>
-
               <View style={styles.cheesesGrid}>
                 {cheeses.map((cheese) => (
                   <TouchableOpacity
@@ -348,24 +435,89 @@ export default function ProducerDetailScreen() {
                 ))}
               </View>
             </View>
-          )}
-
-          {/* Empty State for Cheeses */}
-          {cheeses.length === 0 && (
+          ) : (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Their Cheeses</Text>
               <View style={styles.emptyState}>
                 <Award size={48} color={Colors.subtleText} />
-                <Text style={styles.emptyStateText}>
-                  No cheeses linked yet
-                </Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Check back soon for their collection
-                </Text>
+                <Text style={styles.emptyStateText}>No cheeses linked yet</Text>
+                <Text style={styles.emptyStateSubtext}>Check back soon for their collection</Text>
               </View>
             </View>
           )}
         </View>
+
+        {/* ── Map / Location ── */}
+        {showcase?.latitude && showcase?.longitude && (
+          <View style={styles.mapSection}>
+            <Text style={styles.mapTitle}>Find Us</Text>
+            <TouchableOpacity style={styles.mapButton} onPress={handleShowOnMap}>
+              <Navigation size={20} color={Colors.background} />
+              <Text style={styles.mapButtonText}>Show on Map</Text>
+            </TouchableOpacity>
+            {producer.address && (
+              <Text style={styles.mapAddress}>{producer.address}</Text>
+            )}
+          </View>
+        )}
+
+        {/* ── Contact ── */}
+        {(producer.website || producer.phone || producer.email || producer.address) && (
+          <View style={styles.contactSection}>
+            <Text style={styles.sectionTitle}>Contact</Text>
+            <View style={styles.contactGrid}>
+              {producer.website && (
+                <TouchableOpacity style={styles.contactCard} onPress={handleOpenWebsite}>
+                  <View style={styles.contactIconContainer}>
+                    <Globe size={20} color={Colors.primary} />
+                  </View>
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactLabel}>Website</Text>
+                    <Text style={styles.contactValue} numberOfLines={1}>
+                      {producer.website.replace(/^https?:\/\//, '')}
+                    </Text>
+                  </View>
+                  <ExternalLink size={16} color={Colors.subtleText} />
+                </TouchableOpacity>
+              )}
+              {producer.phone && (
+                <TouchableOpacity style={styles.contactCard} onPress={handleCall}>
+                  <View style={styles.contactIconContainer}>
+                    <Phone size={20} color={Colors.primary} />
+                  </View>
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactLabel}>Phone</Text>
+                    <Text style={styles.contactValue}>{producer.phone}</Text>
+                  </View>
+                  <ChevronRight size={16} color={Colors.subtleText} />
+                </TouchableOpacity>
+              )}
+              {producer.email && (
+                <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
+                  <View style={styles.contactIconContainer}>
+                    <Mail size={20} color={Colors.primary} />
+                  </View>
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactLabel}>Email</Text>
+                    <Text style={styles.contactValue} numberOfLines={1}>{producer.email}</Text>
+                  </View>
+                  <ChevronRight size={16} color={Colors.subtleText} />
+                </TouchableOpacity>
+              )}
+              {producer.address && !showcase?.latitude && (
+                <View style={styles.contactCard}>
+                  <View style={styles.contactIconContainer}>
+                    <MapPin size={20} color={Colors.primary} />
+                  </View>
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactLabel}>Address</Text>
+                    <Text style={styles.contactValue}>{producer.address}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
@@ -373,6 +525,7 @@ export default function ProducerDetailScreen() {
   );
 }
 
+/* ── Styles ── */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -411,83 +564,9 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.medium,
   },
   backButtonErrorText: {
-    color: Colors.background,
+    color: Colors.text,
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
-  },
-
-  // Hero Section
-  heroContainer: {
-    height: 320,
-    position: 'relative',
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-    ...Platform.select({
-      web: { objectFit: 'cover' },
-    }),
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  backButton: {
-    position: 'absolute',
-    top: Layout.spacing.m,
-    left: Layout.spacing.m,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  heroContent: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
-    padding: Layout.spacing.l,
-  },
-  producerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Layout.spacing.m,
-    paddingVertical: Layout.spacing.s,
-    borderRadius: Layout.borderRadius.large,
-    alignSelf: 'flex-start',
-    marginBottom: Layout.spacing.m,
-  },
-  producerBadgeText: {
-    color: Colors.background,
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.bodySemiBold,
-  },
-  heroTitle: {
-    fontSize: Typography.sizes['4xl'],
-    fontFamily: Typography.fonts.heading,
-    color: Colors.background,
-    marginBottom: Layout.spacing.s,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Layout.spacing.xs,
-  },
-  locationText: {
-    color: 'rgba(255, 255, 255, 0.95)',
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodyMedium,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 
   // Stats Bar
@@ -498,6 +577,7 @@ const styles = StyleSheet.create({
     marginTop: -30,
     borderRadius: Layout.borderRadius.large,
     padding: Layout.spacing.m,
+    zIndex: 5,
     ...Layout.shadow.medium,
   },
   statItem: {
@@ -528,10 +608,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
 
-  // Content
+  // About
+  aboutSection: {
+    padding: Layout.spacing.l,
+    paddingTop: Layout.spacing.xl,
+  },
+
+  // Sections
   contentContainer: {
     padding: Layout.spacing.m,
-    paddingTop: Layout.spacing.l,
   },
   section: {
     marginBottom: Layout.spacing.l,
@@ -566,10 +651,49 @@ const styles = StyleSheet.create({
   viewMoreText: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.primary,
+    color: Colors.primaryDark,
   },
 
-  // Contact Section
+  // Map
+  mapSection: {
+    padding: Layout.spacing.l,
+    paddingVertical: Layout.spacing.xl,
+    backgroundColor: Colors.backgroundSecondary,
+    alignItems: 'center',
+  },
+  mapTitle: {
+    fontSize: Typography.sizes.xl,
+    fontFamily: Typography.fonts.headingMedium,
+    color: Colors.text,
+    marginBottom: Layout.spacing.l,
+  },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+    backgroundColor: Colors.primaryDark,
+    paddingHorizontal: Layout.spacing.xl,
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.large,
+    ...Layout.shadow.small,
+  },
+  mapButtonText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.background,
+  },
+  mapAddress: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: Layout.spacing.m,
+    textAlign: 'center',
+  },
+
+  // Contact
+  contactSection: {
+    padding: Layout.spacing.l,
+  },
   contactGrid: {
     gap: Layout.spacing.s,
   },

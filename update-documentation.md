@@ -1,5 +1,89 @@
 # Cheezus App - Update Documentation
 
+## Immersive Producer Showcase Pages (February 22, 2026)
+
+### Transformed producer pages into cinematic, CMS-driven showcase experiences
+- **Goal**: Make producer pages worthy of being the official app of the World Cheese Awards — a beautiful journey through a producer's story, process, people, and cheeses.
+
+### Database Changes
+1. **New `producer_sections` table** — Stores dynamic, ordered content sections per producer:
+   - Section types: `story`, `process`, `team`, `gallery`, `awards`, `quote`
+   - Each has: title, subtitle, body_text, media_url (image/video), background_color, metadata (JSONB)
+   - RLS: public read for visible sections
+2. **New columns on `producers` table**:
+   - `hero_video_url` — Full-screen background video for hero
+   - `logo_url` — Producer logo
+   - `tagline` — Short producer tagline
+   - `founded_year` — Year established
+   - `latitude`, `longitude` — For map integration
+   - `is_verified` — Verified producer badge
+
+### New Components (`components/producer-showcase/`)
+- **`VideoHero`** — Full-screen video/image hero with producer name, tagline, location, verified badge, back/share buttons. Video auto-plays when visible, pauses when scrolled away.
+- **`StorySection`** — Full-bleed background image/video with overlaid text, or text-only variant. For "Our History", "Our Philosophy", etc.
+- **`ProcessSection`** — Horizontal snap-scroll cards showing step-by-step cheesemaking process with numbered steps and images.
+- **`TeamSection`** — Horizontal scroll of team member cards with photos, names, roles, and bios.
+- **`GallerySection`** — Dark-themed horizontal photo carousel with captions and fullscreen modal on tap.
+- **`AwardsSection`** — Rich-brown themed awards showcase with medal color coding (Super Gold, Gold, Silver, Bronze).
+- **`QuoteSection`** — Large italic pull-quote with optional background image, attribution line.
+
+### New Service (`lib/producer-sections-service.ts`)
+- `getProducerSections(producerId)` — Fetches all visible sections ordered by sort_order
+- `getProducerShowcaseData(producerId)` — Fetches showcase fields from producers table
+- TypeScript interfaces: `ProducerSection`, `TeamMember`, `ProcessStep`, `GalleryImage`, `AwardEntry`
+
+### Rebuilt Producer Page (`app/producer/[id].tsx`)
+- **Video Hero** replaces old static hero — supports background video with autoplay
+- **Scroll-based visibility tracking** — Videos auto-play/pause based on scroll position using `onLayout` + `onScroll`
+- **Dynamic sections** rendered based on `section_type` from database
+- **"Show on Map" button** — Opens native maps app (iOS Maps / Google Maps) with producer location
+- **Share button** — Native share sheet for producer page
+- **Backward compatible** — Pages without showcase data still render beautifully with the existing producer info
+
+### Dependencies
+- Added `expo-video` for native video playback
+- Added `expo-video` plugin to `app.config.js`
+
+### JSONB metadata format examples
+- **team**: `{ "members": [{ "name": "...", "role": "...", "image_url": "...", "bio": "..." }] }`
+- **process**: `{ "steps": [{ "step": 1, "title": "...", "description": "...", "image_url": "..." }] }`
+- **gallery**: `{ "images": [{ "url": "...", "caption": "..." }] }`
+- **awards**: `{ "awards": [{ "name": "...", "medal": "Gold", "year": "2024", "image_url": "...", "cheese_name": "..." }] }`
+- **quote**: `{ "author": "...", "role": "..." }`
+
+## Clickable Taste Profile Tags (February 22, 2026)
+
+### Made Flavor/Aroma Tags Navigate to Search Results
+- **Feature**: Clicking a taste profile tag on any cheese detail page now navigates to the Discover tab with that flavor/aroma as the search query, showing all cheeses matching that profile.
+
+### Changes Made
+1. **`components/search/SearchBar.tsx`** + **`components/search/types.ts`**:
+   - Added `initialValue` prop to SearchBarProps
+   - SearchBar now accepts and syncs with an external initial value
+   - Added `useEffect` to re-sync when `initialValue` changes (e.g. navigating between tags)
+
+2. **`app/(tabs)/discover.tsx`**:
+   - Added `search` to `useLocalSearchParams` destructuring
+   - Initializes `searchQuery` state from URL `search` param
+   - Added `useEffect` to sync searchQuery when search param changes
+   - Passes `initialValue` to SearchBar component
+   - Added `flavor` and `aroma` columns to `producer_cheese_stats` query select
+   - Added `flavor` and `aroma` to DiscoverItem metadata type
+   - Added flavor (score +9) and aroma (score +7) to fuzzy search scoring
+
+3. **`app/cheese/[id].tsx`**:
+   - Changed flavor tags from plain `<View>` to `<TouchableOpacity>`
+   - Navigates to `/(tabs)/discover?search={flavor}` on press
+
+4. **`app/producer-cheese/[id].tsx`**:
+   - Added `encodeURIComponent()` to existing flavor and aroma tag navigation URLs
+
+### User Experience
+- View a cheese detail page → see "Flavor profile" or "Taste Profile" tags
+- Tap any tag (e.g. "Nutty", "Creamy", "Earthy")
+- Taken to Discover tab with search pre-filled, showing all matching cheeses
+- Works on both `/cheese/[id]` and `/producer-cheese/[id]` pages
+
 ## Android App Links Verification Fix (January 1, 2026)
 
 ### Fixed Play Store Domain Verification Error

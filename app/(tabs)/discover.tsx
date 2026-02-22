@@ -47,6 +47,8 @@ type DiscoverItem = {
     cheese_type?: string;
     cheese_family?: string;
     producer_name?: string;
+    flavor?: string;
+    aroma?: string;
     reading_time?: number;
     average_rating?: number;
     rating_count?: number;
@@ -179,7 +181,8 @@ function fuzzyMatch(str: string, pattern: string): boolean {
 /* ────────────────────────────── component ───────────────────────────────── */
 export default function DiscoverScreen() {
   const router = useRouter();
-  const { type, region, filter } = useLocalSearchParams();
+  const { type, region, filter, search } = useLocalSearchParams();
+  const initialSearch = typeof search === 'string' ? search : '';
 
   const [items,      setItems]      = useState<DiscoverItem[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -187,7 +190,14 @@ export default function DiscoverScreen() {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
   const [allItems, setAllItems] = useState<DiscoverItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+
+  // Sync searchQuery when search param changes (e.g. navigating from flavor tag)
+  useEffect(() => {
+    if (initialSearch) {
+      setSearchQuery(initialSearch);
+    }
+  }, [initialSearch]);
 
   /* ── data fetch ── */
   useEffect(() => {
@@ -222,7 +232,7 @@ export default function DiscoverScreen() {
         // Fetch producer cheeses - if searching, get more for fuzzy matching
         let producerQuery = supabase
           .from('producer_cheese_stats')
-          .select('id, full_name, image_url, cheese_type_name, producer_name, average_rating, rating_count');
+          .select('id, full_name, image_url, cheese_type_name, producer_name, average_rating, rating_count, flavor, aroma');
         
         // Apply type filter if present
         if (type && typeof type === 'string') {
@@ -250,6 +260,8 @@ export default function DiscoverScreen() {
                 metadata: {
                   cheese_type: c.cheese_type_name,
                   producer_name: c.producer_name,
+                  flavor: c.flavor || undefined,
+                  aroma: c.aroma || undefined,
                   average_rating: c.average_rating,
                   rating_count: c.rating_count,
                 },
@@ -304,6 +316,8 @@ export default function DiscoverScreen() {
             if (i.metadata?.cheese_type && fuzzyMatch(i.metadata.cheese_type, term)) score += 8;
             if (i.metadata?.origin_country && fuzzyMatch(i.metadata.origin_country, term)) score += 3;
             if (i.metadata?.producer_name && fuzzyMatch(i.metadata.producer_name, term)) score += 4;
+            if (i.metadata?.flavor && fuzzyMatch(i.metadata.flavor, term)) score += 9;
+            if (i.metadata?.aroma && fuzzyMatch(i.metadata.aroma, term)) score += 7;
           });
           
           return { item: i, score };
@@ -513,6 +527,7 @@ export default function DiscoverScreen() {
 
       <SearchBar
         placeholder="Search everything..."
+        initialValue={initialSearch}
         onSearch={setSearchQuery}
         onFilter={() => setShowFilterPanel(true)}
       />
