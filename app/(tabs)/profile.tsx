@@ -40,10 +40,11 @@ type Profile = {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, profile: authProfile, refreshProfile } = useAuth();
   
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Use profile from AuthContext as initial value for instant display
+  const [profile, setProfile] = useState<Profile | null>(authProfile as Profile | null);
+  const [loading, setLoading] = useState(!authProfile);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
@@ -69,6 +70,14 @@ export default function ProfileScreen() {
     following: 0,
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+
+  // Sync local profile state with AuthContext profile
+  useEffect(() => {
+    if (authProfile) {
+      setProfile(prev => prev ? { ...prev, ...authProfile } : authProfile as Profile);
+      setLoading(false);
+    }
+  }, [authProfile]);
 
   useEffect(() => {
     if (!user) return;
@@ -276,6 +285,8 @@ export default function ProfileScreen() {
     if (profile) {
       setProfile({ ...profile, avatar_url: avatarUrl });
     }
+    // Also refresh AuthContext profile so avatar is available globally
+    refreshProfile();
     setShowUploadModal(false);
   };
 

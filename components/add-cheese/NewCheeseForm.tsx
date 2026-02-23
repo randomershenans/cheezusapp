@@ -10,6 +10,8 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Typography from '@/constants/Typography';
@@ -27,6 +29,7 @@ export interface NewCheeseFormData {
   // Cheese info
   cheeseName: string;
   producerName: string;
+  producerId?: string; // Link to producers table
   originCountry: string;
   cheeseType: string;
   milkTypes: string[];
@@ -38,9 +41,11 @@ export interface NewCheeseFormData {
   notes: string;
 }
 
-interface Producer {
+interface ProducerSuggestion {
+  id: string;
   name: string;
-  count: number;
+  country?: string;
+  cheese_count: number;
 }
 
 export interface CheeseTypePrefill {
@@ -83,7 +88,7 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showMilkDropdown, setShowMilkDropdown] = useState(false);
   const [producerSearch, setProducerSearch] = useState('');
-  const [producerSuggestions, setProducerSuggestions] = useState<Producer[]>([]);
+  const [producerSuggestions, setProducerSuggestions] = useState<ProducerSuggestion[]>([]);
   const [showProducerSuggestions, setShowProducerSuggestions] = useState(false);
   const [isSearchingProducers, setIsSearchingProducers] = useState(false);
   
@@ -92,7 +97,7 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  // Search for producers as user types
+  // Search for producers as user types - query the producers table
   useEffect(() => {
     const searchProducers = async () => {
       if (producerSearch.length < 2) {
@@ -102,27 +107,34 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
 
       setIsSearchingProducers(true);
       try {
-        const { data, error } = await supabase
-          .from('producer_cheeses')
-          .select('producer_name')
-          .ilike('producer_name', `%${producerSearch}%`)
-          .neq('producer_name', 'Generic')
-          .limit(20);
+        // Search the producers table directly
+        const { data: producers, error } = await supabase
+          .from('producers')
+          .select('id, name, country')
+          .ilike('name', `%${producerSearch}%`)
+          .limit(10);
 
         if (error) throw error;
 
-        // Count occurrences and dedupe
-        const counts: Record<string, number> = {};
-        (data || []).forEach(p => {
-          const name = p.producer_name;
-          counts[name] = (counts[name] || 0) + 1;
-        });
+        // Get cheese counts for each producer
+        const suggestions: ProducerSuggestion[] = await Promise.all(
+          (producers || []).map(async (p) => {
+            const { count } = await supabase
+              .from('producer_cheeses')
+              .select('id', { count: 'exact', head: true })
+              .eq('producer_id', p.id);
+            
+            return {
+              id: p.id,
+              name: p.name,
+              country: p.country,
+              cheese_count: count || 0,
+            };
+          })
+        );
 
-        const suggestions = Object.entries(counts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 5);
-
+        // Sort by cheese count descending
+        suggestions.sort((a, b) => b.cheese_count - a.cheese_count);
         setProducerSuggestions(suggestions);
       } catch (error) {
         console.error('Error searching producers:', error);
@@ -376,7 +388,16 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
         </View>
       </Modal>
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoid} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+      <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -463,22 +484,29 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
                 <>
                   {producerSuggestions.map((producer) => (
                     <TouchableOpacity
-                      key={producer.name}
+                      key={producer.id}
                       style={styles.producerSuggestionItem}
                       onPress={() => {
                         setProducerSearch(producer.name);
                         updateField('producerName', producer.name);
+                        updateField('producerId', producer.id);
                         setShowProducerSuggestions(false);
                       }}
                     >
-                      <Text style={styles.producerSuggestionText}>{producer.name}</Text>
-                      <Text style={styles.producerSuggestionCount}>{producer.count} cheeses</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.producerSuggestionText}>{producer.name}</Text>
+                        {producer.country && (
+                          <Text style={styles.producerSuggestionCountry}>{producer.country}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.producerSuggestionCount}>{producer.cheese_count} cheeses</Text>
                     </TouchableOpacity>
                   ))}
                   <TouchableOpacity
                     style={styles.producerAddNew}
                     onPress={() => {
                       updateField('producerName', producerSearch.trim());
+                      updateField('producerId', undefined); // New producer, no ID yet
                       setShowProducerSuggestions(false);
                     }}
                   >
@@ -645,11 +673,15 @@ export const NewCheeseForm: React.FC<NewCheeseFormProps> = ({
 
       <View style={styles.bottomPadding} />
     </ScrollView>
+    </KeyboardAvoidingView>
     </>
   );
 };
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -748,6 +780,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Typography.fonts.body,
     color: Colors.text,
+  },
+  producerSuggestionCountry: {
+    fontSize: 12,
+    fontFamily: Typography.fonts.body,
+    color: Colors.subtleText,
+    marginTop: 2,
   },
   producerSuggestionCount: {
     fontSize: 14,

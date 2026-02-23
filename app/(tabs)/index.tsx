@@ -486,11 +486,10 @@ export default function HomeScreen() {
         `content.ilike.%${term}%`,
       ]).join(',');
 
-      // Search articles - include content for better relevance
+      // Search articles - include content for better relevance (searchable regardless of visible_in_feed)
       const { data: entries } = await supabase
         .from('cheezopedia_entries')
         .select('id, title, description, content, image_url, content_type, reading_time_minutes')
-        .eq('visible_in_feed', true)
         .or(articleOrConditions)
         .limit(20);
 

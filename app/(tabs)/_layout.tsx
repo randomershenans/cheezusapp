@@ -1,5 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
-import { House, Search, Plus, PackageOpen, User } from 'lucide-react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Plus } from 'lucide-react-native';
 import {
   StyleSheet,
   View,
@@ -34,7 +35,7 @@ export default function TabLayout() {
             title: 'Home',
             href: '/',
             tabBarIcon: ({ color, size }) => (
-              <House size={size} color={color} />
+              <MaterialCommunityIcons name="home" size={size} color={color} />
             ),
           }}
         />
@@ -45,7 +46,7 @@ export default function TabLayout() {
             title: 'Discover',
             href: '/discover',
             tabBarIcon: ({ color, size }) => (
-              <Search size={size} color={color} />
+              <MaterialCommunityIcons name="magnify" size={size} color={color} />
             ),
           }}
         />
@@ -66,7 +67,7 @@ export default function TabLayout() {
             title: 'Cheese Box',
             href: '/cheese-box',
             tabBarIcon: ({ color, size }) => (
-              <PackageOpen size={size} color={color} />
+              <MaterialCommunityIcons name="cheese" size={size} color={color} />
             ),
           }}
         />
@@ -77,7 +78,7 @@ export default function TabLayout() {
             title: 'Profile',
             href: '/profile',
             tabBarIcon: ({ color, size }) => (
-              <User size={size} color={color} />
+              <MaterialCommunityIcons name="account" size={size} color={color} />
             ),
           }}
         />

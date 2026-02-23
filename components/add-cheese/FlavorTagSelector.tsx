@@ -30,6 +30,9 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
   const [showAddNew, setShowAddNew] = useState(false);
   const [newFlavorName, setNewFlavorName] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
+
+  const INITIAL_VISIBLE_COUNT = 6;
 
   useEffect(() => {
     loadFlavorTags();
@@ -137,19 +140,28 @@ export const FlavorTagSelector: React.FC<FlavorTagSelectorProps> = ({
         </Text>
       </View>
 
-      <FlatList
-        data={allTags}
-        renderItem={({ item }) => renderTag(item)}
-        keyExtractor={(item) => item.id}
-        numColumns={3}
-        columnWrapperStyle={styles.row}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No flavor tags available</Text>
-          </View>
-        }
-      />
+      {/* Show limited tags initially, all when expanded */}
+      <View style={styles.tagsContainer}>
+        {(showAllTags ? allTags : allTags.slice(0, INITIAL_VISIBLE_COUNT)).map((tag) => renderTag(tag))}
+      </View>
+
+      {allTags.length === 0 && (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No flavor tags available</Text>
+        </View>
+      )}
+
+      {/* Show more/less toggle */}
+      {allTags.length > INITIAL_VISIBLE_COUNT && (
+        <TouchableOpacity
+          style={styles.showMoreButton}
+          onPress={() => setShowAllTags(!showAllTags)}
+        >
+          <Text style={styles.showMoreText}>
+            {showAllTags ? 'Show less' : `Show ${allTags.length - INITIAL_VISIBLE_COUNT} more...`}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Add New Flavor */}
       {showAddNew ? (
@@ -214,6 +226,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Typography.fonts.body,
     color: '#6B7280',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  showMoreButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  showMoreText: {
+    fontSize: 14,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: '#FCD95B',
   },
   row: {
     justifyContent: 'flex-start',

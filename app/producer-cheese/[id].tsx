@@ -676,7 +676,7 @@ export default function ProducerCheeseDetailScreen() {
                       <TouchableOpacity
                         key={index}
                         style={styles.flavorTag}
-                        onPress={() => router.push(`/(tabs)/discover?search=${flavor.trim()}`)}
+                        onPress={() => router.push(`/(tabs)/discover?search=${encodeURIComponent(flavor.trim())}`)}
                       >
                         <Text style={styles.flavorTagText}>{capitalizeText(flavor.trim())}</Text>
                       </TouchableOpacity>
@@ -694,7 +694,7 @@ export default function ProducerCheeseDetailScreen() {
                       <TouchableOpacity
                         key={index}
                         style={styles.aromaTag}
-                        onPress={() => router.push(`/(tabs)/discover?search=${aroma.trim()}`)}
+                        onPress={() => router.push(`/(tabs)/discover?search=${encodeURIComponent(aroma.trim())}`)}
                       >
                         <Text style={styles.aromaTagText}>{capitalizeText(aroma.trim())}</Text>
                       </TouchableOpacity>

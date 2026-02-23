@@ -4,7 +4,7 @@ export default {
     slug: "cheezus",
     owner: "cheezus-group",
     scheme: "cheezus",
-    version: "1.0.1",
+    version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "light",
@@ -34,6 +34,7 @@ export default {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FCD95B"
       },
+      versionCode: 12,
       package: "com.cheezus.app",
       intentFilters: [
         {
@@ -112,6 +113,7 @@ export default {
           RNMapboxMapsDownloadToken: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN,
         }
       ]
+      "expo-video"
     ],
     extra: {
       router: {

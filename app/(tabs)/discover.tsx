@@ -48,6 +48,65 @@ type NearbyItem = {
   longitude: number | null;
   distance_km?: number;
   is_verified?: boolean;
+  title: string;
+  description: string;
+  image_url: string;
+  type: 'cheese' | 'producer-cheese' | 'article' | 'recipe' | 'user';
+  metadata?: {
+    origin_country?: string;
+    cheese_type?: string;
+    cheese_family?: string;
+    producer_name?: string;
+    flavor?: string;
+    aroma?: string;
+    reading_time?: number;
+    average_rating?: number;
+    rating_count?: number;
+    vanity_url?: string;
+    tagline?: string;
+  };
+};
+
+const filterOptions = [
+  { key: 'all',      label: 'All',      icon: Grid,     color: '#0066CC' },
+  { key: 'cheese',   label: 'Cheeses',  icon: ChefHat,  color: '#E67E22' },
+  { key: 'articles', label: 'Articles', icon: BookOpen, color: '#27AE60' },
+  { key: 'recipes',  label: 'Recipes',  icon: Utensils, color: '#E74C3C' },
+];
+
+// Synonym mapping for smart search (includes common misspellings)
+const CHEESE_SYNONYMS: Record<string, string[]> = {
+  'goat': ['goat', 'goats', 'chèvre', 'chevre', "goat's", 'capra'],
+  'blue': ['blue', 'bleu', 'gorgonzola', 'roquefort', 'stilton', 'veined'],
+  'sheep': ['sheep', 'sheeps', 'pecorino', 'manchego', "sheep's", 'ewe', 'ovine'],
+  'cow': ['cow', 'cows', "cow's", 'bovine', 'milk'],
+  'soft': ['soft', 'fresh', 'creamy', 'spreadable'],
+  'hard': ['hard', 'aged', 'mature', 'firm', 'dense'],
+  'french': ['french', 'france'],
+  'italian': ['italian', 'italy', 'italiano'],
+  'swiss': ['swiss', 'switzerland', 'gruyere', 'emmental'],
+  'english': ['english', 'england', 'british'],
+  'spanish': ['spanish', 'spain', 'espana'],
+  'dutch': ['dutch', 'netherlands', 'holland', 'gouda'],
+  'cheddar': ['cheddar', 'cheder', 'cheedar', 'chedar', 'chedder'],
+  'mozzarella': ['mozzarella', 'mozarella', 'mozzerella', 'mozza', 'mozerella'],
+  'parmesan': ['parmesan', 'parmigiano', 'reggiano', 'parm', 'parmasean'],
+  'brie': ['brie', 'bree', 'bri'],
+  'feta': ['feta', 'fetta', 'feeta'],
+  'camembert': ['camembert', 'camembear', 'camember', 'camambert', 'camenbert'],
+  'ricotta': ['ricotta', 'ricota'],
+  'provolone': ['provolone', 'provoloni', 'provelone'],
+  'gruyere': ['gruyere', 'gruyère', 'gruyer', 'gruyear'],
+  'gouda': ['gouda', 'guda', 'gooda'],
+  'emmental': ['emmental', 'emmenthal', 'emmenthaler'],
+  'gorgonzola': ['gorgonzola', 'gorganzola'],
+  'stilton': ['stilton', 'stiliton'],
+  'roquefort': ['roquefort', 'rocquefort', 'roquefor'],
+  'havarti': ['havarti', 'havarthi'],
+  'mild': ['mild', 'subtle', 'delicate', 'gentle'],
+  'strong': ['strong', 'sharp', 'pungent', 'intense', 'tangy'],
+  'nutty': ['nutty', 'hazelnut', 'almond'],
+  'creamy': ['creamy', 'smooth', 'buttery', 'rich'],
 };
 
 type ViewMode = 'map' | 'list';
@@ -67,6 +126,23 @@ export default function DiscoverScreen() {
   useEffect(() => {
     initializeLocation();
   }, []);
+  const { type, region, filter, search } = useLocalSearchParams();
+  const initialSearch = typeof search === 'string' ? search : '';
+
+  const [items,      setItems]      = useState<DiscoverItem[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [activeFilter, setActive]   = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
+  const [allItems, setAllItems] = useState<DiscoverItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+
+  // Sync searchQuery when search param changes (e.g. navigating from flavor tag)
+  useEffect(() => {
+    if (initialSearch) {
+      setSearchQuery(initialSearch);
+    }
+  }, [initialSearch]);
 
   useEffect(() => {
     if (userLocation) {
@@ -82,6 +158,130 @@ export default function DiscoverScreen() {
         setLoading(false);
         fetchAllItems();
         return;
+      let all: DiscoverItem[] = [];
+
+      /* Users - Search when query starts with @ or contains username-like pattern */
+      if (searchQuery && (searchQuery.startsWith('@') || searchQuery.includes('@'))) {
+        const users = await searchUsers(searchQuery);
+        all.push(
+          ...users.map(u => ({
+            id: u.id,
+            title: u.name || 'Cheese Lover',
+            description: u.vanity_url ? `@${u.vanity_url}` : (u.tagline || 'Cheese enthusiast'),
+            image_url: u.avatar_url || 'https://via.placeholder.com/100?text=User',
+            type: 'user' as const,
+            metadata: {
+              vanity_url: u.vanity_url || undefined,
+              tagline: u.tagline || undefined,
+            },
+          }))
+        );
+      }
+
+      /* Cheeses - Show both producer cheeses and cheese types */
+      if (activeFilter === 'all' || activeFilter === 'cheese') {
+        // Fetch producer cheeses - if searching, get more for fuzzy matching
+        let producerQuery = supabase
+          .from('producer_cheese_stats')
+          .select('id, full_name, image_url, cheese_type_name, producer_name, average_rating, rating_count, flavor, aroma');
+        
+        // Apply type filter if present
+        if (type && typeof type === 'string') {
+          producerQuery = producerQuery.eq('cheese_type_name', type);
+        }
+        
+        // If searching, get more results for fuzzy matching; otherwise limit
+        const limit = searchQuery && searchQuery.trim() ? 200 : 50;
+        const { data: producerCheeses } = await producerQuery.limit(limit);
+
+        if (producerCheeses) {
+          all.push(
+            ...producerCheeses.map(c => {
+              // Hide "Generic" producer - just show cheese type name
+              const isGeneric = c.producer_name?.toLowerCase().includes('generic') || 
+                                c.producer_name?.toLowerCase().includes('unknown');
+              const displayTitle = isGeneric ? c.cheese_type_name : c.full_name;
+              
+              return {
+                id: c.id,
+                title: displayTitle,
+                description: `${c.producer_name} ${c.cheese_type_name}`,
+                image_url: c.image_url || 'https://via.placeholder.com/400?text=Cheese',
+                type: 'producer-cheese' as const,
+                metadata: {
+                  cheese_type: c.cheese_type_name,
+                  producer_name: c.producer_name,
+                  flavor: c.flavor || undefined,
+                  aroma: c.aroma || undefined,
+                  average_rating: c.average_rating,
+                  rating_count: c.rating_count,
+                },
+              };
+            })
+          );
+        }
+
+      }
+
+      /* Articles & Recipes */
+      if (activeFilter === 'all' || activeFilter === 'articles' || activeFilter === 'recipes') {
+        const { data: entries } = await supabase
+          .from('cheezopedia_entries')
+          .select('id, title, description, image_url, content_type, reading_time_minutes')
+          .eq('visible_in_feed', true)
+          .order('published_at', { ascending: false })
+          .limit(50);
+
+        if (entries) {
+          all.push(
+            ...entries
+              .filter(e => {
+                if (activeFilter === 'articles') return e.content_type === 'article';
+                if (activeFilter === 'recipes')  return e.content_type === 'recipe';
+                return true;
+              })
+              .map(e => ({
+                id:        e.id,
+                title:     e.title,
+                description: e.description,
+                image_url: e.image_url,
+                type:      e.content_type === 'recipe' ? 'recipe' as DiscoverItem['type'] : 'article' as DiscoverItem['type'],
+                metadata:  { reading_time: e.reading_time_minutes },
+              }))
+          );
+        }
+      }
+
+      /* Client-side aggressive fuzzy filter */
+      if (searchQuery && searchQuery.trim()) {
+        const searchTerms = expandSearchTerm(searchQuery);
+        
+        // Score each item by relevance
+        const scoredItems = all.map(i => {
+          let score = 0;
+          
+          searchTerms.forEach(term => {
+            // Title matches score highest
+            if (fuzzyMatch(i.title, term)) score += 10;
+            if (i.description && fuzzyMatch(i.description, term)) score += 5;
+            if (i.metadata?.cheese_type && fuzzyMatch(i.metadata.cheese_type, term)) score += 8;
+            if (i.metadata?.origin_country && fuzzyMatch(i.metadata.origin_country, term)) score += 3;
+            if (i.metadata?.producer_name && fuzzyMatch(i.metadata.producer_name, term)) score += 4;
+            if (i.metadata?.flavor && fuzzyMatch(i.metadata.flavor, term)) score += 9;
+            if (i.metadata?.aroma && fuzzyMatch(i.metadata.aroma, term)) score += 7;
+          });
+          
+          return { item: i, score };
+        });
+        
+        // Filter items with any score and sort by relevance
+        all = scoredItems
+          .filter(({ score }) => score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map(({ item }) => item);
+      } else {
+        // No search - shuffle for discovery
+        all = all.sort(() => Math.random() - 0.5);
       }
 
       const location = await Location.getCurrentPositionAsync({
@@ -420,6 +620,12 @@ export default function DiscoverScreen() {
           </Text>
         </View>
       )}
+      <SearchBar
+        placeholder="Search everything..."
+        initialValue={initialSearch}
+        onSearch={setSearchQuery}
+        onFilter={() => setShowFilterPanel(true)}
+      />
 
       {/* Main Content */}
       {loading ? (

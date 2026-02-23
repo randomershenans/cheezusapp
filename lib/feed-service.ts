@@ -97,9 +97,12 @@ export const getPersonalizedFeed = async (
   shuffle: boolean = true
 ): Promise<PersonalizedFeedResponse> => {
   try {
+    // Request 3x more items to allow for variety on refresh
+    const fetchLimit = shuffle ? limit * 3 : limit;
+    
     const { data, error } = await supabase.rpc('get_personalized_feed', {
       p_user_id: userId || null,
-      p_limit: limit,
+      p_limit: fetchLimit,
       p_exclude_ids: excludeIds,
     });
 
@@ -111,12 +114,33 @@ export const getPersonalizedFeed = async (
       followingItems = await getFollowingActivity(userId);
     }
 
-    // Shuffle results for variety if requested
-    const recommendations = shuffle ? shuffleArray(data?.recommendations || []) : (data?.recommendations || []);
-    const trending = shuffle ? shuffleArray(data?.trending || []) : (data?.trending || []);
-    const discovery = shuffle ? shuffleArray(data?.discovery || []) : (data?.discovery || []);
-    const awards = shuffle ? shuffleArray(data?.awards || []) : (data?.awards || []);
-    const articles = shuffle ? shuffleArray(data?.articles || []) : (data?.articles || []);
+    // Shuffle and take a random subset for variety on each refresh
+    const selectRandom = <T>(arr: T[], count: number): T[] => {
+      const shuffled = shuffleArray(arr);
+      return shuffled.slice(0, count);
+    };
+
+    // Calculate per-category limits (distribute the limit across categories)
+    const recLimit = Math.ceil(limit * 0.3); // 30% recommendations
+    const trendLimit = Math.ceil(limit * 0.25); // 25% trending
+    const discLimit = Math.ceil(limit * 0.25); // 25% discovery
+    const awardLimit = Math.ceil(limit * 0.2); // 20% awards
+
+    const recommendations = shuffle 
+      ? selectRandom(data?.recommendations || [], recLimit) 
+      : (data?.recommendations || []).slice(0, recLimit);
+    const trending = shuffle 
+      ? selectRandom(data?.trending || [], trendLimit) 
+      : (data?.trending || []).slice(0, trendLimit);
+    const discovery = shuffle 
+      ? selectRandom(data?.discovery || [], discLimit) 
+      : (data?.discovery || []).slice(0, discLimit);
+    const awards = shuffle 
+      ? selectRandom(data?.awards || [], awardLimit) 
+      : (data?.awards || []).slice(0, awardLimit);
+    const articles = shuffle 
+      ? selectRandom(data?.articles || [], 3) 
+      : (data?.articles || []).slice(0, 3);
 
     return {
       profile: data?.profile || null,
@@ -152,6 +176,9 @@ export const loadMoreCheeses = async (
 ): Promise<FeedCheeseItem[]> => {
   try {
     // Fetch random cheeses that haven't been seen yet
+    // Filter out any null/undefined values from excludeIds
+    const validExcludeIds = excludeIds.filter(id => id && id !== 'null' && id !== 'undefined');
+    
     let query = supabase
       .from('producer_cheese_stats')
       .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, awards_image_url, average_rating, rating_count');
@@ -160,6 +187,9 @@ export const loadMoreCheeses = async (
     const validIds = excludeIds.filter(id => id && id !== 'null' && id !== 'undefined');
     if (validIds.length > 0) {
       query = query.not('id', 'in', `(${validIds.join(',')})`);
+    // Only apply the exclusion filter if we have valid IDs
+    if (validExcludeIds.length > 0) {
+      query = query.not('id', 'in', `(${validExcludeIds.join(',')})`);
     }
     
     const { data: cheeses, error } = await query.limit(limit * 3); // Fetch more to allow for shuffling variety
@@ -442,7 +472,8 @@ export const getFollowingActivity = async (userId: string): Promise<FeedCheeseIt
       });
     });
 
-    return results;
+    // Shuffle results so same cheese isn't always at top on refresh
+    return shuffleArray(results);
   } catch (error) {
     console.error('Error fetching following activity:', error);
     return [];

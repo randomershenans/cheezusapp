@@ -12,6 +12,7 @@ export type SearchMode = 'all' | 'cheese' | 'pairing';
 
 export interface SearchBarProps {
   placeholder?: string;
+  initialValue?: string;
   onSearch?: (query: string) => void;
   onFilter?: () => void;
 }
