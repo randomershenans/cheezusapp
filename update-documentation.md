@@ -1,5 +1,62 @@
 # Cheezus App - Update Documentation
 
+## Content-Cheese Bi-directional Linking (January 16, 2026)
+
+### Added Bi-directional Content-Cheese Linking Feature
+Enables users to discover cheeses from content and discover content from cheeses.
+
+### Database Schema
+- Created `db/content-cheese-links-schema.sql`:
+  - `content_cheese_links` junction table linking `cheezopedia_entries` to cheeses
+  - Supports links to both `cheese_types` (broad, e.g., "Brie") and `producer_cheeses` (specific, e.g., "President Brie")
+  - RLS policies for viewing and creating links
+  - Indexes for fast lookups from both directions
+
+### RPC Functions Created
+- **`get_content_cheeses(p_content_id, p_limit)`** - Get cheeses linked to content (for article/recipe pages)
+- **`get_cheese_content(p_cheese_type_id, p_producer_cheese_id, p_limit)`** - Get content linked to cheese (for cheese detail pages)
+- **`count_cheese_content(p_cheese_type_id, p_producer_cheese_id)`** - Count total content for "see more"
+
+### Components Created
+- **`components/CheeseTileGrid.tsx`**:
+  - Displays linked cheese tiles in a 2-column grid
+  - Shows cheese name, category, origin, and rating
+  - Navigates to producer-cheese or cheese-type detail pages
+  - Configurable title and max display count (default 6)
+
+- **`components/ContentTileGrid.tsx`**:
+  - Displays linked content tiles in a 2-column grid
+  - Shows content type badge, title, and reading time
+  - Supports articles, recipes, guides, and pairings
+  - "See more" button when total count exceeds display limit
+  - Configurable title and max display count (default 4)
+
+### Pages Updated
+- **`app/cheezopedia/[id].tsx`**:
+  - Added `linkedCheeses` state
+  - Added `fetchLinkedCheeses()` function calling `get_content_cheeses` RPC
+  - Added "Featured Cheeses" section at bottom using `CheeseTileGrid`
+
+- **`app/producer-cheese/[id].tsx`**:
+  - Added `relatedContent` and `contentCount` state
+  - Added `fetchRelatedContent()` function calling `get_cheese_content` RPC
+  - Added "What to do with this cheese" section using `ContentTileGrid`
+
+### User Experience
+1. **On articles/recipes**: Users see up to 6 cheese tiles at the bottom, can click to learn more about each cheese
+2. **On cheese detail pages**: Users see up to 4 content tiles (recipes, articles, pairings) with "See more" option
+3. Answers the common question: "I have this cheese, what do I do with it?"
+
+### Admin Integration
+- Cheese links will be added via the web portal when creating/editing articles
+- User is handling the admin portal side
+
+### Deployment Steps
+1. Run `db/content-cheese-links-schema.sql` in Supabase SQL Editor
+2. Add cheese links to content via admin portal
+3. Content will automatically appear on cheese pages and vice versa
+
+---
 ## Immersive Producer Showcase Pages (February 22, 2026)
 
 ### Transformed producer pages into cinematic, CMS-driven showcase experiences

@@ -107,6 +107,12 @@ export default {
           "microphonePermission": "Cheezus may use the microphone when recording video of cheese tastings to share with the community."
         }
       ],
+      [
+        "@rnmapbox/maps",
+        {
+          RNMapboxMapsDownloadToken: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN,
+        }
+      ]
       "expo-video"
     ],
     extra: {
