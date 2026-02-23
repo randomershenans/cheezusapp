@@ -115,7 +115,7 @@ export default function ShopDetailScreen() {
   const fetchShopCheeses = async () => {
     try {
       const { data, error } = await supabase
-        .from('shop_cheeses')
+        .from('shop_stock')
         .select(`
           id,
           in_stock,
@@ -173,6 +173,18 @@ export default function ShopDetailScreen() {
       });
       Linking.openURL(url as string);
     }
+  };
+
+  const handleShowOnMap = () => {
+    if (!shop?.latitude || !shop?.longitude) return;
+    router.push({
+      pathname: '/(tabs)/discover',
+      params: {
+        viewMode: 'map',
+        lat: shop.latitude.toString(),
+        lng: shop.longitude.toString(),
+      },
+    });
   };
 
   const getShopTypeLabel = (type: string): string => {
@@ -245,11 +257,6 @@ export default function ShopDetailScreen() {
 
           {/* Hero Content */}
           <View style={styles.heroContent}>
-            <View style={styles.shopBadge}>
-              <Store size={14} color={Colors.background} />
-              <Text style={styles.shopBadgeText}>{getShopTypeLabel(shop.shop_type)}</Text>
-            </View>
-
             <Text style={styles.heroTitle}>{shop.name}</Text>
 
             {(shop.city || shop.country) && (
@@ -263,12 +270,6 @@ export default function ShopDetailScreen() {
             )}
           </View>
 
-          {/* Verified Badge */}
-          {shop.is_verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓ Verified</Text>
-            </View>
-          )}
         </View>
 
         {/* Stats Bar */}
@@ -313,67 +314,60 @@ export default function ShopDetailScreen() {
             </View>
           )}
 
-          {/* Contact Section */}
+          {/* Contact & Location */}
           {(shop.website_url || shop.phone || shop.email || shop.address) && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Contact & Location</Text>
               <View style={styles.contactGrid}>
                 {shop.website_url && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleOpenWebsite}>
-                    <View style={styles.contactIconContainer}>
-                      <Globe size={20} color={Colors.primary} />
+                  <TouchableOpacity style={styles.contactTile} onPress={handleOpenWebsite}>
+                    <View style={styles.contactTileLabelRow}>
+                      <Globe size={14} color={Colors.primary} />
+                      <Text style={styles.contactTileLabel}>Website</Text>
                     </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Website</Text>
-                      <Text style={styles.contactValue} numberOfLines={1}>
-                        {shop.website_url.replace(/^https?:\/\//, '')}
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
+                    <Text style={styles.contactTileValue} numberOfLines={1}>
+                      {shop.website_url.replace(/^https?:\/\//, '')}
+                    </Text>
                   </TouchableOpacity>
                 )}
 
                 {shop.phone && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleCall}>
-                    <View style={styles.contactIconContainer}>
-                      <Phone size={20} color={Colors.primary} />
+                  <TouchableOpacity style={styles.contactTile} onPress={handleCall}>
+                    <View style={styles.contactTileLabelRow}>
+                      <Phone size={14} color={Colors.primary} />
+                      <Text style={styles.contactTileLabel}>Phone</Text>
                     </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Phone</Text>
-                      <Text style={styles.contactValue}>{shop.phone}</Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
+                    <Text style={styles.contactTileValue} numberOfLines={1}>{shop.phone}</Text>
                   </TouchableOpacity>
                 )}
 
                 {shop.email && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
-                    <View style={styles.contactIconContainer}>
-                      <Mail size={20} color={Colors.primary} />
+                  <TouchableOpacity style={styles.contactTile} onPress={handleEmail}>
+                    <View style={styles.contactTileLabelRow}>
+                      <Mail size={14} color={Colors.primary} />
+                      <Text style={styles.contactTileLabel}>Email</Text>
                     </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Email</Text>
-                      <Text style={styles.contactValue} numberOfLines={1}>
-                        {shop.email}
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
+                    <Text style={styles.contactTileValue} numberOfLines={1}>{shop.email}</Text>
                   </TouchableOpacity>
                 )}
 
                 {shop.address && (
-                  <TouchableOpacity style={styles.contactCard} onPress={handleOpenMaps}>
-                    <View style={styles.contactIconContainer}>
-                      <MapPin size={20} color={Colors.primary} />
+                  <TouchableOpacity style={styles.contactTile} onPress={handleOpenMaps}>
+                    <View style={styles.contactTileLabelRow}>
+                      <MapPin size={14} color={Colors.primary} />
+                      <Text style={styles.contactTileLabel}>Address</Text>
                     </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactLabel}>Address</Text>
-                      <Text style={styles.contactValue}>{getFullAddress()}</Text>
-                    </View>
-                    <ChevronRight size={18} color={Colors.subtleText} />
+                    <Text style={styles.contactTileValue} numberOfLines={2}>{getFullAddress()}</Text>
                   </TouchableOpacity>
                 )}
               </View>
+
+              {(shop.latitude && shop.longitude) && (
+                <TouchableOpacity style={styles.showOnMapButton} onPress={handleShowOnMap}>
+                  <MapPin size={16} color={Colors.background} />
+                  <Text style={styles.showOnMapText}>Show on Map</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -658,39 +652,51 @@ const styles = StyleSheet.create({
 
   // Contact Section
   contactGrid: {
-    gap: Layout.spacing.s,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  contactCard: {
+  contactTile: {
+    width: '48%' as any,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: Layout.borderRadius.medium,
+    padding: Layout.spacing.m,
+    gap: 2,
+  },
+  contactTileLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    padding: Layout.spacing.m,
-    borderRadius: Layout.borderRadius.medium,
+    gap: 6,
   },
-  contactIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Layout.spacing.m,
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactLabel: {
+  contactTileLabel: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  contactValue: {
-    fontSize: Typography.sizes.base,
+  contactTileValue: {
+    fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.bodyMedium,
     color: Colors.text,
     marginTop: 2,
+  },
+
+  // Show on Map
+  showOnMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.s,
+    backgroundColor: Colors.primary,
+    paddingVertical: Layout.spacing.m,
+    borderRadius: Layout.borderRadius.medium,
+    marginTop: Layout.spacing.s,
+  },
+  showOnMapText: {
+    color: Colors.background,
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
   },
 
   // Opening Hours
