@@ -474,12 +474,16 @@ export default function HomeScreen() {
         `origin_country.ilike.%${term}%`,
         `flavor.ilike.%${term}%`,
         `aroma.ilike.%${term}%`,
+        `rind.ilike.%${term}%`,
+        `texture.ilike.%${term}%`,
+        `milk_type.ilike.%${term}%`,
+        `cheese_family.ilike.%${term}%`,
       ]).join(',');
 
       // Search producer cheeses in database with expanded terms
       const { data: producerCheeses } = await supabase
         .from('producer_cheese_stats')
-        .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count, flavor, aroma')
+        .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count, flavor, aroma, rind, texture, milk_type')
         .or(cheeseOrConditions)
         .limit(50);
 

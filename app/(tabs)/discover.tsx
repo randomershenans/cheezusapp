@@ -352,8 +352,22 @@ export default function DiscoverScreen() {
     }
   }, []);
 
+  const useImperial = useMemo(() => {
+    try {
+      const locale = Intl.DateTimeFormat().resolvedOptions().locale || '';
+      return locale.endsWith('-US') || locale === 'en-US';
+    } catch {
+      return false;
+    }
+  }, []);
+
   const formatDistance = (km?: number): string => {
     if (!km) return '';
+    if (useImperial) {
+      const miles = km * 0.621371;
+      if (miles < 0.1) return `${Math.round(miles * 5280)}ft`;
+      return `${miles.toFixed(1)}mi`;
+    }
     if (km < 1) return `${Math.round(km * 1000)}m`;
     return `${km.toFixed(1)}km`;
   };

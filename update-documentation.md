@@ -1,5 +1,47 @@
 # Cheezus App - Update Documentation
 
+## Shop Page Improvements & Event Details Page (February 23, 2026)
+
+### Shop Page Fixes
+- **Removed duplicate badges**: Removed green "✓ Verified" badge from hero (already shown as "Verified Partner" in stats bar), removed yellow shop type badge from hero (already in stats bar)
+- **Fixed cheeses not loading**: Changed query from non-existent `shop_cheeses` table to correct `shop_stock` table
+- **Added "Show on Map" button**: Yellow button in Contact & Location section navigates to discover page map view centered on shop location
+- **Redesigned Contact & Location**: Changed from stacked full-width rows to a compact 2x2 grid with icon next to label, reducing vertical space
+
+### Event Details Page (`app/event/[id].tsx`)
+- New page for viewing event details, accessible at `/event/[id]`
+- Hero section with event image, type badge (Tasting, Market, Festival, etc.), and status badge (Upcoming, Happening Now, Past Event, Cancelled)
+- Quick info bar with date and time
+- Price & tickets section with "Get Tickets" / "Register" button
+- Expandable description
+- Location section with "Show on Map" and open in maps
+- Online access link for virtual events
+- Capacity display and organizer info from `partners` table
+
+### Discover Page Improvements
+- **Filter bar applies to map view**: Map markers now filter based on active filter (All, Cheeses, Producers) using `useMemo`
+- **US locale detection**: Auto-detects US locale via `Intl.DateTimeFormat` and shows distances in miles/feet instead of km/m
+- **Renamed section**: "Cheeses Near You" → "Cheese Near You"
+
+### Taste Match Feature (`app/producer-cheese/[id].tsx`)
+- **"Matches your taste" section**: Shows logged-in users why a cheese matches their taste profile
+- Compares cheese attributes against user's taste profile from `get_user_taste_profile` RPC
+- Matches on: cheese family, origin country, milk type, producer (by UUID), flavor tags, cheese type
+- Filters out "generic" and "unknown" values from match reasons
+- Clean styling: subtle background card with yellow left accent bar, uppercase label
+- Updated `UserTasteProfile` interface in `feed-service.ts` to include `favorite_types` and `favorite_flavors`
+
+### Clickable Cheese Details
+- Detail grid items (Type, Family, Milk Type, Texture, Rind) are now tappable `TouchableOpacity` components
+- Tapping navigates to home feed search with that term pre-filled
+- Clickable cards have a yellow bottom border to indicate interactivity
+- Non-searchable items (Color, Ageing, Fat Content, Calcium, Vegetarian, Vegan) remain static
+
+### Producer Page
+- **Copy address button**: Small copy icon next to address in "Find Us" section, copies address to clipboard
+
+---
+
 ## Content-Cheese Bi-directional Linking (January 16, 2026)
 
 ### Added Bi-directional Content-Cheese Linking Feature

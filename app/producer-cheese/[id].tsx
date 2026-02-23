@@ -30,6 +30,7 @@ import {
   getFlavorTagsForProducerCheese,
   ProducerCheeseWithStats,
 } from '@/lib';
+import { getUserTasteProfile, UserTasteProfile } from '@/lib/feed-service';
 import ContentTileGrid, { LinkedContent } from '@/components/ContentTileGrid';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
@@ -55,6 +56,7 @@ export default function ProducerCheeseDetailScreen() {
   const [canEdit, setCanEdit] = useState(false);
   const [relatedContent, setRelatedContent] = useState<LinkedContent[]>([]);
   const [contentCount, setContentCount] = useState(0);
+  const [tasteMatchReasons, setTasteMatchReasons] = useState<string[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -136,11 +138,100 @@ export default function ProducerCheeseDetailScreen() {
           console.log('No pairings found for this cheese type');
         }
       }
+      // Fetch taste match reasons
+      if (user) {
+        fetchTasteMatch(cheeseData);
+      }
     } catch (error) {
       console.error('Error fetching producer cheese:', error);
       Alert.alert('Error', 'Failed to load cheese details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTasteMatch = async (cheese: ProducerCheeseWithStats) => {
+    if (!user) return;
+    try {
+      const profile = await getUserTasteProfile(user.id);
+      if (!profile) return;
+
+      const reasons: string[] = [];
+      const cheeseData = cheese as any;
+
+      const isGeneric = (val: string | null | undefined): boolean => {
+        if (!val) return true;
+        const lower = val.toLowerCase();
+        return lower.includes('generic') || lower.includes('unknown');
+      };
+
+      // Check family match
+      if (profile.favorite_families?.length && cheeseData.cheese_family && !isGeneric(cheeseData.cheese_family)) {
+        const matchedFamily = profile.favorite_families.find(
+          (f: string) => f.toLowerCase() === cheeseData.cheese_family.toLowerCase()
+        );
+        if (matchedFamily) {
+          reasons.push(`You enjoy ${matchedFamily} cheeses`);
+        }
+      }
+
+      // Check country match
+      if (profile.favorite_countries?.length && cheese.origin_country) {
+        const matchedCountry = profile.favorite_countries.find(
+          (c: string) => c.toLowerCase() === cheese.origin_country!.toLowerCase()
+        );
+        if (matchedCountry) {
+          reasons.push(`You like cheeses from ${matchedCountry}`);
+        }
+      }
+
+      // Check milk type match
+      if (profile.favorite_milk_types?.length && cheese.milk_type) {
+        const matchedMilk = profile.favorite_milk_types.find(
+          (m: string) => m.toLowerCase() === cheese.milk_type!.toLowerCase()
+        );
+        if (matchedMilk) {
+          reasons.push(`You prefer ${matchedMilk} milk cheeses`);
+        }
+      }
+
+      // Check producer match (RPC returns producer_id UUIDs)
+      if (profile.favorite_producers?.length && !isGeneric(cheese.producer_name)) {
+        const { data: pcRow } = await supabase
+          .from('producer_cheeses')
+          .select('producer_id')
+          .eq('id', id)
+          .single();
+        if (pcRow?.producer_id && profile.favorite_producers.includes(pcRow.producer_id)) {
+          reasons.push(`You've enjoyed cheeses by ${cheese.producer_name}`);
+        }
+      }
+
+      // Check flavor tag match
+      if (profile.favorite_flavors?.length && flavorTags.length) {
+        const matchedFlavors = flavorTags
+          .filter(tag => profile.favorite_flavors!.some(
+            (f: string) => f.toLowerCase() === tag.name.toLowerCase()
+          ))
+          .map(tag => tag.name);
+        if (matchedFlavors.length > 0) {
+          reasons.push(`You enjoy ${matchedFlavors.slice(0, 3).join(', ')} flavours`);
+        }
+      }
+
+      // Check cheese type match
+      if (profile.favorite_types?.length && cheeseData.cheese_type && !isGeneric(cheeseData.cheese_type)) {
+        const matchedType = profile.favorite_types.find(
+          (t: string) => t.toLowerCase() === cheeseData.cheese_type.toLowerCase()
+        );
+        if (matchedType) {
+          reasons.push(`You tend to like ${matchedType} cheeses`);
+        }
+      }
+
+      setTasteMatchReasons(reasons);
+    } catch (error) {
+      console.log('Could not fetch taste match:', error);
     }
   };
 
@@ -568,6 +659,19 @@ export default function ProducerCheeseDetailScreen() {
             )}
           </View>
 
+          {/* Taste Match */}
+          {tasteMatchReasons.length > 0 && (
+            <View style={styles.tasteMatchSection}>
+              <View style={styles.tasteMatchAccent} />
+              <View style={styles.tasteMatchContent}>
+                <Text style={styles.tasteMatchTitle}>Matches your taste</Text>
+                {tasteMatchReasons.map((reason, index) => (
+                  <Text key={index} style={styles.tasteMatchText}>{reason}</Text>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Description */}
           {(producerCheese.description || (producerCheese as any).cheese_type_description) && (
             <View style={styles.section}>
@@ -594,28 +698,28 @@ export default function ProducerCheeseDetailScreen() {
             <Text style={styles.sectionTitle}>Details</Text>
             <View style={styles.detailsGrid}>
               {(producerCheese as any).cheese_type && (
-                <View style={styles.detailCard}>
+                <TouchableOpacity style={styles.detailCardClickable} onPress={() => router.push(`/(tabs)?search=${encodeURIComponent((producerCheese as any).cheese_type.trim())}`)}>
                   <Text style={styles.detailLabel}>Type</Text>
-                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).cheese_type)}</Text>
-                </View>
+                  <Text style={styles.detailValueClickable}>{capitalizeText((producerCheese as any).cheese_type)}</Text>
+                </TouchableOpacity>
               )}
               {(producerCheese as any).cheese_family && (
-                <View style={styles.detailCard}>
+                <TouchableOpacity style={styles.detailCardClickable} onPress={() => router.push(`/(tabs)?search=${encodeURIComponent((producerCheese as any).cheese_family.trim())}`)}>
                   <Text style={styles.detailLabel}>Family</Text>
-                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).cheese_family)}</Text>
-                </View>
+                  <Text style={styles.detailValueClickable}>{capitalizeText((producerCheese as any).cheese_family)}</Text>
+                </TouchableOpacity>
               )}
               {producerCheese.milk_type && (
-                <View style={styles.detailCard}>
+                <TouchableOpacity style={styles.detailCardClickable} onPress={() => router.push(`/(tabs)?search=${encodeURIComponent(producerCheese.milk_type!.trim())}`)}>
                   <Text style={styles.detailLabel}>Milk Type</Text>
-                  <Text style={styles.detailValue}>{capitalizeText(producerCheese.milk_type)}</Text>
-                </View>
+                  <Text style={styles.detailValueClickable}>{capitalizeText(producerCheese.milk_type)}</Text>
+                </TouchableOpacity>
               )}
               {(producerCheese as any).texture && (
-                <View style={styles.detailCard}>
+                <TouchableOpacity style={styles.detailCardClickable} onPress={() => router.push(`/(tabs)?search=${encodeURIComponent((producerCheese as any).texture.trim())}`)}>
                   <Text style={styles.detailLabel}>Texture</Text>
-                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).texture)}</Text>
-                </View>
+                  <Text style={styles.detailValueClickable}>{capitalizeText((producerCheese as any).texture)}</Text>
+                </TouchableOpacity>
               )}
               {(producerCheese as any).color && (
                 <View style={styles.detailCard}>
@@ -624,10 +728,10 @@ export default function ProducerCheeseDetailScreen() {
                 </View>
               )}
               {(producerCheese as any).rind && (
-                <View style={styles.detailCard}>
+                <TouchableOpacity style={styles.detailCardClickable} onPress={() => router.push(`/(tabs)?search=${encodeURIComponent((producerCheese as any).rind.trim())}`)}>
                   <Text style={styles.detailLabel}>Rind</Text>
-                  <Text style={styles.detailValue}>{capitalizeText((producerCheese as any).rind)}</Text>
-                </View>
+                  <Text style={styles.detailValueClickable}>{capitalizeText((producerCheese as any).rind)}</Text>
+                </TouchableOpacity>
               )}
               {producerCheese.ageing_period && (
                 <View style={styles.detailCard}>
@@ -1503,6 +1607,15 @@ const styles = StyleSheet.create({
     minWidth: '47%',
     ...Layout.shadow.small,
   },
+  detailCardClickable: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: Layout.borderRadius.medium,
+    padding: Layout.spacing.m,
+    minWidth: '47%',
+    ...Layout.shadow.small,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.primary,
+  },
   detailLabel: {
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.fonts.body,
@@ -1512,6 +1625,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   detailValue: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.text,
+  },
+  detailValueClickable: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
@@ -1602,5 +1720,39 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.headingMedium,
     color: Colors.text,
     marginTop: 2,
+  },
+
+  // Taste Match
+  tasteMatchSection: {
+    flexDirection: 'row',
+    marginHorizontal: Layout.spacing.l,
+    marginBottom: Layout.spacing.l,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: Layout.borderRadius.medium,
+    overflow: 'hidden',
+  },
+  tasteMatchAccent: {
+    width: 3,
+    backgroundColor: Colors.primary,
+  },
+  tasteMatchContent: {
+    flex: 1,
+    paddingVertical: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.m,
+    gap: 4,
+  },
+  tasteMatchTitle: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.subtleText,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  tasteMatchText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.text,
+    lineHeight: Typography.sizes.sm * 1.5,
   },
 });

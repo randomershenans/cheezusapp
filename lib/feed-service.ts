@@ -55,6 +55,8 @@ export interface UserTasteProfile {
   tier: 'new' | 'starting' | 'building' | 'connoisseur';
   avg_rating: number;
   favorite_families: string[] | null;
+  favorite_types: string[] | null;
+  favorite_flavors: string[] | null;
   favorite_countries: string[] | null;
   favorite_milk_types: string[] | null;
   favorite_producers: string[] | null;
