@@ -15,7 +15,7 @@ import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const HERO_HEIGHT = SCREEN_HEIGHT * 0.55;
+const HERO_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 interface VideoHeroProps {
   name: string;
@@ -83,8 +83,8 @@ export default function VideoHero({
         />
       )}
 
-      {/* Gradient overlay */}
-      <View style={styles.gradientBottom} />
+      {/* Single full overlay — no edges, no seam lines */}
+      <View style={styles.overlay} />
 
       {/* Top bar: Back + Share */}
       <View style={styles.topBar}>
@@ -154,13 +154,9 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: HERO_HEIGHT,
   },
-  gradientBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: HERO_HEIGHT * 0.65,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   topBar: {
     position: 'absolute',
