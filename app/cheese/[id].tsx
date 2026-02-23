@@ -605,7 +605,7 @@ export default function CheeseDetailScreen() {
                   <TouchableOpacity
                     key={index}
                     style={styles.flavorTag}
-                    onPress={() => router.push(`/(tabs)/discover?search=${encodeURIComponent(flavor.flavor.trim())}`)}
+                    onPress={() => router.push(`/(tabs)?search=${encodeURIComponent(flavor.flavor.trim())}`)}
                   >
                     <Text style={styles.flavorTagText}>{flavor.flavor}</Text>
                   </TouchableOpacity>

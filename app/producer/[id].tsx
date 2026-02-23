@@ -164,15 +164,14 @@ export default function ProducerDetailScreen() {
 
   const handleShowOnMap = () => {
     if (!showcase?.latitude || !showcase?.longitude) return;
-    const label = encodeURIComponent(producer?.name || 'Producer');
-    const lat = showcase.latitude;
-    const lng = showcase.longitude;
-    const url = Platform.select({
-      ios: `maps:0,0?q=${label}@${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
-      default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+    router.push({
+      pathname: '/(tabs)/discover',
+      params: {
+        viewMode: 'map',
+        lat: showcase.latitude.toString(),
+        lng: showcase.longitude.toString(),
+      },
     });
-    if (url) Linking.openURL(url);
   };
 
   const handleShare = async () => {
@@ -671,7 +670,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Layout.spacing.s,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: Colors.primary,
     paddingHorizontal: Layout.spacing.xl,
     paddingVertical: Layout.spacing.m,
     borderRadius: Layout.borderRadius.large,
@@ -680,7 +679,7 @@ const styles = StyleSheet.create({
   mapButtonText: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.background,
+    color: Colors.text,
   },
   mapAddress: {
     fontSize: Typography.sizes.sm,

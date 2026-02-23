@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, Image, Platform, Dimensions, useWindowDimensions, Modal, RefreshControl, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Search, TrendingUp, Clock, Star, MapPin, ChefHat, BookOpen, Utensils, Sparkles, ShoppingBag, Grid, Award } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { getPersonalizedFeed, interleaveFeedItems, getCheeseDisplayName, searchUsers, loadMoreCheeses, FeedItem as ApiFeedItem, FeedCheeseItem, FeedArticle, FeedSponsored, UserTasteProfile } from '@/lib/feed-service';
@@ -109,6 +109,8 @@ type FeedItem = {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { search: searchParam } = useLocalSearchParams();
+  const initialSearch = typeof searchParam === 'string' ? searchParam : '';
   const { user } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [allFeedItems, setAllFeedItems] = useState<FeedItem[]>([]);
@@ -118,7 +120,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
   const [seenIds, setSeenIds] = useState<string[]>([]);
@@ -470,12 +472,14 @@ export default function HomeScreen() {
         `cheese_type_name.ilike.%${term}%`,
         `producer_name.ilike.%${term}%`,
         `origin_country.ilike.%${term}%`,
+        `flavor.ilike.%${term}%`,
+        `aroma.ilike.%${term}%`,
       ]).join(',');
 
       // Search producer cheeses in database with expanded terms
       const { data: producerCheeses } = await supabase
         .from('producer_cheese_stats')
-        .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count')
+        .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, average_rating, rating_count, flavor, aroma')
         .or(cheeseOrConditions)
         .limit(50);
 
@@ -1024,6 +1028,7 @@ export default function HomeScreen() {
 
         <SearchBar 
           placeholder="Search cheeses, recipes, articles..."
+          initialValue={initialSearch}
           onSearch={handleSearch}
           onFilter={handleFilter}
         />

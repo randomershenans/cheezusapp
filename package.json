@@ -43,6 +43,7 @@
     "expo-video": "~3.0.16",
     "expo-web-browser": "~15.0.9",
     "lucide-react-native": "0.542.0",
+    "mapbox-gl": "^2.15.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

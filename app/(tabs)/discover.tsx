@@ -13,11 +13,10 @@ import {
   RefreshControl,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import {
   MapPin,
-  Star,
   Store,
   Factory,
   Map,
@@ -39,7 +38,7 @@ const { width: screenWidth } = Dimensions.get('window');
 type NearbyItem = {
   id: string;
   name: string;
-  type: 'shop' | 'producer';
+  type: 'shop' | 'producer' | 'cheese';
   image_url: string | null;
   address: string | null;
   city: string | null;
@@ -48,73 +47,29 @@ type NearbyItem = {
   longitude: number | null;
   distance_km?: number;
   is_verified?: boolean;
-  title: string;
-  description: string;
-  image_url: string;
-  type: 'cheese' | 'producer-cheese' | 'article' | 'recipe' | 'user';
-  metadata?: {
-    origin_country?: string;
-    cheese_type?: string;
-    cheese_family?: string;
-    producer_name?: string;
-    flavor?: string;
-    aroma?: string;
-    reading_time?: number;
-    average_rating?: number;
-    rating_count?: number;
-    vanity_url?: string;
-    tagline?: string;
-  };
-};
-
-const filterOptions = [
-  { key: 'all',      label: 'All',      icon: Grid,     color: '#0066CC' },
-  { key: 'cheese',   label: 'Cheeses',  icon: ChefHat,  color: '#E67E22' },
-  { key: 'articles', label: 'Articles', icon: BookOpen, color: '#27AE60' },
-  { key: 'recipes',  label: 'Recipes',  icon: Utensils, color: '#E74C3C' },
-];
-
-// Synonym mapping for smart search (includes common misspellings)
-const CHEESE_SYNONYMS: Record<string, string[]> = {
-  'goat': ['goat', 'goats', 'chèvre', 'chevre', "goat's", 'capra'],
-  'blue': ['blue', 'bleu', 'gorgonzola', 'roquefort', 'stilton', 'veined'],
-  'sheep': ['sheep', 'sheeps', 'pecorino', 'manchego', "sheep's", 'ewe', 'ovine'],
-  'cow': ['cow', 'cows', "cow's", 'bovine', 'milk'],
-  'soft': ['soft', 'fresh', 'creamy', 'spreadable'],
-  'hard': ['hard', 'aged', 'mature', 'firm', 'dense'],
-  'french': ['french', 'france'],
-  'italian': ['italian', 'italy', 'italiano'],
-  'swiss': ['swiss', 'switzerland', 'gruyere', 'emmental'],
-  'english': ['english', 'england', 'british'],
-  'spanish': ['spanish', 'spain', 'espana'],
-  'dutch': ['dutch', 'netherlands', 'holland', 'gouda'],
-  'cheddar': ['cheddar', 'cheder', 'cheedar', 'chedar', 'chedder'],
-  'mozzarella': ['mozzarella', 'mozarella', 'mozzerella', 'mozza', 'mozerella'],
-  'parmesan': ['parmesan', 'parmigiano', 'reggiano', 'parm', 'parmasean'],
-  'brie': ['brie', 'bree', 'bri'],
-  'feta': ['feta', 'fetta', 'feeta'],
-  'camembert': ['camembert', 'camembear', 'camember', 'camambert', 'camenbert'],
-  'ricotta': ['ricotta', 'ricota'],
-  'provolone': ['provolone', 'provoloni', 'provelone'],
-  'gruyere': ['gruyere', 'gruyère', 'gruyer', 'gruyear'],
-  'gouda': ['gouda', 'guda', 'gooda'],
-  'emmental': ['emmental', 'emmenthal', 'emmenthaler'],
-  'gorgonzola': ['gorgonzola', 'gorganzola'],
-  'stilton': ['stilton', 'stiliton'],
-  'roquefort': ['roquefort', 'rocquefort', 'roquefor'],
-  'havarti': ['havarti', 'havarthi'],
-  'mild': ['mild', 'subtle', 'delicate', 'gentle'],
-  'strong': ['strong', 'sharp', 'pungent', 'intense', 'tangy'],
-  'nutty': ['nutty', 'hazelnut', 'almond'],
-  'creamy': ['creamy', 'smooth', 'buttery', 'rich'],
 };
 
 type ViewMode = 'map' | 'list';
+type FilterType = 'all' | 'cheeses' | 'producers' | 'shops' | 'events';
+
+const FILTERS: { key: FilterType; label: string; comingSoon?: boolean }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'cheeses', label: 'Cheeses' },
+  { key: 'producers', label: 'Producers' },
+  { key: 'shops', label: 'Shops', comingSoon: true },
+  { key: 'events', label: 'Events', comingSoon: true },
+];
 
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { viewMode: viewModeParam, lat, lng } = useLocalSearchParams();
   
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    viewModeParam === 'map' ? 'map' : 'list'
+  );
+  const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number } | undefined>(
+    lat && lng ? { latitude: parseFloat(lat as string), longitude: parseFloat(lng as string) } : undefined
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -122,27 +77,12 @@ export default function DiscoverScreen() {
   const [nearbyShops, setNearbyShops] = useState<NearbyItem[]>([]);
   const [nearbyProducers, setNearbyProducers] = useState<NearbyItem[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
+  const [nearbyCheeses, setNearbyCheeses] = useState<NearbyItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   useEffect(() => {
     initializeLocation();
   }, []);
-  const { type, region, filter, search } = useLocalSearchParams();
-  const initialSearch = typeof search === 'string' ? search : '';
-
-  const [items,      setItems]      = useState<DiscoverItem[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [activeFilter, setActive]   = useState<'all' | 'cheese' | 'articles' | 'recipes'>('all');
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
-  const [allItems, setAllItems] = useState<DiscoverItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState(initialSearch);
-
-  // Sync searchQuery when search param changes (e.g. navigating from flavor tag)
-  useEffect(() => {
-    if (initialSearch) {
-      setSearchQuery(initialSearch);
-    }
-  }, [initialSearch]);
 
   useEffect(() => {
     if (userLocation) {
@@ -158,130 +98,6 @@ export default function DiscoverScreen() {
         setLoading(false);
         fetchAllItems();
         return;
-      let all: DiscoverItem[] = [];
-
-      /* Users - Search when query starts with @ or contains username-like pattern */
-      if (searchQuery && (searchQuery.startsWith('@') || searchQuery.includes('@'))) {
-        const users = await searchUsers(searchQuery);
-        all.push(
-          ...users.map(u => ({
-            id: u.id,
-            title: u.name || 'Cheese Lover',
-            description: u.vanity_url ? `@${u.vanity_url}` : (u.tagline || 'Cheese enthusiast'),
-            image_url: u.avatar_url || 'https://via.placeholder.com/100?text=User',
-            type: 'user' as const,
-            metadata: {
-              vanity_url: u.vanity_url || undefined,
-              tagline: u.tagline || undefined,
-            },
-          }))
-        );
-      }
-
-      /* Cheeses - Show both producer cheeses and cheese types */
-      if (activeFilter === 'all' || activeFilter === 'cheese') {
-        // Fetch producer cheeses - if searching, get more for fuzzy matching
-        let producerQuery = supabase
-          .from('producer_cheese_stats')
-          .select('id, full_name, image_url, cheese_type_name, producer_name, average_rating, rating_count, flavor, aroma');
-        
-        // Apply type filter if present
-        if (type && typeof type === 'string') {
-          producerQuery = producerQuery.eq('cheese_type_name', type);
-        }
-        
-        // If searching, get more results for fuzzy matching; otherwise limit
-        const limit = searchQuery && searchQuery.trim() ? 200 : 50;
-        const { data: producerCheeses } = await producerQuery.limit(limit);
-
-        if (producerCheeses) {
-          all.push(
-            ...producerCheeses.map(c => {
-              // Hide "Generic" producer - just show cheese type name
-              const isGeneric = c.producer_name?.toLowerCase().includes('generic') || 
-                                c.producer_name?.toLowerCase().includes('unknown');
-              const displayTitle = isGeneric ? c.cheese_type_name : c.full_name;
-              
-              return {
-                id: c.id,
-                title: displayTitle,
-                description: `${c.producer_name} ${c.cheese_type_name}`,
-                image_url: c.image_url || 'https://via.placeholder.com/400?text=Cheese',
-                type: 'producer-cheese' as const,
-                metadata: {
-                  cheese_type: c.cheese_type_name,
-                  producer_name: c.producer_name,
-                  flavor: c.flavor || undefined,
-                  aroma: c.aroma || undefined,
-                  average_rating: c.average_rating,
-                  rating_count: c.rating_count,
-                },
-              };
-            })
-          );
-        }
-
-      }
-
-      /* Articles & Recipes */
-      if (activeFilter === 'all' || activeFilter === 'articles' || activeFilter === 'recipes') {
-        const { data: entries } = await supabase
-          .from('cheezopedia_entries')
-          .select('id, title, description, image_url, content_type, reading_time_minutes')
-          .eq('visible_in_feed', true)
-          .order('published_at', { ascending: false })
-          .limit(50);
-
-        if (entries) {
-          all.push(
-            ...entries
-              .filter(e => {
-                if (activeFilter === 'articles') return e.content_type === 'article';
-                if (activeFilter === 'recipes')  return e.content_type === 'recipe';
-                return true;
-              })
-              .map(e => ({
-                id:        e.id,
-                title:     e.title,
-                description: e.description,
-                image_url: e.image_url,
-                type:      e.content_type === 'recipe' ? 'recipe' as DiscoverItem['type'] : 'article' as DiscoverItem['type'],
-                metadata:  { reading_time: e.reading_time_minutes },
-              }))
-          );
-        }
-      }
-
-      /* Client-side aggressive fuzzy filter */
-      if (searchQuery && searchQuery.trim()) {
-        const searchTerms = expandSearchTerm(searchQuery);
-        
-        // Score each item by relevance
-        const scoredItems = all.map(i => {
-          let score = 0;
-          
-          searchTerms.forEach(term => {
-            // Title matches score highest
-            if (fuzzyMatch(i.title, term)) score += 10;
-            if (i.description && fuzzyMatch(i.description, term)) score += 5;
-            if (i.metadata?.cheese_type && fuzzyMatch(i.metadata.cheese_type, term)) score += 8;
-            if (i.metadata?.origin_country && fuzzyMatch(i.metadata.origin_country, term)) score += 3;
-            if (i.metadata?.producer_name && fuzzyMatch(i.metadata.producer_name, term)) score += 4;
-            if (i.metadata?.flavor && fuzzyMatch(i.metadata.flavor, term)) score += 9;
-            if (i.metadata?.aroma && fuzzyMatch(i.metadata.aroma, term)) score += 7;
-          });
-          
-          return { item: i, score };
-        });
-        
-        // Filter items with any score and sort by relevance
-        all = scoredItems
-          .filter(({ score }) => score > 0)
-          .sort((a, b) => b.score - a.score)
-          .map(({ item }) => item);
-      } else {
-        // No search - shuffle for discovery
-        all = all.sort(() => Math.random() - 0.5);
       }
 
       const location = await Location.getCurrentPositionAsync({
@@ -339,6 +155,21 @@ export default function DiscoverScreen() {
         setNearbyProducers(producers.map((p: any) => ({
           ...p,
           type: 'producer' as const,
+        })));
+      }
+
+      if (cheeses.length > 0) {
+        setNearbyCheeses(cheeses.map((c: any) => ({
+          id: c.producer_cheese_id || c.id,
+          name: c.name,
+          type: 'cheese' as const,
+          image_url: c.image_url,
+          address: c.origin_region ? `${c.origin_region}, ${c.origin_country}` : c.origin_country,
+          city: c.origin_region,
+          country: c.origin_country,
+          latitude: c.latitude,
+          longitude: c.longitude,
+          distance_km: c.distance_km,
         })));
       }
 
@@ -428,6 +259,8 @@ export default function DiscoverScreen() {
   const handleItemPress = (item: NearbyItem) => {
     if (item.type === 'shop') {
       router.push(`/shop/${item.id}`);
+    } else if (item.type === 'cheese') {
+      router.push(`/producer-cheese/${item.id}`);
     } else {
       router.push(`/producer/${item.id}`);
     }
@@ -529,13 +362,8 @@ export default function DiscoverScreen() {
       />
       <View style={styles.nearbyCardContent}>
         <View style={styles.nearbyCardBadge}>
-          {item.type === 'shop' ? (
-            <Store size={12} color={Colors.primary} />
-          ) : (
-            <Factory size={12} color="#4CAF50" />
-          )}
           <Text style={styles.nearbyCardBadgeText}>
-            {item.type === 'shop' ? 'Shop' : 'Producer'}
+            {item.type === 'shop' ? 'Shop' : item.type === 'cheese' ? 'Cheese' : 'Producer'}
           </Text>
           {item.is_verified && (
             <View style={styles.verifiedDot} />
@@ -582,7 +410,7 @@ export default function DiscoverScreen() {
     </View>
   );
 
-  const hasItems = nearbyShops.length > 0 || nearbyProducers.length > 0;
+  const hasItems = nearbyShops.length > 0 || nearbyProducers.length > 0 || nearbyCheeses.length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -590,43 +418,61 @@ export default function DiscoverScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.title}>Discover</Text>
-          <Text style={styles.subtitle}>
-            {userLocation ? 'Cheese around you' : 'Explore cheese places'}
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
+        <Text style={styles.title}>Discover</Text>
+        <NotificationBell />
+      </View>
+
+      {/* Segmented Toggle */}
+      <View style={styles.toggleContainer}>
+        <View style={styles.togglePill}>
           <TouchableOpacity
-            style={styles.viewToggle}
-            onPress={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}
+            style={[styles.toggleOption, viewMode === 'map' && styles.toggleOptionActive]}
+            onPress={() => setViewMode('map')}
           >
-            {viewMode === 'map' ? (
-              <List size={22} color={Colors.text} />
-            ) : (
-              <Map size={22} color={Colors.text} />
-            )}
+            <Map size={16} color={viewMode === 'map' ? Colors.text : Colors.subtleText} />
+            <Text style={[styles.toggleText, viewMode === 'map' && styles.toggleTextActive]}>Map</Text>
           </TouchableOpacity>
-          <NotificationBell />
+          <TouchableOpacity
+            style={[styles.toggleOption, viewMode === 'list' && styles.toggleOptionActive]}
+            onPress={() => setViewMode('list')}
+          >
+            <List size={16} color={viewMode === 'list' ? Colors.text : Colors.subtleText} />
+            <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>List</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Location Banner */}
-      {userLocation && (
-        <View style={styles.locationBanner}>
-          <Navigation size={14} color={Colors.primary} />
-          <Text style={styles.locationBannerText}>
-            Showing places near you
-          </Text>
-        </View>
-      )}
-      <SearchBar
-        placeholder="Search everything..."
-        initialValue={initialSearch}
-        onSearch={setSearchQuery}
-        onFilter={() => setShowFilterPanel(true)}
-      />
-
+      {/* Filter Bar */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterBarScroll}
+        contentContainerStyle={styles.filterBar}
+      >
+        {FILTERS.map((f) => (
+          <TouchableOpacity
+            key={f.key}
+            style={[
+              styles.filterChip,
+              activeFilter === f.key && styles.filterChipActive,
+              f.comingSoon && styles.filterChipDisabled,
+            ]}
+            onPress={() => !f.comingSoon && setActiveFilter(f.key)}
+            activeOpacity={f.comingSoon ? 1 : 0.7}
+          >
+            <Text style={[
+              styles.filterChipText,
+              activeFilter === f.key && styles.filterChipTextActive,
+              f.comingSoon && styles.filterChipTextDisabled,
+            ]}>
+              {f.label}
+            </Text>
+            {f.comingSoon && (
+              <Text style={styles.comingSoonBadge}>Soon</Text>
+            )}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
       {/* Main Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -639,7 +485,7 @@ export default function DiscoverScreen() {
           onMarkerPress={handleMarkerPress}
           onRegionChange={handleRegionChange}
           showUserLocation={true}
-          initialCenter={userLocation || undefined}
+          initialCenter={mapCenter || userLocation || undefined}
           style={styles.map}
         />
       ) : (
@@ -655,10 +501,9 @@ export default function DiscoverScreen() {
           ) : (
             <>
               {/* Shops Section */}
-              {nearbyShops.length > 0 && (
+              {(activeFilter === 'all' || activeFilter === 'shops') && nearbyShops.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Store size={20} color={Colors.primary} />
                     <Text style={styles.sectionTitle}>Cheese Shops</Text>
                     <Text style={styles.sectionCount}>{nearbyShops.length}</Text>
                   </View>
@@ -667,28 +512,28 @@ export default function DiscoverScreen() {
               )}
 
               {/* Producers Section */}
-              {nearbyProducers.length > 0 && (
+              {(activeFilter === 'all' || activeFilter === 'producers') && nearbyProducers.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Factory size={20} color="#4CAF50" />
                     <Text style={styles.sectionTitle}>Producers</Text>
                     <Text style={styles.sectionCount}>{nearbyProducers.length}</Text>
                   </View>
                   {nearbyProducers.map(renderNearbyCard)}
                 </View>
               )}
+
+              {/* Cheeses Section */}
+              {(activeFilter === 'all' || activeFilter === 'cheeses') && nearbyCheeses.length > 0 && (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Cheeses Near You</Text>
+                    <Text style={styles.sectionCount}>{nearbyCheeses.length}</Text>
+                  </View>
+                  {nearbyCheeses.map(renderNearbyCard)}
+                </View>
+              )}
             </>
           )}
-
-          {/* Search CTA */}
-          <TouchableOpacity
-            style={styles.searchCTA}
-            onPress={() => router.push('/search')}
-          >
-            <Search size={20} color={Colors.primary} />
-            <Text style={styles.searchCTAText}>Search for cheeses, recipes & more</Text>
-            <ChevronRight size={18} color={Colors.subtleText} />
-          </TouchableOpacity>
 
           <View style={styles.bottomSpacing} />
         </ScrollView>
@@ -708,17 +553,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Layout.spacing.s,
   },
   title: {
     fontSize: Typography.sizes['3xl'],
@@ -726,19 +563,87 @@ const styles = StyleSheet.create({
     color: Colors.text,
     letterSpacing: Typography.letterSpacing.tight,
   },
-  subtitle: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    marginTop: 4,
+
+  // Segmented Toggle
+  toggleContainer: {
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.s,
   },
-  viewToggle: {
-    width: 40,
-    height: 40,
+  togglePill: {
+    flexDirection: 'row',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: Layout.borderRadius.large,
+    padding: 3,
+  },
+  toggleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Layout.spacing.l,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: Layout.borderRadius.large,
+  },
+  toggleOptionActive: {
+    backgroundColor: Colors.card,
+    ...Layout.shadow.small,
+  },
+  toggleText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+  },
+  toggleTextActive: {
+    color: Colors.text,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+
+  // Filter Bar
+  filterBarScroll: {
+    flexGrow: 0,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+    paddingHorizontal: Layout.spacing.m,
+    paddingBottom: Layout.spacing.s,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: Colors.backgroundSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterChipDisabled: {
+    opacity: 0.5,
+  },
+  filterChipText: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.bodyMedium,
+    color: Colors.subtleText,
+  },
+  filterChipTextActive: {
+    color: Colors.text,
+    fontFamily: Typography.fonts.bodySemiBold,
+  },
+  filterChipTextDisabled: {
+    color: Colors.subtleText,
+  },
+  comingSoonBadge: {
+    fontSize: 9,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.primary,
+    backgroundColor: 'rgba(252, 217, 91, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
 
   // Location Banner
