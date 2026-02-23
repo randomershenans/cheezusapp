@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -79,6 +79,18 @@ export default function DiscoverScreen() {
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [nearbyCheeses, setNearbyCheeses] = useState<NearbyItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+
+  const filteredMapMarkers = useMemo(() => {
+    if (activeFilter === 'all') return mapMarkers;
+    const typeMap: Record<FilterType, string> = {
+      all: '',
+      cheeses: 'cheese',
+      producers: 'producer',
+      shops: 'shop',
+      events: 'event',
+    };
+    return mapMarkers.filter(m => m.type === typeMap[activeFilter]);
+  }, [mapMarkers, activeFilter]);
 
   useEffect(() => {
     initializeLocation();
@@ -481,7 +493,7 @@ export default function DiscoverScreen() {
         </View>
       ) : viewMode === 'map' ? (
         <CheeseMap
-          markers={mapMarkers}
+          markers={filteredMapMarkers}
           onMarkerPress={handleMarkerPress}
           onRegionChange={handleRegionChange}
           showUserLocation={true}
@@ -526,7 +538,7 @@ export default function DiscoverScreen() {
               {(activeFilter === 'all' || activeFilter === 'cheeses') && nearbyCheeses.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Cheeses Near You</Text>
+                    <Text style={styles.sectionTitle}>Cheese Near You</Text>
                     <Text style={styles.sectionCount}>{nearbyCheeses.length}</Text>
                   </View>
                   {nearbyCheeses.map(renderNearbyCard)}

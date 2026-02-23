@@ -15,6 +15,7 @@ import {
   NativeScrollEvent,
   LayoutChangeEvent,
   Share,
+  Clipboard,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,6 +29,7 @@ import {
   Award,
   Navigation,
   ExternalLink,
+  Copy,
 } from 'lucide-react-native';
 
 import {
@@ -455,7 +457,15 @@ export default function ProducerDetailScreen() {
               <Text style={styles.mapButtonText}>Show on Map</Text>
             </TouchableOpacity>
             {producer.address && (
-              <Text style={styles.mapAddress}>{producer.address}</Text>
+              <View style={styles.mapAddressRow}>
+                <Text style={styles.mapAddress}>{producer.address}</Text>
+                <TouchableOpacity
+                  onPress={() => Clipboard.setString(producer.address!)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Copy size={14} color={Colors.subtleText} />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         )}
@@ -681,11 +691,17 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.bodySemiBold,
     color: Colors.text,
   },
+  mapAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Layout.spacing.m,
+  },
   mapAddress: {
     fontSize: Typography.sizes.sm,
     fontFamily: Typography.fonts.body,
     color: Colors.subtleText,
-    marginTop: Layout.spacing.m,
     textAlign: 'center',
   },
 
