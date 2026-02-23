@@ -84,7 +84,6 @@ export default function VideoHero({
       )}
 
       {/* Gradient overlay */}
-      <View style={styles.gradientTop} />
       <View style={styles.gradientBottom} />
 
       {/* Top bar: Back + Share */}
@@ -154,14 +153,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     width: SCREEN_WIDTH,
     height: HERO_HEIGHT,
-  },
-  gradientTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 140,
-    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   gradientBottom: {
     position: 'absolute',
