@@ -57,6 +57,7 @@ export default function ProducerCheeseDetailScreen() {
   const [relatedContent, setRelatedContent] = useState<LinkedContent[]>([]);
   const [contentCount, setContentCount] = useState(0);
   const [tasteMatchReasons, setTasteMatchReasons] = useState<string[]>([]);
+  const [producersOfThisCheese, setProducersOfThisCheese] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -110,6 +111,28 @@ export default function ProducerCheeseDetailScreen() {
         setOtherProducerCheeses(otherCheeses);
       }
 
+      // For generic cheeses, fetch other producers that make this cheese type
+      const isGenericProducer = cheeseData.producer_name &&
+        (cheeseData.producer_name.toLowerCase().includes('generic') ||
+         cheeseData.producer_name.toLowerCase().includes('unknown'));
+
+      if (isGenericProducer && cheeseData.cheese_type_name) {
+        const typeName = cheeseData.cheese_type_name;
+        const { data: producerVersions, error: producerVersionsError } = await supabase
+          .from('producer_cheese_stats')
+          .select('*')
+          .or(`cheese_type_name.ilike.%${typeName}%,product_name.ilike.%${typeName}%`)
+          .neq('id', id)
+          .not('producer_name', 'ilike', '%generic%')
+          .not('producer_name', 'ilike', '%unknown%')
+          .order('average_rating', { ascending: false })
+          .limit(10);
+
+        if (!producerVersionsError && producerVersions) {
+          setProducersOfThisCheese(producerVersions);
+        }
+      }
+
       // Fetch related content (articles, recipes) for this cheese
       fetchRelatedContent(cheeseData.cheese_type_id || null);
 
@@ -156,7 +179,6 @@ export default function ProducerCheeseDetailScreen() {
       const profile = await getUserTasteProfile(user.id);
       if (!profile) return;
 
-      const reasons: string[] = [];
       const cheeseData = cheese as any;
 
       const isGeneric = (val: string | null | undefined): boolean => {
@@ -165,37 +187,74 @@ export default function ProducerCheeseDetailScreen() {
         return lower.includes('generic') || lower.includes('unknown');
       };
 
-      // Check family match
+      // Collect matching attributes with specificity weights
+      // Higher weight = more specific/meaningful match
+      let matchScore = 0;
+      const matchedFlavors: string[] = [];
+      let matchedType: string | null = null;
+      let matchedFamily: string | null = null;
+      let matchedCountry: string | null = null;
+      let matchedMilk: string | null = null;
+      let matchedProducer: string | null = null;
+
+      // Flavor tags — most specific signal (weight: 3 per flavor)
+      if (profile.favorite_flavors?.length && flavorTags.length) {
+        const flavors = flavorTags
+          .filter(tag => profile.favorite_flavors!.some(
+            (f: string) => f.toLowerCase() === tag.name.toLowerCase()
+          ))
+          .map(tag => tag.name.toLowerCase());
+        if (flavors.length > 0) {
+          matchedFlavors.push(...flavors.slice(0, 3));
+          matchScore += flavors.length * 3;
+        }
+      }
+
+      // Cheese type (Hard, Soft, etc.) — weight: 2
+      if (profile.favorite_types?.length && cheeseData.cheese_type && !isGeneric(cheeseData.cheese_type)) {
+        const found = profile.favorite_types.find(
+          (t: string) => t.toLowerCase() === cheeseData.cheese_type.toLowerCase()
+        );
+        if (found) {
+          matchedType = found.toLowerCase();
+          matchScore += 2;
+        }
+      }
+
+      // Family (Bloomy Rind, Blue, etc.) — weight: 2
       if (profile.favorite_families?.length && cheeseData.cheese_family && !isGeneric(cheeseData.cheese_family)) {
-        const matchedFamily = profile.favorite_families.find(
+        const found = profile.favorite_families.find(
           (f: string) => f.toLowerCase() === cheeseData.cheese_family.toLowerCase()
         );
-        if (matchedFamily) {
-          reasons.push(`You enjoy ${matchedFamily} cheeses`);
+        if (found) {
+          matchedFamily = found.toLowerCase();
+          matchScore += 2;
         }
       }
 
-      // Check country match
+      // Country — weight: 1
       if (profile.favorite_countries?.length && cheese.origin_country) {
-        const matchedCountry = profile.favorite_countries.find(
+        const found = profile.favorite_countries.find(
           (c: string) => c.toLowerCase() === cheese.origin_country!.toLowerCase()
         );
-        if (matchedCountry) {
-          reasons.push(`You like cheeses from ${matchedCountry}`);
+        if (found) {
+          matchedCountry = found;
+          matchScore += 1;
         }
       }
 
-      // Check milk type match
+      // Milk type — weight: 1
       if (profile.favorite_milk_types?.length && cheese.milk_type) {
-        const matchedMilk = profile.favorite_milk_types.find(
+        const found = profile.favorite_milk_types.find(
           (m: string) => m.toLowerCase() === cheese.milk_type!.toLowerCase()
         );
-        if (matchedMilk) {
-          reasons.push(`You prefer ${matchedMilk} milk cheeses`);
+        if (found) {
+          matchedMilk = found.toLowerCase();
+          matchScore += 1;
         }
       }
 
-      // Check producer match (RPC returns producer_id UUIDs)
+      // Producer — weight: 3 (very specific)
       if (profile.favorite_producers?.length && !isGeneric(cheese.producer_name)) {
         const { data: pcRow } = await supabase
           .from('producer_cheeses')
@@ -203,30 +262,40 @@ export default function ProducerCheeseDetailScreen() {
           .eq('id', id)
           .single();
         if (pcRow?.producer_id && profile.favorite_producers.includes(pcRow.producer_id)) {
-          reasons.push(`You've enjoyed cheeses by ${cheese.producer_name}`);
+          matchedProducer = cheese.producer_name || null;
+          matchScore += 3;
         }
       }
 
-      // Check flavor tag match
-      if (profile.favorite_flavors?.length && flavorTags.length) {
-        const matchedFlavors = flavorTags
-          .filter(tag => profile.favorite_flavors!.some(
-            (f: string) => f.toLowerCase() === tag.name.toLowerCase()
-          ))
-          .map(tag => tag.name);
-        if (matchedFlavors.length > 0) {
-          reasons.push(`You enjoy ${matchedFlavors.slice(0, 3).join(', ')} flavours`);
-        }
+      // Require minimum match score of 3 to show anything
+      // This means: at least 1 flavor match, or type+country, or family+milk, etc.
+      // A single broad match (just country or just milk) won't trigger it
+      if (matchScore < 3) {
+        setTasteMatchReasons([]);
+        return;
       }
 
-      // Check cheese type match
-      if (profile.favorite_types?.length && cheeseData.cheese_type && !isGeneric(cheeseData.cheese_type)) {
-        const matchedType = profile.favorite_types.find(
-          (t: string) => t.toLowerCase() === cheeseData.cheese_type.toLowerCase()
-        );
-        if (matchedType) {
-          reasons.push(`You tend to like ${matchedType} cheeses`);
-        }
+      const reasons: string[] = [];
+
+      // Build a layered, concatenated primary reason
+      // e.g. "You like French, hard, nutty cheeses"
+      const descriptors: string[] = [];
+      if (matchedCountry) descriptors.push(matchedCountry);
+      if (matchedType) descriptors.push(matchedType);
+      if (matchedFamily) descriptors.push(matchedFamily);
+      if (matchedFlavors.length > 0) descriptors.push(matchedFlavors.join(', '));
+
+      if (descriptors.length >= 2) {
+        reasons.push(`You like ${descriptors.join(', ')} cheeses`);
+      } else if (descriptors.length === 1 && matchedFlavors.length > 0) {
+        reasons.push(`You enjoy ${matchedFlavors.join(' & ')} flavours`);
+      } else if (descriptors.length === 1) {
+        reasons.push(`You like ${descriptors[0]} cheeses`);
+      }
+
+      // Add producer match as a separate specific reason
+      if (matchedProducer) {
+        reasons.push(`You've enjoyed cheeses by ${matchedProducer}`);
       }
 
       setTasteMatchReasons(reasons);
@@ -938,6 +1007,49 @@ export default function ProducerCheeseDetailScreen() {
             </View>
           )}
 
+          {/* Producers that make this cheese - shown for generic cheeses */}
+          {producersOfThisCheese.length > 0 && producerCheese && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Producers that make {producerCheese.cheese_type_name || 'this cheese'}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.horizontalScroll}
+              >
+                {producersOfThisCheese.map((cheese) => (
+                  <TouchableOpacity
+                    key={cheese.id}
+                    style={styles.relatedCard}
+                    onPress={() => router.push(`/producer-cheese/${cheese.id}`)}
+                  >
+                    <Image
+                      source={{
+                        uri: cheese.image_url || 'https://via.placeholder.com/120?text=Cheese',
+                      }}
+                      style={styles.relatedImage}
+                    />
+                    <Text style={styles.relatedProducerName} numberOfLines={1}>
+                      {cheese.producer_name}
+                    </Text>
+                    <Text style={styles.relatedName} numberOfLines={2}>
+                      {cheese.full_name}
+                    </Text>
+                    {cheese.average_rating > 0 && (
+                      <View style={styles.relatedRating}>
+                        <Star size={12} color="#FFD700" fill="#FFD700" />
+                        <Text style={styles.relatedRatingText}>
+                          {cheese.average_rating.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Related Content Section */}
           {relatedContent.length > 0 && (
             <View style={styles.section}>
@@ -1301,6 +1413,14 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     backgroundColor: Colors.lightGray,
+  },
+  relatedProducerName: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodySemiBold,
+    color: Colors.primary,
+    paddingHorizontal: Layout.spacing.s,
+    paddingTop: Layout.spacing.s,
+    textTransform: 'uppercase',
   },
   relatedName: {
     fontSize: Typography.sizes.sm,

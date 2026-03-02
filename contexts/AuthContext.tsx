@@ -11,7 +11,6 @@ interface UserProfile {
   location: string | null;
   avatar_url: string | null;
   vanity_url: string | null;
-  premium: boolean;
 }
 
 interface AuthContextType {
@@ -40,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, name, tagline, location, avatar_url, vanity_url, premium')
+        .select('id, name, tagline, location, avatar_url, vanity_url')
         .eq('id', userId)
         .single();
       if (data) setProfile(data);

@@ -59,6 +59,21 @@
 
 ---
 
+## "Producers That Make This Cheese" for Generic Cheeses (March 2, 2026)
+
+### Feature: Show producer versions of generic cheeses
+- **Problem**: Generic cheeses (e.g. Parmesan, Brie) have no specific producer and lack contextual info. The "More from Producer" section is hidden for these, leaving a gap.
+- **Solution**: When viewing a generic cheese (producer_name contains "generic" or "unknown"), a new section appears: **"Producers that make [Cheese Type]"**. This lists up to 10 producer_cheeses sharing the same `cheese_type_id`, excluding other generics, ordered by rating.
+
+### Files Changed
+- **`app/producer-cheese/[id].tsx`**:
+  - Added `producersOfThisCheese` state
+  - Fetches from `producer_cheese_stats` where `cheese_type_id` matches, excluding generic/unknown producers
+  - New UI section with horizontal scroll cards showing producer name (yellow label), cheese name, and rating
+  - Added `relatedProducerName` style for the producer label on cards
+
+---
+
 ## Map Back-Navigation Fix (March 2, 2026)
 
 ### Fixed: User unable to return to cheese/producer page after "Show on Map"

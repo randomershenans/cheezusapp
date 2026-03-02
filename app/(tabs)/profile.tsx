@@ -33,7 +33,6 @@ type Profile = {
   location: string | null;
   avatar_url: string | null;
   vanity_url: string | null;
-  premium: boolean;
   created_at: string;
   updated_at: string;
 };
