@@ -138,6 +138,27 @@ export default function CheeseMap({
     return '#FFA726'; // Orange for cheeses
   };
 
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Get distance from user to a marker (always relative to user, not map center)
+  const getDistanceToMarker = (marker: MapMarker): number | undefined => {
+    if (!userLocation) return marker.distance_km;
+    return calculateDistanceKm(
+      userLocation.latitude, userLocation.longitude,
+      marker.latitude, marker.longitude
+    );
+  };
+
   const center = initialCenter || userLocation || DEFAULT_MAP_CENTER;
 
   // Fallback - show placeholder when Mapbox not available (web or Expo Go)
@@ -310,13 +331,17 @@ export default function CheeseMap({
                 </Text>
               )}
 
-              {selectedMarker.distance_km !== undefined && (
-                <Text style={styles.markerCardDistance}>
-                  {selectedMarker.distance_km < 1
-                    ? `${Math.round(selectedMarker.distance_km * 1000)}m away`
-                    : `${selectedMarker.distance_km.toFixed(1)}km away`}
-                </Text>
-              )}
+              {(() => {
+                const dist = getDistanceToMarker(selectedMarker);
+                if (dist === undefined) return null;
+                return (
+                  <Text style={styles.markerCardDistance}>
+                    {dist < 1
+                      ? `${Math.round(dist * 1000)}m away`
+                      : `${dist.toFixed(1)}km away`}
+                  </Text>
+                );
+              })()}
             </View>
           </TouchableOpacity>
         </View>

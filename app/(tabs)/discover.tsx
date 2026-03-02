@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Compass,
   Search,
+  ArrowLeft,
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import NotificationBell from '@/components/NotificationBell';
@@ -62,7 +63,7 @@ const FILTERS: { key: FilterType; label: string; comingSoon?: boolean }[] = [
 
 export default function DiscoverScreen() {
   const router = useRouter();
-  const { viewMode: viewModeParam, lat, lng } = useLocalSearchParams();
+  const { viewMode: viewModeParam, lat, lng, source } = useLocalSearchParams();
   
   const [viewMode, setViewMode] = useState<ViewMode>(
     viewModeParam === 'map' ? 'map' : 'list'
@@ -97,10 +98,11 @@ export default function DiscoverScreen() {
   }, []);
 
   useEffect(() => {
-    if (userLocation) {
-      fetchNearbyItems();
+    const center = mapCenter || userLocation;
+    if (center) {
+      fetchNearbyItems(center);
     }
-  }, [userLocation]);
+  }, [userLocation, mapCenter]);
 
   const initializeLocation = async () => {
     try {
@@ -129,25 +131,26 @@ export default function DiscoverScreen() {
     }
   };
 
-  const fetchNearbyItems = async () => {
-    if (!userLocation) return;
+  const fetchNearbyItems = async (center?: { latitude: number; longitude: number }) => {
+    const searchCenter = center || mapCenter || userLocation;
+    if (!searchCenter) return;
 
     try {
       // Fetch nearby shops, producers, and cheeses in parallel
       const [shopsRes, producersRes, cheesesRes] = await Promise.all([
         supabase.rpc('find_nearby_shops', {
-          p_latitude: userLocation.latitude,
-          p_longitude: userLocation.longitude,
+          p_latitude: searchCenter.latitude,
+          p_longitude: searchCenter.longitude,
           p_radius_km: 100,
         }),
         supabase.rpc('find_nearby_producers', {
-          p_latitude: userLocation.latitude,
-          p_longitude: userLocation.longitude,
+          p_latitude: searchCenter.latitude,
+          p_longitude: searchCenter.longitude,
           p_radius_km: 100,
         }),
         supabase.rpc('find_nearby_cheese_types', {
-          p_latitude: userLocation.latitude,
-          p_longitude: userLocation.longitude,
+          p_latitude: searchCenter.latitude,
+          p_longitude: searchCenter.longitude,
           p_radius_km: 100,
         }),
       ]);
@@ -260,13 +263,14 @@ export default function DiscoverScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (userLocation) {
-      await fetchNearbyItems();
+    const center = mapCenter || userLocation;
+    if (center) {
+      await fetchNearbyItems(center);
     } else {
       await fetchAllItems();
     }
     setRefreshing(false);
-  }, [userLocation]);
+  }, [userLocation, mapCenter]);
 
   const handleItemPress = (item: NearbyItem) => {
     if (item.type === 'shop') {
@@ -444,6 +448,11 @@ export default function DiscoverScreen() {
 
       {/* Header */}
       <View style={styles.header}>
+        {source ? (
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color={Colors.text} />
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.title}>Discover</Text>
         <NotificationBell />
       </View>
@@ -582,6 +591,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: Layout.spacing.s,
+  },
+  backButton: {
+    marginRight: Layout.spacing.s,
+    padding: 4,
   },
   title: {
     fontSize: Typography.sizes['3xl'],

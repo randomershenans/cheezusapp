@@ -50,6 +50,14 @@ export interface FeedSponsored {
   product_name?: string;
 }
 
+export interface TopRatedCheese {
+  name: string;
+  family: string | null;
+  country: string | null;
+  milk_type: string | null;
+  type_name: string | null;
+}
+
 export interface UserTasteProfile {
   cheese_count: number;
   tier: 'new' | 'starting' | 'building' | 'connoisseur';
@@ -60,6 +68,7 @@ export interface UserTasteProfile {
   favorite_countries: string[] | null;
   favorite_milk_types: string[] | null;
   favorite_producers: string[] | null;
+  top_rated_cheeses: TopRatedCheese[] | null;
   tried_cheese_ids: string[] | null;
 }
 
@@ -170,11 +179,87 @@ export const getPersonalizedFeed = async (
 };
 
 /**
+ * Generate a personalized recommendation reason for a cheese based on user taste profile
+ */
+const generatePersonalizedReason = (
+  cheese: { cheese_type_name?: string; cheese_family?: string; origin_country?: string; milk_type?: string; producer_name?: string; average_rating?: number; rating_count?: number },
+  profile: UserTasteProfile | null
+): { reason: string; type: 'recommendation' | 'discovery' | 'trending' } => {
+  if (profile && profile.cheese_count > 0) {
+    const families = profile.favorite_families || [];
+    const countries = profile.favorite_countries || [];
+    const milkTypes = profile.favorite_milk_types || [];
+    const types = profile.favorite_types || [];
+    const topCheeses = profile.top_rated_cheeses || [];
+
+    // Try to find a specific cheese the user loved that shares attributes
+    if (topCheeses.length > 0) {
+      // Match by same cheese type - "Because you liked Brie"
+      if (cheese.cheese_type_name) {
+        const matchByType = topCheeses.find(tc => tc.type_name === cheese.cheese_type_name);
+        if (matchByType) {
+          return { reason: `Because you liked ${matchByType.name}`, type: 'recommendation' };
+        }
+      }
+
+      // Match by same family - "Because you loved [specific cheese] — another [family]"
+      if (cheese.cheese_family) {
+        const matchByFamily = topCheeses.find(tc => tc.family === cheese.cheese_family && tc.name !== cheese.cheese_type_name);
+        if (matchByFamily) {
+          return { reason: `Because you loved ${matchByFamily.name}`, type: 'recommendation' };
+        }
+      }
+
+      // Match by same country
+      if (cheese.origin_country) {
+        const matchByCountry = topCheeses.find(tc => tc.country === cheese.origin_country);
+        if (matchByCountry) {
+          return { reason: `Because you loved ${matchByCountry.name} from ${cheese.origin_country}`, type: 'recommendation' };
+        }
+      }
+    }
+
+    // Fallback to profile-level matches
+    if (cheese.cheese_type_name && types.includes(cheese.cheese_type_name)) {
+      return { reason: `Because you like ${cheese.cheese_type_name}`, type: 'recommendation' };
+    }
+    if (cheese.cheese_family && cheese.origin_country && families.includes(cheese.cheese_family) && countries.includes(cheese.origin_country)) {
+      return { reason: `Because you enjoy ${cheese.cheese_family.toLowerCase()} cheeses from ${cheese.origin_country}`, type: 'recommendation' };
+    }
+    if (cheese.cheese_family && families.includes(cheese.cheese_family)) {
+      return { reason: `Because you like ${cheese.cheese_family.toLowerCase()} cheeses`, type: 'recommendation' };
+    }
+    if (cheese.origin_country && countries.includes(cheese.origin_country)) {
+      return { reason: `Because you enjoy cheeses from ${cheese.origin_country}`, type: 'recommendation' };
+    }
+    if (cheese.milk_type && milkTypes.includes(cheese.milk_type)) {
+      return { reason: `Because you enjoy ${cheese.milk_type.toLowerCase()} milk cheeses`, type: 'recommendation' };
+    }
+  }
+
+  // No profile match — generate descriptive discovery reasons from the cheese's own attributes
+  if (cheese.average_rating && cheese.rating_count && cheese.rating_count > 0) {
+    return { reason: `Rated ${Number(cheese.average_rating).toFixed(1)} by ${cheese.rating_count} taster${cheese.rating_count > 1 ? 's' : ''}`, type: 'trending' };
+  }
+  if (cheese.cheese_family && cheese.origin_country) {
+    return { reason: `Explore this ${cheese.cheese_family.toLowerCase()} cheese from ${cheese.origin_country}`, type: 'discovery' };
+  }
+  if (cheese.origin_country) {
+    return { reason: `Discover a taste of ${cheese.origin_country}`, type: 'discovery' };
+  }
+  if (cheese.cheese_family) {
+    return { reason: `Try this ${cheese.cheese_family.toLowerCase()} cheese`, type: 'discovery' };
+  }
+  return { reason: 'A new cheese to discover', type: 'discovery' };
+};
+
+/**
  * Load more cheeses for infinite scroll - fetches random cheeses excluding already seen
  */
 export const loadMoreCheeses = async (
   excludeIds: string[],
-  limit: number = 15
+  limit: number = 15,
+  profile: UserTasteProfile | null = null
 ): Promise<FeedCheeseItem[]> => {
   try {
     // Fetch random cheeses that haven't been seen yet
@@ -183,7 +268,7 @@ export const loadMoreCheeses = async (
     
     let query = supabase
       .from('producer_cheese_stats')
-      .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, awards_image_url, average_rating, rating_count');
+      .select('id, full_name, cheese_type_name, cheese_family, producer_name, origin_country, origin_region, description, image_url, awards_image_url, average_rating, rating_count, milk_type');
     
     // Only apply the exclusion filter if we have valid IDs
     if (validExcludeIds.length > 0) {
@@ -198,26 +283,16 @@ export const loadMoreCheeses = async (
     // Shuffle and take the limit
     const shuffled = shuffleArray(cheeses).slice(0, limit);
 
-    // Convert to FeedCheeseItem format with random types for variety
-    const types: Array<'discovery' | 'trending'> = ['discovery', 'trending'];
-    const reasons = [
-      'Discover something new',
-      'Popular with cheese lovers',
-      'Highly rated',
-      'You might enjoy this',
-      'A cheese lover favorite',
-      'Worth trying',
-      'Explore this one',
-    ];
-
     return shuffled.map(cheese => {
       const isGeneric = cheese.producer_name?.toLowerCase().includes('generic') ||
                         cheese.producer_name?.toLowerCase().includes('unknown');
       const displayName = isGeneric ? cheese.cheese_type_name : cheese.full_name;
 
+      const { reason, type } = generatePersonalizedReason(cheese, profile);
+
       return {
         id: cheese.id,
-        type: types[Math.floor(Math.random() * types.length)],
+        type,
         cheese: {
           id: cheese.id,
           full_name: displayName,
@@ -230,7 +305,7 @@ export const loadMoreCheeses = async (
           average_rating: cheese.average_rating || 0,
           rating_count: cheese.rating_count || 0,
         },
-        reason: reasons[Math.floor(Math.random() * reasons.length)],
+        reason,
       };
     });
   } catch (error) {

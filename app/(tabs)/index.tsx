@@ -222,7 +222,7 @@ export default function HomeScreen() {
     setLoadingMore(true);
     Analytics.trackFeedLoadMore(user?.id);
     try {
-      const moreCheeses = await loadMoreCheeses(seenIds, 15);
+      const moreCheeses = await loadMoreCheeses(seenIds, 15, userProfile);
       
       if (moreCheeses.length === 0) {
         setHasMoreContent(false);
@@ -263,7 +263,7 @@ export default function HomeScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMoreContent, seenIds, searchQuery]);
+  }, [loadingMore, hasMoreContent, seenIds, searchQuery, userProfile]);
 
   // Handle scroll to detect when near bottom
   const handleScroll = useCallback((event: any) => {

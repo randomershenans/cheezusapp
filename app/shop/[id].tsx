@@ -183,6 +183,7 @@ export default function ShopDetailScreen() {
         viewMode: 'map',
         lat: shop.latitude.toString(),
         lng: shop.longitude.toString(),
+        source: 'shop',
       },
     });
   };

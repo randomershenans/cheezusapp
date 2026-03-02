@@ -251,6 +251,7 @@ export default function EventDetailScreen() {
         viewMode: 'map',
         lat: event.latitude.toString(),
         lng: event.longitude.toString(),
+        source: 'event',
       },
     });
   };

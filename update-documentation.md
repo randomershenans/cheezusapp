@@ -1,5 +1,92 @@
 # Cheezus App - Update Documentation
 
+## Personalized Feed Recommendations (March 1, 2026)
+
+### Made recommendation reasons specific and personal instead of generic
+- **Problem**: Feed recommendations showed generic text like "Matches your taste", "Popular choice", "Discover something new" — felt impersonal and didn't help users understand their own preferences
+- **Goal**: Recommendations should lead to self-discovery — "Because you liked Brie de Meaux", "Because you enjoy soft cheeses from France", "Because you love cheeses by Président"
+
+### Database Changes (`db/enhanced-feed-recommendations.sql`)
+1. **Enhanced `get_user_taste_profile()`**:
+   - Added `favorite_types` — top cheese type names rated 4+ (e.g., "Brie", "Comté")
+   - Added `favorite_flavors` — top flavor tags from highly-rated cheeses (e.g., "Nutty", "Creamy")
+   - Added `top_rated_cheeses` — array of objects with name, family, country, milk_type, type_name for the user's top 10 highest-rated cheeses (used for "Because you liked X" style reasons)
+
+2. **Enhanced `get_personalized_feed()`**:
+   - **Recommendations** now generate specific reasons:
+     - Producer match: "Because you love cheeses by [Producer Name]"
+     - Type match: "Because you liked [Cheese Type]"
+     - Family + Country: "Because you enjoy [family] cheeses from [Country]"
+     - Family only: "Because you like [family] cheeses"
+     - Country only: "Because you enjoy cheeses from [Country]"
+     - Milk type: "Because you enjoy [milk] milk cheeses"
+   - **Trending** now shows actual stats: "Rated 4.5 by 12 tasters"
+   - **Discovery** now describes the cheese: "Explore this semi-hard cheese from France"
+   - **Awards** now descriptive: "Award-winning soft cheese from Italy"
+   - Also matches on `favorite_types` (cheese type name) in addition to family/country/milk/producer
+
+### Client-Side Changes
+
+#### `lib/feed-service.ts`
+- Added `TopRatedCheese` interface for the new profile field
+- Added `top_rated_cheeses` to `UserTasteProfile` interface
+- Created `generatePersonalizedReason()` — smart reason generator that:
+  1. First tries to match by specific cheese the user loved (same type → "Because you liked Brie de Meaux")
+  2. Then by same family (→ "Because you loved [cheese name]")
+  3. Then by same country (→ "Because you loved [cheese] from [country]")
+  4. Falls back to profile-level matches (favorite types, families, countries, milk types)
+  5. For unmatched cheeses: uses descriptive text from cheese attributes instead of generic filler
+- Updated `loadMoreCheeses()` to accept optional `profile` parameter and use `generatePersonalizedReason()` instead of random generic strings
+
+#### `app/(tabs)/index.tsx`
+- Passes `userProfile` (taste profile) to `loadMoreCheeses()` for infinite scroll personalization
+- Added `userProfile` to `useCallback` dependency array
+
+### Deployment Steps
+1. Run `db/enhanced-feed-recommendations.sql` in Supabase SQL Editor
+2. Client-side changes take effect immediately after deploy
+
+### Example Recommendation Reasons (Before → After)
+| Before | After |
+|--------|-------|
+| "Matches your taste" | "Because you liked Comté" |
+| "From a region you enjoy" | "Because you enjoy cheeses from France" |
+| "From a producer you love" | "Because you love cheeses by Président" |
+| "Popular choice" | "Rated 4.5 by 12 tasters" |
+| "Discover something new" | "Explore this semi-hard cheese from Switzerland" |
+| "Award winner" | "Award-winning soft cheese from Italy" |
+| "You might enjoy this" (scroll) | "Because you like semi-soft cheeses" |
+
+---
+
+## Map Back-Navigation Fix (March 2, 2026)
+
+### Fixed: User unable to return to cheese/producer page after "Show on Map"
+- **Problem**: Tapping "Show on Map" on a cheese, producer, shop, or event page navigated to the Discover tab. Since tabs don't show back buttons, the user was stranded on Discover with no way to return to the page they were reviewing.
+- **Fix**: Added a `source` param to all "Show on Map" navigations. When Discover detects this param, it shows a back arrow button in the header that calls `router.back()`.
+
+### Files Changed
+- **`app/(tabs)/discover.tsx`**: Extracts `source` param, shows `ArrowLeft` back button in header when present, added `backButton` style
+- **`app/producer/[id].tsx`**: Added `source: 'producer'` to discover navigation params
+- **`app/shop/[id].tsx`**: Added `source: 'shop'` to discover navigation params
+- **`app/event/[id].tsx`**: Added `source: 'event'` to discover navigation params
+
+### Fixed: List view shows different results than map when navigating via "Show on Map"
+- **Problem**: Map centered on a producer (e.g. in Australia) but list still showed items near user's real location (e.g. USA). List and map were disconnected.
+- **Fix**: `fetchNearbyItems()` now uses `mapCenter` (from nav params) as the search center when available, falling back to `userLocation`. Both list and map now show items from the same area.
+- **Files**: `app/(tabs)/discover.tsx` — updated `fetchNearbyItems`, `useEffect`, and `onRefresh` to use `mapCenter || userLocation`
+
+### Fixed: Distance shows "0m away" when previewing a producer on the map
+- **Problem**: `find_nearby_*` RPCs return distance relative to the search center. When map is centered on a producer, distance from it to itself = 0.
+- **Fix**: CheeseMap now calculates distance from the **user's actual GPS location** to the selected marker using Haversine formula, instead of using the marker's `distance_km` (which was relative to the map center).
+- **Files**: `components/CheeseMap.tsx` — added `calculateDistanceKm()` and `getDistanceToMarker()`, updated preview card to use calculated distance
+
+### Murray's Duplicate Producer Cleanup
+- Found two producer records for Murray's: "Murray's" (USA, correct) and "Murray's Cheese" (France, incorrect duplicate)
+- Reassigned 1 cheese from duplicate to original, deleted duplicate producer
+
+---
+
 ## Shop Page Improvements & Event Details Page (February 23, 2026)
 
 ### Shop Page Fixes

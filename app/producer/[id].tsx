@@ -172,6 +172,7 @@ export default function ProducerDetailScreen() {
         viewMode: 'map',
         lat: showcase.latitude.toString(),
         lng: showcase.longitude.toString(),
+        source: 'producer',
       },
     });
   };
