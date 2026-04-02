@@ -16,9 +16,11 @@ import {
   SpaceGrotesk_600SemiBold,
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
+import { AppState } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext'
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
+import { Analytics } from '@/lib/analytics';
 import PushNotificationHandler from '@/components/PushNotificationHandler';
 
 // Prevent splash screen from auto-hiding
@@ -45,6 +47,17 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  // Track app open on mount and foreground
+  useEffect(() => {
+    Analytics.trackAppOpen(false);
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        Analytics.trackAppOpen(false);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Handle deep links
   useEffect(() => {

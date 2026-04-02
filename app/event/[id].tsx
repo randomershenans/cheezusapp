@@ -28,6 +28,8 @@ import {
 } from 'lucide-react-native';
 
 import { supabase } from '@/lib/supabase';
+import { Analytics } from '@/lib/analytics';
+import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -73,6 +75,7 @@ type Partner = {
 export default function EventDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
 
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [partner, setPartner] = useState<Partner | null>(null);
@@ -236,6 +239,7 @@ export default function EventDetailScreen() {
       const url = event.ticket_url || event.registration_url || '';
       const text = `Check out ${event.title}${url ? ` - ${url}` : ''}`;
       try {
+        Analytics.trackEventShare(event.id, 'sms', user?.id);
         await Linking.openURL(`sms:?body=${encodeURIComponent(text)}`);
       } catch {
         // Fallback - do nothing

@@ -5,6 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { User, ChevronRight, Settings, Pencil, Trophy, Award, Star, Sparkles, Target, Users, Share2 } from 'lucide-react-native';
 import { Share } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import { supabase } from '../../lib/supabase';
 import ProfilePictureUpload from '../../components/ProfilePictureUpload';
 import NotificationBell from '@/components/NotificationBell';
@@ -310,10 +311,13 @@ export default function ProfileScreen() {
       const profileUrl = profile.vanity_url 
         ? `https://cheezus.co/@${profile.vanity_url}`
         : `https://cheezus.co/profile/${user.id}`;
-      await Share.share({
+      const result = await Share.share({
         message: `Check out ${displayName}'s cheese journey on Cheezus! 🧀\n\n${profileUrl}`,
         title: `${displayName} on Cheezus`,
       });
+      if (result.action === Share.sharedAction) {
+        Analytics.trackProfileShare(result.activityType, user?.id);
+      }
     } catch (error) {
       console.error('Error sharing profile:', error);
     }
@@ -376,6 +380,7 @@ export default function ProfileScreen() {
       setProfile({ ...profile, vanity_url: cleanUrl });
       setIsEditingVanityUrl(false);
       setVanityUrlError('');
+      Analytics.trackShareLinkSet(cleanUrl, user?.id);
     } catch (error) {
       console.error('Error saving vanity URL:', error);
       setVanityUrlError('Failed to save');

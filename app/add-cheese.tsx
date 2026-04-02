@@ -8,6 +8,9 @@ import { uploadImageToStorage } from '@/lib/storage';
 import { CheeseSearch, CheeseSearchResult } from '@/components/add-cheese/CheeseSearch';
 import { AddToBoxForm, AddToBoxFormData } from '@/components/add-cheese/AddToBoxForm';
 import { NewCheeseForm, NewCheeseFormData, CheeseTypePrefill } from '@/components/add-cheese/NewCheeseForm';
+import SharePromptModal from '@/components/SharePromptModal';
+import MilestoneSharePrompt, { checkMilestone, hasShownMilestone, MilestoneNumber } from '@/components/MilestoneSharePrompt';
+import { useAuth } from '@/contexts/AuthContext';
 import Colors from '@/constants/Colors';
 
 type Step = 'search' | 'add-existing' | 'add-new';
@@ -15,6 +18,7 @@ type AddDestination = 'cheese_box' | 'wishlist';
 
 export default function AddCheeseScreen() {
   const router = useRouter();
+  const { user, profile } = useAuth();
   const [step, setStep] = useState<Step>('search');
   const [selectedCheese, setSelectedCheese] = useState<CheeseSearchResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,6 +31,46 @@ export default function AddCheeseScreen() {
 
   // State for existing cheese destination choice
   const [showExistingDestinationModal, setShowExistingDestinationModal] = useState(false);
+
+  // State for share prompt
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const [sharedCheeseName, setSharedCheeseName] = useState<string | null>(null);
+
+  // State for milestone share prompt
+  const [showMilestonePrompt, setShowMilestonePrompt] = useState(false);
+  const [milestoneCount, setMilestoneCount] = useState<MilestoneNumber | null>(null);
+
+  // Check if user hit a milestone and show the appropriate prompt
+  const checkAndShowMilestoneOrShare = async (userId: string, navigateFn: () => void, cheeseName?: string) => {
+    setSharedCheeseName(cheeseName || null);
+    try {
+      const { count, error } = await supabase
+        .from('cheese_box_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (!error && count !== null) {
+        const milestone = checkMilestone(count);
+        if (milestone) {
+          const alreadyShown = await hasShownMilestone(milestone);
+          if (!alreadyShown) {
+            setMilestoneCount(milestone);
+            setPendingNavigation(() => navigateFn);
+            setShowMilestonePrompt(true);
+            return;
+          }
+        }
+      }
+    } catch {
+      // Non-critical — fall through to regular share prompt
+    }
+
+    // No milestone — show regular share prompt
+    setPendingNavigation(() => navigateFn);
+    setShowSharePrompt(true);
+
+  };
 
   // Handle selecting an existing cheese
   const handleSelectExisting = (cheese: CheeseSearchResult) => {
@@ -159,19 +203,11 @@ export default function AddCheeseScreen() {
 
       if (error) throw error;
 
-      Alert.alert(
-        'Added! 🧀',
-        `${selectedCheese.name} is now in your cheese box`,
-        [
-          {
-            text: 'View Cheese',
-            onPress: () => router.replace(`/producer-cheese/${selectedCheese.id}`),
-          },
-          {
-            text: 'Back to Box',
-            onPress: () => router.replace('/(tabs)/cheese-box'),
-          },
-        ]
+      // Check for milestone, then show appropriate prompt before navigating
+      await checkAndShowMilestoneOrShare(
+        user.id,
+        () => router.replace('/(tabs)/cheese-box'),
+        selectedCheese.name
       );
     } catch (error) {
       console.error('Error adding to cheese box:', error);
@@ -406,6 +442,14 @@ export default function AddCheeseScreen() {
 
         // Update badges for cheese box additions
         await supabase.rpc('update_all_badges_for_user', { p_user_id: user.id });
+
+        // Check for milestone, then show appropriate prompt before navigating
+        await checkAndShowMilestoneOrShare(
+          user.id,
+          () => router.replace('/(tabs)/cheese-box'),
+          cheeseName
+        );
+        return;
       } else {
         // Add to wishlist
         const { data: existingWishlist } = await supabase
@@ -575,6 +619,40 @@ export default function AddCheeseScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Share Prompt Modal - shown after adding to cheese box */}
+      <SharePromptModal
+        visible={showSharePrompt}
+        onDismiss={() => {
+          setShowSharePrompt(false);
+          if (pendingNavigation) {
+            pendingNavigation();
+            setPendingNavigation(null);
+          }
+        }}
+        trigger="post_log"
+        userId={user?.id}
+        vanityUrl={profile?.vanity_url ?? undefined}
+        cheeseName={sharedCheeseName ?? undefined}
+      />
+
+      {/* Milestone Share Prompt - shown when user hits a cheese-logging milestone */}
+      {milestoneCount && (
+        <MilestoneSharePrompt
+          visible={showMilestonePrompt}
+          onDismiss={() => {
+            setShowMilestonePrompt(false);
+            setMilestoneCount(null);
+            if (pendingNavigation) {
+              pendingNavigation();
+              setPendingNavigation(null);
+            }
+          }}
+          milestoneCount={milestoneCount}
+          userId={user?.id}
+          vanityUrl={profile?.vanity_url ?? undefined}
+        />
+      )}
 
       {/* Rating Modal - shown after selecting Cheese Box */}
       <Modal

@@ -235,7 +235,7 @@ export default function PublicProfileScreen() {
           .insert({ follower_id: user.id, following_id: id });
         setIsFollowing(true);
         setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
-        Analytics.trackUserFollow(id as string, user?.id);
+        Analytics.trackUserFollow(id as string, 'profile', user?.id);
       }
     } catch (error) {
       console.error('Error toggling follow:', error);

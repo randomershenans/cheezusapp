@@ -35,7 +35,7 @@ export default function SignupScreen() {
     
     try {
       await signUp(email, password, name);
-      Analytics.trackSignup();
+      Analytics.trackSignup('email', undefined, undefined);
       setShowConfirmation(true);
       // Also try Alert for native
       if (Platform.OS !== 'web') {

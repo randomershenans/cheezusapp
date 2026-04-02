@@ -11,6 +11,9 @@ import SearchBar from '@/components/SearchBar';
 import FilterPanel, { FilterOptions, SelectedFilters } from '@/components/FilterPanel';
 import NearbyCheeseCard from '@/components/NearbyCheeseCard';
 import NotificationBell from '@/components/NotificationBell';
+import ShareProfileCard from '@/components/ShareProfileCard';
+import FollowSuggestions from '@/components/FollowSuggestions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -111,7 +114,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { search: searchParam } = useLocalSearchParams();
   const initialSearch = typeof searchParam === 'string' ? searchParam : '';
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [allFeedItems, setAllFeedItems] = useState<FeedItem[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -125,11 +128,67 @@ export default function HomeScreen() {
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [hasMoreContent, setHasMoreContent] = useState(true);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [showFollowSuggestions, setShowFollowSuggestions] = useState(false);
 
   useEffect(() => {
     loadPersonalizedFeed();
     Analytics.trackFeedView(user?.id);
   }, [user]);
+
+  // Fetch follower count for share profile card
+  useEffect(() => {
+    if (!user?.id) {
+      setFollowerCount(null);
+      return;
+    }
+    const fetchFollowerCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('followers')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', user.id);
+        if (!error) {
+          setFollowerCount(count ?? 0);
+        }
+      } catch (err) {
+        console.error('Error fetching follower count:', err);
+      }
+    };
+    fetchFollowerCount();
+  }, [user?.id]);
+
+  // Show follow suggestions modal for new users with 0 following
+  useEffect(() => {
+    if (!user?.id) return;
+    const checkFollowSuggestions = async () => {
+      try {
+        const alreadyShown = await AsyncStorage.getItem('follow_suggestions_shown');
+        if (alreadyShown) return;
+
+        const { count, error } = await supabase
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', user.id);
+
+        if (!error && (count === null || count === 0)) {
+          setShowFollowSuggestions(true);
+        }
+      } catch (err) {
+        console.error('Error checking follow suggestions:', err);
+      }
+    };
+    checkFollowSuggestions();
+  }, [user?.id]);
+
+  const handleDismissFollowSuggestions = async () => {
+    setShowFollowSuggestions(false);
+    try {
+      await AsyncStorage.setItem('follow_suggestions_shown', 'true');
+    } catch (err) {
+      console.error('Error saving follow suggestions flag:', err);
+    }
+  };
 
   const loadPersonalizedFeed = async () => {
     setLoading(true);
@@ -1044,6 +1103,13 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={styles.feedContainer}>
+            {user && followerCount === 0 && (
+              <ShareProfileCard
+                followerCount={followerCount}
+                userId={user.id}
+                vanityUrl={profile?.vanity_url}
+              />
+            )}
             {feedItems.map((item, index) => (
               <View key={item.id} style={styles.feedItem}>
                 {renderFeedItem(item)}
@@ -1086,6 +1152,15 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Follow Suggestions Modal for new users */}
+      {user?.id && (
+        <FollowSuggestions
+          visible={showFollowSuggestions}
+          onDismiss={handleDismissFollowSuggestions}
+          userId={user.id}
+        />
+      )}
     </SafeAreaView>
   );
 }
