@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Platform, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
-import { MapPin, Store, Factory, Navigation, X, Slice } from 'lucide-react-native';
+import { MapPin, Store, Factory, Navigation, X, Slice, Star, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -33,6 +33,12 @@ export type MapMarker = {
   address?: string;
   distance_km?: number;
   producer_name?: string; // For cheeses
+  /**
+   * Optional highlight for the marker:
+   *   - 'wishlist'    = carries a cheese the user has wishlisted (gold star)
+   *   - 'taste_match' = matches the user's taste profile (secondary badge)
+   */
+  highlight?: 'wishlist' | 'taste_match';
 };
 
 export type MapRegion = {
@@ -249,21 +255,37 @@ export default function CheeseMap({
                 selectedMarker?.id === marker.id && styles.markerSelected,
               ]}
             >
-              <Image
-                source={{ 
-                  uri: marker.image_url || (
-                    marker.type === 'cheese' 
-                      ? 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=100&h=100&fit=crop'
-                      : marker.type === 'producer'
-                        ? 'https://images.unsplash.com/photo-1559561853-08451507cbe7?w=100&h=100&fit=crop'
-                        : 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=100&h=100&fit=crop'
-                  )
-                }}
-                style={[
-                  styles.markerImage,
-                  { borderColor: getMarkerColor(marker.type) },
-                ]}
-              />
+              <View style={[
+                styles.markerImageWrap,
+                marker.highlight === 'wishlist'    && styles.markerRingWishlist,
+                marker.highlight === 'taste_match' && styles.markerRingTasteMatch,
+              ]}>
+                <Image
+                  source={{
+                    uri: marker.image_url || (
+                      marker.type === 'cheese'
+                        ? 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=100&h=100&fit=crop'
+                        : marker.type === 'producer'
+                          ? 'https://images.unsplash.com/photo-1559561853-08451507cbe7?w=100&h=100&fit=crop'
+                          : 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=100&h=100&fit=crop'
+                    )
+                  }}
+                  style={[
+                    styles.markerImage,
+                    { borderColor: getMarkerColor(marker.type) },
+                  ]}
+                />
+                {marker.highlight === 'wishlist' ? (
+                  <View style={styles.highlightBadge}>
+                    <Star size={10} color="#1F2937" fill="#FCD95B" />
+                  </View>
+                ) : null}
+                {marker.highlight === 'taste_match' ? (
+                  <View style={[styles.highlightBadge, styles.highlightBadgeTaste]}>
+                    <Sparkles size={10} color="#1F2937" />
+                  </View>
+                ) : null}
+              </View>
               <View style={[styles.markerPointer, { borderTopColor: getMarkerColor(marker.type) }]} />
             </TouchableOpacity>
           </MapboxGL.MarkerView>
@@ -398,6 +420,40 @@ const styles = StyleSheet.create({
   // Markers
   markerContainer: {
     alignItems: 'center',
+  },
+  markerImageWrap: {
+    position: 'relative',
+  },
+  markerRingWishlist: {
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#FCD95B',
+    backgroundColor: 'rgba(252, 217, 91, 0.18)',
+  },
+  markerRingTasteMatch: {
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#9A7B4F',
+    backgroundColor: 'rgba(154, 123, 79, 0.15)',
+  },
+  highlightBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FCD95B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    ...Layout.shadow.small,
+  },
+  highlightBadgeTaste: {
+    backgroundColor: '#F3E9D3',
   },
   markerImage: {
     width: 44,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, Image } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect, Circle, G } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, MapPin } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
@@ -16,12 +17,15 @@ type Props = {
   tier: Tier;
 };
 
-const HERO_HEIGHT = 340;
+// Content height (below the status bar). Full hero height is this + insets.top
+// so the gold bleeds all the way up under the notch/status bar.
+const HERO_CONTENT_HEIGHT = 360;
 
 // Subtle wheel-slice pattern — small gold circles radiating behind the avatar.
-// Decorative only, no interaction.
-const WheelSlicePattern = () => (
-  <Svg width="100%" height="100%" viewBox="0 0 400 340" style={StyleSheet.absoluteFill}>
+// Decorative only, no interaction. Extends edge-to-edge including under the
+// status bar so the gradient fills the whole top of the screen.
+const WheelSlicePattern = ({ totalHeight }: { totalHeight: number }) => (
+  <Svg width="100%" height="100%" viewBox={`0 0 400 ${totalHeight}`} style={StyleSheet.absoluteFill} preserveAspectRatio="none">
     <Defs>
       <SvgLinearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
         <Stop offset="0%"  stopColor="#FCD95B" stopOpacity="1" />
@@ -29,14 +33,14 @@ const WheelSlicePattern = () => (
         <Stop offset="100%" stopColor="#FFFEF7" stopOpacity="1" />
       </SvgLinearGradient>
     </Defs>
-    <Rect x="0" y="0" width="400" height="340" fill="url(#heroGrad)" />
+    <Rect x="0" y="0" width="400" height={totalHeight} fill="url(#heroGrad)" />
     {/* Radiating dots — hint of cheese wheel texture */}
     <G opacity="0.25">
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
         const angle = (i * Math.PI) / 4;
         const r = 180;
         const cx = 200 + Math.cos(angle) * r;
-        const cy = 170 + Math.sin(angle) * r * 0.55;
+        const cy = (totalHeight / 2) + Math.sin(angle) * r * 0.55;
         return <Circle key={i} cx={cx} cy={cy} r={3} fill="#EAB308" />;
       })}
     </G>
@@ -44,12 +48,17 @@ const WheelSlicePattern = () => (
 );
 
 export default function ProfileHero({ name, tagline, location, avatarUrl, vanityUrl, tier }: Props) {
-  return (
-    <View style={styles.container}>
-      <WheelSlicePattern />
+  const insets = useSafeAreaInsets();
+  // Reserve room for the nav-buttons row (44) + padding before the tier pill
+  // so the pill never collides with the status bar OR the back/share buttons.
+  const tierPillTop = insets.top + 44 + 8;
 
-      {/* Tier pill — top right */}
-      <View style={styles.tierPill}>
+  return (
+    <View style={[styles.container, { height: HERO_CONTENT_HEIGHT + insets.top, paddingTop: insets.top }]}>
+      <WheelSlicePattern totalHeight={HERO_CONTENT_HEIGHT + insets.top} />
+
+      {/* Tier pill — pinned below the nav row, never under the status bar */}
+      <View style={[styles.tierPill, { top: tierPillTop }]}>
         <Text style={styles.tierPillText}>{tier.label}</Text>
       </View>
 
@@ -93,7 +102,6 @@ export default function ProfileHero({ name, tagline, location, avatarUrl, vanity
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: HERO_HEIGHT,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -159,8 +167,7 @@ const styles = StyleSheet.create({
   },
   tierPill: {
     position: 'absolute',
-    top: Layout.spacing.m,
-    right: Layout.spacing.m,
+    alignSelf: 'center',
     backgroundColor: '#FFFEF7',
     paddingHorizontal: Layout.spacing.m,
     paddingVertical: 6,

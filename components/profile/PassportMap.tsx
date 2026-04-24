@@ -1,65 +1,97 @@
-import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import Svg, { Circle, Rect, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import React, { useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
+import { MAPBOX_ACCESS_TOKEN, MAP_STYLES } from '@/constants/Mapbox';
 import type { CountryCount } from '@/lib/profile-service';
 import { COUNTRY_CENTROIDS, findCentroid, TOTAL_COUNTRIES_IN_WORLD } from '@/lib/country-centroids';
+
+// Conditional dynamic import — same pattern as CheeseMap. @rnmapbox/maps
+// needs native code; on web or Expo Go we fall back to a list.
+let MapboxGL: any = null;
+let mapboxAvailable = false;
+if (Platform.OS !== 'web') {
+  try {
+    MapboxGL = require('@rnmapbox/maps').default;
+    MapboxGL.setAccessToken(MAPBOX_ACCESS_TOKEN);
+    mapboxAvailable = true;
+  } catch {
+    mapboxAvailable = false;
+  }
+}
 
 type Props = {
   countries: CountryCount[];
 };
 
-// Map viewBox — trimmed to exclude Antarctic & high Arctic.
-const MAP_WIDTH = 360;
-const MAP_HEIGHT = 180;
-const LNG_MIN = -170;
-const LNG_MAX = 180;
-const LAT_MIN = -50;
-const LAT_MAX = 75;
+type MapDot = { name: string; count: number; lat: number; lng: number };
 
-const project = (lat: number, lng: number) => {
-  const x = ((lng - LNG_MIN) / (LNG_MAX - LNG_MIN)) * MAP_WIDTH;
-  const y = ((LAT_MAX - lat) / (LAT_MAX - LAT_MIN)) * MAP_HEIGHT;
-  return { x, y };
-};
-
-const dotRadius = (count: number) => {
-  // log scale so 1 and 20 are both visible without a single country dominating
-  return 3 + Math.min(9, Math.log2(count + 1) * 2.2);
-};
+const MAP_ASPECT_RATIO = 16 / 10;
 
 export default function PassportMap({ countries }: Props) {
-  const [selected, setSelected] = useState<{ country: string; count: number } | null>(null);
+  const [selected, setSelected] = useState<MapDot | null>(null);
+  const cameraRef = useRef<any>(null);
 
-  const { loggedByName, loggedDots, totalLogged } = useMemo(() => {
-    const byName: Record<string, number> = {};
-    for (const c of countries) {
-      byName[c.country.toLowerCase()] = c.count;
-    }
-
-    const dots: { x: number; y: number; r: number; name: string; count: number }[] = [];
+  const { loggedDots, totalLogged } = useMemo(() => {
+    const dots: MapDot[] = [];
     for (const c of countries) {
       const centroid = findCentroid(c.country);
       if (!centroid) continue;
-      const { x, y } = project(centroid.lat, centroid.lng);
-      dots.push({ x, y, r: dotRadius(c.count), name: centroid.name, count: c.count });
+      dots.push({ name: centroid.name, count: c.count, lat: centroid.lat, lng: centroid.lng });
     }
-    return { loggedByName: byName, loggedDots: dots, totalLogged: countries.length };
+    return { loggedDots: dots, totalLogged: countries.length };
   }, [countries]);
 
-  const unloggedCentroids = useMemo(
-    () =>
-      COUNTRY_CENTROIDS.filter(
-        (c) =>
-          !(c.name.toLowerCase() in loggedByName) &&
-          !(c.aliases?.some((a) => a.toLowerCase() in loggedByName))
-      ).map((c) => {
-        const { x, y } = project(c.lat, c.lng);
-        return { x, y, name: c.name };
-      }),
-    [loggedByName]
+  // Fit camera to the bounds of the user's countries, with a sensible default
+  // when they have zero countries yet.
+  const cameraProps = useMemo(() => {
+    if (loggedDots.length === 0) {
+      return {
+        centerCoordinate: [10, 30], // roughly centered on Europe+Africa
+        zoomLevel: 0.2,
+      };
+    }
+    if (loggedDots.length === 1) {
+      return {
+        centerCoordinate: [loggedDots[0].lng, loggedDots[0].lat],
+        zoomLevel: 3,
+      };
+    }
+    const lats = loggedDots.map((d) => d.lat);
+    const lngs = loggedDots.map((d) => d.lng);
+    const ne: [number, number] = [Math.max(...lngs), Math.max(...lats)];
+    const sw: [number, number] = [Math.min(...lngs), Math.min(...lats)];
+    return {
+      bounds: {
+        ne,
+        sw,
+        paddingLeft: 40,
+        paddingRight: 40,
+        paddingTop: 40,
+        paddingBottom: 40,
+      },
+    } as any;
+  }, [loggedDots]);
+
+  const renderFallback = () => (
+    <View style={styles.fallbackCard}>
+      <Text style={styles.fallbackTitle}>Countries stamped</Text>
+      {loggedDots.length === 0 ? (
+        <Text style={styles.fallbackBody}>
+          Your passport is empty — log a cheese to start stamping it.
+        </Text>
+      ) : (
+        <View style={styles.fallbackList}>
+          {loggedDots.slice(0, 12).map((d) => (
+            <View key={d.name} style={styles.fallbackChip}>
+              <Text style={styles.fallbackChipName}>{d.name}</Text>
+              <Text style={styles.fallbackChipCount}>{d.count}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 
   return (
@@ -74,67 +106,79 @@ export default function PassportMap({ countries }: Props) {
       </View>
 
       <View style={styles.mapCard}>
-        <Svg width="100%" height="100%" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}>
-          <Defs>
-            <SvgLinearGradient id="mapBg" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%"  stopColor="#FFFEF7" />
-              <Stop offset="100%" stopColor="#FAF5E8" />
-            </SvgLinearGradient>
-            <SvgLinearGradient id="dotGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%"  stopColor="#FCD95B" />
-              <Stop offset="100%" stopColor="#EAB308" />
-            </SvgLinearGradient>
-          </Defs>
+        {!mapboxAvailable ? (
+          renderFallback()
+        ) : (
+          <>
+            <MapboxGL.MapView
+              style={StyleSheet.absoluteFill}
+              styleURL={MAP_STYLES.light}
+              logoEnabled={false}
+              attributionEnabled={false}
+              compassEnabled={false}
+              scaleBarEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              zoomEnabled
+              scrollEnabled
+            >
+              <MapboxGL.Camera
+                ref={cameraRef}
+                animationMode="flyTo"
+                animationDuration={800}
+                {...cameraProps}
+              />
 
-          <Rect x={0} y={0} width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#mapBg)" rx={12} />
+              {loggedDots.map((d) => {
+                const size = 18 + Math.min(26, Math.log2(d.count + 1) * 7);
+                return (
+                  <MapboxGL.MarkerView
+                    key={d.name}
+                    coordinate={[d.lng, d.lat]}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setSelected(d)}
+                      style={[
+                        styles.dot,
+                        {
+                          width: size,
+                          height: size,
+                          borderRadius: size / 2,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.dotCount, { fontSize: Math.max(10, size * 0.42) }]}>
+                        {d.count}
+                      </Text>
+                    </TouchableOpacity>
+                  </MapboxGL.MarkerView>
+                );
+              })}
+            </MapboxGL.MapView>
 
-          {/* Unlogged countries — ghost dots */}
-          {unloggedCentroids.map((c) => (
-            <Circle
-              key={`ghost-${c.name}`}
-              cx={c.x}
-              cy={c.y}
-              r={2}
-              fill={Colors.border}
-              opacity={0.5}
-            />
-          ))}
-
-          {/* Logged countries — gold dots, sized by count */}
-          {loggedDots.map((d) => (
-            <Circle
-              key={`logged-${d.name}`}
-              cx={d.x}
-              cy={d.y}
-              r={d.r}
-              fill="url(#dotGrad)"
-              stroke="#8B6914"
-              strokeWidth={0.8}
-              opacity={0.95}
-              onPress={() => setSelected({ country: d.name, count: d.count })}
-            />
-          ))}
-        </Svg>
-
-        {selected ? (
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.tooltipBackdrop}
-            onPress={() => setSelected(null)}
-          >
-            <View style={styles.tooltip}>
-              <Text style={styles.tooltipCountry}>{selected.country}</Text>
-              <Text style={styles.tooltipCount}>
-                {selected.count} {selected.count === 1 ? 'cheese' : 'cheeses'}
-              </Text>
-              <Text style={styles.tooltipClose}>Tap to close</Text>
-            </View>
-          </TouchableOpacity>
-        ) : null}
+            {selected ? (
+              <TouchableOpacity
+                activeOpacity={1}
+                style={styles.tooltipBackdrop}
+                onPress={() => setSelected(null)}
+              >
+                <View style={styles.tooltip}>
+                  <Text style={styles.tooltipCountry}>{selected.name}</Text>
+                  <Text style={styles.tooltipCount}>
+                    {selected.count} {selected.count === 1 ? 'cheese' : 'cheeses'}
+                  </Text>
+                  <Text style={styles.tooltipClose}>Tap anywhere to close</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+          </>
+        )}
       </View>
 
-      {totalLogged > 0 ? (
-        <Text style={styles.hint}>Tap a gold dot for country details.</Text>
+      {mapboxAvailable && totalLogged > 0 ? (
+        <Text style={styles.hint}>Tap a gold pin for country details.</Text>
       ) : null}
     </View>
   );
@@ -161,7 +205,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   mapCard: {
-    aspectRatio: MAP_WIDTH / MAP_HEIGHT,
+    aspectRatio: MAP_ASPECT_RATIO,
     borderRadius: Layout.borderRadius.large,
     overflow: 'hidden',
     backgroundColor: '#FFFEF7',
@@ -174,12 +218,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Layout.spacing.s,
   },
+  // Marker dot (gold, sized by count)
+  dot: {
+    backgroundColor: '#FCD95B',
+    borderWidth: 2,
+    borderColor: '#8B6914',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  dotCount: {
+    color: '#1F2937',
+    fontFamily: Typography.fonts.bodyBold,
+  },
+  // Tooltip
   tooltipBackdrop: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(252, 217, 91, 0.08)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   tooltip: {
     backgroundColor: '#2C3E50',
@@ -206,5 +268,47 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     color: 'rgba(255,255,255,0.5)',
     marginTop: 6,
+  },
+  // Web / Expo Go fallback
+  fallbackCard: {
+    ...StyleSheet.absoluteFillObject,
+    padding: Layout.spacing.m,
+    backgroundColor: '#FFFEF7',
+    justifyContent: 'center',
+  },
+  fallbackTitle: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyBold,
+    color: Colors.text,
+    marginBottom: Layout.spacing.s,
+  },
+  fallbackBody: {
+    fontSize: Typography.sizes.sm,
+    fontFamily: Typography.fonts.body,
+    color: Colors.textSecondary,
+  },
+  fallbackList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  fallbackChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FCD95B',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  fallbackChipName: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.bodyBold,
+    color: '#1F2937',
+  },
+  fallbackChipCount: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: '#1F2937',
   },
 });

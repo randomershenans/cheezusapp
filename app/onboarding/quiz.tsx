@@ -104,7 +104,7 @@ function aggregateAnswers(selections: SelectionsById): QuizAnswers {
 
 export default function QuizScreen() {
   const router = useRouter();
-  const { user, skipOnboardingForSession } = useAuth();
+  const { user, skipOnboardingForSession, refreshOnboardingStatus } = useAuth();
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selections, setSelections] = useState<SelectionsById>({});
   const [submitting, setSubmitting] = useState(false);
@@ -187,6 +187,12 @@ export default function QuizScreen() {
     try {
       await saveTasteSeed(user.id, answers, false);
       Analytics.trackQuizCompleted(user.id);
+      // Mark complete in session state + refetch profile so the router guard
+      // sees hasCompletedOnboarding === true before we navigate away.
+      // Without this, the guard fires on /(tabs) and sends the user back to
+      // /onboarding/quiz in an infinite loop.
+      skipOnboardingForSession();
+      await refreshOnboardingStatus();
       // Pass the aggregated answers into the result screen as JSON.
       router.replace({
         pathname: '/onboarding/result',

@@ -181,13 +181,20 @@ BEGIN
     LIMIT 2
   ) s;
 
+  -- Top producers — exclude the catch-all 'Generic' / 'Unknown' producer_name
+  -- so we don't surface "Because you love cheeses by Generic" as a feed reason.
   SELECT COALESCE(ARRAY_AGG(producer_id ORDER BY avg_r DESC, cnt DESC), '{}'::UUID[])
     INTO v_real_producers
   FROM (
     SELECT pcs.producer_id, AVG(cbe.rating) AS avg_r, COUNT(*) AS cnt
     FROM cheese_box_entries cbe
     JOIN producer_cheese_stats pcs ON pcs.id = cbe.cheese_id
-    WHERE cbe.user_id = p_user_id AND cbe.rating >= 4 AND pcs.producer_id IS NOT NULL
+    WHERE cbe.user_id = p_user_id
+      AND cbe.rating >= 4
+      AND pcs.producer_id IS NOT NULL
+      AND pcs.producer_name IS NOT NULL
+      AND pcs.producer_name NOT ILIKE '%generic%'
+      AND pcs.producer_name NOT ILIKE '%unknown%'
     GROUP BY pcs.producer_id
     ORDER BY avg_r DESC, cnt DESC
     LIMIT 3
@@ -416,7 +423,12 @@ BEGIN
           'rating_count',      cand.rating_count
         ),
         'reason', CASE
-          WHEN cand.producer_id = ANY(v_fav_producers) THEN
+          -- Only surface the producer reason if the name is meaningful —
+          -- NEVER show "by Generic" / "by Unknown" to users.
+          WHEN cand.producer_id = ANY(v_fav_producers)
+               AND cand.producer_name IS NOT NULL
+               AND cand.producer_name NOT ILIKE '%generic%'
+               AND cand.producer_name NOT ILIKE '%unknown%' THEN
             'Because you love cheeses by ' || cand.producer_name
 
           WHEN cand.cheese_type_name = ANY(v_fav_types) THEN

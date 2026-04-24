@@ -28,6 +28,7 @@ import {
   ArrowLeft,
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import NotificationBell from '@/components/NotificationBell';
 import CheeseMap, { MapMarker, MapRegion } from '@/components/CheeseMap';
 import Colors from '@/constants/Colors';
@@ -63,10 +64,13 @@ const FILTERS: { key: FilterType; label: string; comingSoon?: boolean }[] = [
 
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { viewMode: viewModeParam, lat, lng, source } = useLocalSearchParams();
   
+  // Default to map view — "Find cheese near me right now" is the primary
+  // job of the Discover tab. List stays available via the toggle.
   const [viewMode, setViewMode] = useState<ViewMode>(
-    viewModeParam === 'map' ? 'map' : 'list'
+    viewModeParam === 'list' ? 'list' : 'map'
   );
   const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number } | undefined>(
     lat && lng ? { latitude: parseFloat(lat as string), longitude: parseFloat(lng as string) } : undefined
@@ -222,9 +226,105 @@ export default function DiscoverScreen() {
         })),
       ].filter(m => m.latitude && m.longitude);
 
-      setMapMarkers(markers);
+      // Apply wishlist + taste-match highlights. Best-effort; swallow errors so
+      // a missing signal doesn't break the map.
+      const highlighted = await applyMarkerHighlights(markers);
+      setMapMarkers(highlighted);
     } catch (error) {
       console.error('Error fetching nearby items:', error);
+    }
+  };
+
+  /**
+   * Enrich markers with `highlight` tags:
+   *   - `wishlist`    — producer/cheese the user has in their wishlist
+   *   - `taste_match` — producer/cheese matching favorite producers/countries/families
+   *                     from the user's taste profile (ignored if already wishlisted)
+   */
+  const applyMarkerHighlights = async (markers: MapMarker[]): Promise<MapMarker[]> => {
+    if (!user?.id) return markers;
+
+    try {
+      // 1) Wishlisted cheese IDs, and the producer IDs behind them.
+      const { data: wishRows } = await supabase
+        .from('wishlists')
+        .select('cheese_id')
+        .eq('user_id', user.id);
+      const wishlistCheeseIds = new Set<string>((wishRows ?? []).map((r: any) => r.cheese_id));
+
+      let wishlistProducerIds = new Set<string>();
+      if (wishlistCheeseIds.size > 0) {
+        const { data: wishProducers } = await supabase
+          .from('producer_cheeses')
+          .select('producer_id')
+          .in('id', Array.from(wishlistCheeseIds))
+          .not('producer_id', 'is', null);
+        wishlistProducerIds = new Set(
+          (wishProducers ?? []).map((r: any) => r.producer_id).filter(Boolean),
+        );
+      }
+
+      // 2) Taste profile signals — favorite producers + countries + families.
+      const { data: tasteRaw } = await supabase.rpc('get_user_taste_profile', {
+        p_user_id: user.id,
+      });
+      const taste = tasteRaw as
+        | { favorite_producers?: string[]; favorite_countries?: string[]; favorite_families?: string[] }
+        | null;
+      const tasteProducerIds = new Set<string>(taste?.favorite_producers ?? []);
+      const tasteCountries   = new Set<string>(taste?.favorite_countries ?? []);
+      const tasteFamilies    = new Set<string>(taste?.favorite_families ?? []);
+
+      // 3) Resolve each marker's producer_id / metadata when needed for matching.
+      // We only need producer_id for producer + cheese markers; shop matching is
+      // currently based on stocking a wishlisted cheese, which we don't have a
+      // data model for yet, so shops stay un-highlighted for now.
+      const needCheeseLookup = markers
+        .filter((m) => m.type === 'cheese')
+        .map((m) => m.id);
+      let cheeseMeta: Record<string, { producer_id: string | null; origin_country: string | null; cheese_family: string | null }> = {};
+      if (needCheeseLookup.length > 0) {
+        const { data: rows } = await supabase
+          .from('producer_cheese_stats')
+          .select('id, producer_id, origin_country, cheese_family')
+          .in('id', needCheeseLookup);
+        for (const r of rows ?? []) {
+          cheeseMeta[(r as any).id] = {
+            producer_id: (r as any).producer_id ?? null,
+            origin_country: (r as any).origin_country ?? null,
+            cheese_family: (r as any).cheese_family ?? null,
+          };
+        }
+      }
+
+      return markers.map((m) => {
+        let highlight: MapMarker['highlight'] | undefined;
+
+        if (m.type === 'producer') {
+          if (wishlistProducerIds.has(m.id)) highlight = 'wishlist';
+          else if (tasteProducerIds.has(m.id)) highlight = 'taste_match';
+        } else if (m.type === 'cheese') {
+          if (wishlistCheeseIds.has(m.id)) {
+            highlight = 'wishlist';
+          } else {
+            const meta = cheeseMeta[m.id];
+            if (meta?.producer_id && wishlistProducerIds.has(meta.producer_id)) {
+              highlight = 'wishlist';
+            } else if (meta?.producer_id && tasteProducerIds.has(meta.producer_id)) {
+              highlight = 'taste_match';
+            } else if (meta?.origin_country && tasteCountries.has(meta.origin_country)) {
+              highlight = 'taste_match';
+            } else if (meta?.cheese_family && tasteFamilies.has(meta.cheese_family)) {
+              highlight = 'taste_match';
+            }
+          }
+        }
+
+        return highlight ? { ...m, highlight } : m;
+      });
+    } catch (err) {
+      console.warn('[discover] marker highlight failed (non-fatal):', err);
+      return markers;
     }
   };
 
@@ -453,7 +553,10 @@ export default function DiscoverScreen() {
             <ArrowLeft size={24} color={Colors.text} />
           </TouchableOpacity>
         ) : null}
-        <Text style={styles.title}>Discover</Text>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.title}>Cheese near you</Text>
+          <Text style={styles.subtitle}>Gold pins = on your wishlist · Tan pins = your taste</Text>
+        </View>
         <NotificationBell />
       </View>
 
@@ -596,11 +699,20 @@ const styles = StyleSheet.create({
     marginRight: Layout.spacing.s,
     padding: 4,
   },
+  headerTitleWrap: {
+    flex: 1,
+  },
   title: {
-    fontSize: Typography.sizes['3xl'],
+    fontSize: Typography.sizes['2xl'],
     fontFamily: Typography.fonts.heading,
     color: Colors.text,
     letterSpacing: Typography.letterSpacing.tight,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.fonts.body,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
 
   // Segmented Toggle

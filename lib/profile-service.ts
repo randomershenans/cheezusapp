@@ -78,15 +78,124 @@ export async function fetchPublicProfile(userId: string): Promise<PublicProfileP
   }
 
   const payload = data as Omit<PublicProfilePayload, 'tier'>;
+
+  // Enrich the flavor fingerprint with inline `producer_cheeses.flavor` text.
+  // The RPC only counts matches in `producer_cheese_flavor_tags`, which is
+  // sparsely populated (~20% of cheeses). Parsing the comma-separated flavor
+  // column captures the other 80% — same approach as the analytics page.
+  const enrichedFingerprint = await enrichFingerprintFromFlavorText(
+    userId,
+    payload.flavor_fingerprint ?? {},
+  );
+
   return {
     ...payload,
     stats: payload.stats ?? EMPTY_STATS,
     top_shelf: payload.top_shelf ?? [],
     countries: payload.countries ?? [],
-    flavor_fingerprint: payload.flavor_fingerprint ?? {},
+    flavor_fingerprint: enrichedFingerprint,
     featured_badges: payload.featured_badges ?? [],
     tier: tierFromCheeseCount(payload.stats?.cheese_count ?? 0),
   };
+}
+
+// Canonical axes shown on the Taste Fingerprint radar. Mirrors
+// `TASTE_FINGERPRINT_AXES` in constants/FlavorTags.ts — kept as a local
+// constant to avoid a constants import cycle.
+const FINGERPRINT_AXES = ['Creamy', 'Nutty', 'Sharp', 'Earthy', 'Funky', 'Sweet'] as const;
+
+// Map parsed inline flavor words → canonical axes, so things like
+// "buttery"/"milky" both contribute to "Creamy".
+const FLAVOR_WORD_TO_AXIS: Record<string, typeof FINGERPRINT_AXES[number]> = {
+  creamy: 'Creamy',
+  buttery: 'Creamy',
+  milky: 'Creamy',
+  smooth: 'Creamy',
+  rich: 'Creamy',
+
+  nutty: 'Nutty',
+  almond: 'Nutty',
+  hazelnut: 'Nutty',
+  walnut: 'Nutty',
+
+  sharp: 'Sharp',
+  tangy: 'Sharp',
+  pungent: 'Sharp',
+  bold: 'Sharp',
+  acidic: 'Sharp',
+
+  earthy: 'Earthy',
+  mushroomy: 'Earthy',
+  mushroom: 'Earthy',
+  woody: 'Earthy',
+  mossy: 'Earthy',
+
+  funky: 'Funky',
+  barnyardy: 'Funky',
+  barnyard: 'Funky',
+  stinky: 'Funky',
+  yeasty: 'Funky',
+
+  sweet: 'Sweet',
+  fruity: 'Sweet',
+  caramel: 'Sweet',
+  butterscotch: 'Sweet',
+  honey: 'Sweet',
+};
+
+function parseFlavorText(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .toLowerCase()
+    .split(/[,;]\s*/)
+    .map((t) => t.trim().replace(/^slightly\s+/, '').replace(/^very\s+/, ''))
+    .filter((t) => t.length > 0 && t.length <= 20);
+}
+
+async function enrichFingerprintFromFlavorText(
+  userId: string,
+  base: FlavorFingerprint,
+): Promise<FlavorFingerprint> {
+  const counts: Record<string, number> = { ...base };
+
+  try {
+    // Pull the user's cheese ids, then their inline flavor text.
+    const { data: entries } = await supabase
+      .from('cheese_box_entries')
+      .select('cheese_id, rating')
+      .eq('user_id', userId);
+
+    const ids = (entries ?? []).map((e: any) => e.cheese_id);
+    if (ids.length === 0) return counts as FlavorFingerprint;
+
+    const { data: flavorRows } = await supabase
+      .from('producer_cheeses')
+      .select('id, flavor')
+      .in('id', ids);
+
+    // Weight inline-parsed tokens by rating so higher-rated cheeses contribute more.
+    const ratingById = new Map<string, number>();
+    for (const e of entries ?? []) {
+      ratingById.set(e.cheese_id, Number(e.rating) || 0);
+    }
+
+    for (const row of flavorRows ?? []) {
+      const tokens = parseFlavorText((row as any).flavor);
+      const r = ratingById.get((row as any).id) ?? 0;
+      // ≥4-star cheeses count double; unrated / low-rated still count once
+      // (otherwise new users with few ratings show a nearly-empty radar).
+      const weight = r >= 4 ? 2 : 1;
+      for (const tok of tokens) {
+        const axis = FLAVOR_WORD_TO_AXIS[tok];
+        if (axis) counts[axis] = (counts[axis] ?? 0) + weight;
+      }
+    }
+  } catch (err) {
+    console.warn('[profile-service] fingerprint enrichment failed, using base:', err);
+    return base;
+  }
+
+  return counts as FlavorFingerprint;
 }
 
 /**

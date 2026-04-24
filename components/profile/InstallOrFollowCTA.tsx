@@ -35,6 +35,9 @@ export default function InstallOrFollowCTA(props: Props) {
     return <WebInstallCTA profileName={profileName} />;
   }
 
+  // Own profile on native: no CTA row needed — the top-right icon handles share.
+  if (isOwnProfile && !isWeb) return null;
+
   return (
     <View style={styles.row}>
       {!isOwnProfile ? (
