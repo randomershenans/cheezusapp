@@ -1,7 +1,11 @@
-import React, { useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, Share, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Colors from '@/constants/Colors';
 import { Analytics } from '@/lib/analytics';
+import { generateAndShare } from '@/lib/shareCard';
+import ShareCardHost from '@/components/share-cards/ShareCardHost';
+import ShareCardPreview from '@/components/share-cards/ShareCardPreview';
+import { supabase } from '@/lib/supabase';
 
 const MILESTONES = [5, 10, 25, 50, 100] as const;
 
@@ -13,6 +17,8 @@ interface MilestoneSharePromptProps {
   milestoneCount: MilestoneNumber;
   userId?: string;
   vanityUrl?: string;
+  userName?: string | null;
+  userAvatarUrl?: string | null;
 }
 
 /**
@@ -85,7 +91,11 @@ export default function MilestoneSharePrompt({
   milestoneCount,
   userId,
   vanityUrl,
+  userName,
+  userAvatarUrl,
 }: MilestoneSharePromptProps) {
+  const [cheesePhotos, setCheesePhotos] = useState<Array<{ url: string | null; name?: string | null }>>([]);
+
   useEffect(() => {
     if (visible) {
       Analytics.trackSharePromptShown('milestone', milestoneCount, userId);
@@ -93,18 +103,53 @@ export default function MilestoneSharePrompt({
     }
   }, [visible]);
 
-  const profileUrl = vanityUrl
-    ? `https://cheezus.app/${vanityUrl}`
-    : 'https://cheezus.app';
+  // Fetch 4 cheese photos for the grid. Uses top-rated for 25+, most-recent otherwise.
+  useEffect(() => {
+    if (!visible || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const orderByTopRated = milestoneCount >= 25;
+        const query = supabase
+          .from('cheese_box_entries')
+          .select(
+            'rating, created_at, cheese_id, producer_cheese:producer_cheeses!cheese_id(image_url, full_name)'
+          )
+          .eq('user_id', userId)
+          .limit(4);
+        const { data } = orderByTopRated
+          ? await query.not('rating', 'is', null).order('rating', { ascending: false })
+          : await query.order('created_at', { ascending: false });
+        if (cancelled) return;
+        const photos = (data ?? []).map((r: any) => ({
+          url: r.producer_cheese?.image_url ?? null,
+          name: r.producer_cheese?.full_name ?? null,
+        }));
+        setCheesePhotos(photos);
+      } catch {
+        // Non-fatal — card will render with placeholders.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, userId, milestoneCount]);
+
+  const cardProps = {
+    milestone: milestoneCount,
+    cheesePhotos,
+    userName,
+    userHandle: vanityUrl,
+    userAvatarUrl,
+    userId,
+    vanityUrl,
+  };
 
   const handleShare = async () => {
     Analytics.trackSharePromptTapped('milestone', userId);
     try {
-      const result = await Share.share({
-        message: `I've logged ${milestoneCount} cheeses on Cheezus! Follow my cheese journey: ${profileUrl}`,
-        url: profileUrl,
-      });
-      if (result.action === Share.sharedAction) {
+      const result = await generateAndShare('milestone', cardProps);
+      if (result.shared) {
         Analytics.trackProfileShare(result.activityType || 'unknown', userId);
       }
     } catch (error) {
@@ -135,6 +180,13 @@ export default function MilestoneSharePrompt({
             {getMilestoneMessage(milestoneCount)}
           </Text>
 
+          {/* Card preview */}
+          {visible ? (
+            <View style={styles.previewWrap}>
+              <ShareCardPreview cardType="milestone" props={cardProps} width={240} />
+            </View>
+          ) : null}
+
           <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
             <Text style={styles.shareButtonText}>Share Your Journey</Text>
           </TouchableOpacity>
@@ -144,6 +196,7 @@ export default function MilestoneSharePrompt({
           </TouchableOpacity>
         </View>
       </View>
+      {visible ? <ShareCardHost /> : null}
     </Modal>
   );
 }
@@ -166,7 +219,7 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 56,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
     fontSize: 22,
@@ -179,8 +232,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.subtleText,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     lineHeight: 21,
+  },
+  previewWrap: {
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
   },
   shareButton: {
     backgroundColor: Colors.primary,

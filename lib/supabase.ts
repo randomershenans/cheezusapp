@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { makeRedirectUri } from 'expo-auth-session';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 const MOBILE_TIMEOUT = 20000; // 20 seconds for mobile
 
@@ -109,3 +109,16 @@ export const supabase = createClient(
     auth: createAuthConfig()
   }
 );
+
+// React Native only: pause auto-refresh in the background and resume on foreground.
+// Without this, expired tokens don't get refreshed when the app returns from background,
+// leading to silently-failing queries until a cold restart.
+if (Platform.OS !== 'web' && typeof window !== 'undefined') {
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      supabase.auth.startAutoRefresh();
+    } else {
+      supabase.auth.stopAutoRefresh();
+    }
+  });
+}

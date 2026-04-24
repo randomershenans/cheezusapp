@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Alert, TouchableOpacity, Modal, TextInput, ActivityIndicator, Dimensions, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, Alert, TouchableOpacity, Modal, TextInput, ActivityIndicator, Dimensions, SafeAreaView, Platform, KeyboardAvoidingView, Share } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Star, Heart, Calendar, MapPin, Info, Award, Edit3, Plus, X, Trash2, ArrowLeft, Share2, Clock, Users } from 'lucide-react-native';
@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -504,9 +505,22 @@ export default function CheeseDetailScreen() {
           </TouchableOpacity>
           
           <View style={styles.actionButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => {/* Handle share */}}
+              onPress={async () => {
+                if (!cheese) return;
+                try {
+                  const result = await Share.share({
+                    message: `Check out ${cheese.name} on Cheezus! 🧀\n\nhttps://cheezus.co/cheese/${cheese.id}`,
+                    title: cheese.name,
+                  });
+                  if (result.action === Share.sharedAction) {
+                    Analytics.trackCheeseShare(cheese.id, result.activityType || 'unknown', user?.id);
+                  }
+                } catch (e) {
+                  // user cancelled
+                }
+              }}
             >
               <Share2 size={24} color="#FFFFFF" />
             </TouchableOpacity>

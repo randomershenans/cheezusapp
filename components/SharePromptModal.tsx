@@ -1,7 +1,10 @@
 import React, { useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, Share, StyleSheet } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Colors from '@/constants/Colors';
 import { Analytics } from '@/lib/analytics';
+import { generateAndShare } from '@/lib/shareCard';
+import ShareCardHost from '@/components/share-cards/ShareCardHost';
+import ShareCardPreview from '@/components/share-cards/ShareCardPreview';
 
 type ShareTrigger = 'post_log' | 'milestone';
 
@@ -13,6 +16,15 @@ interface SharePromptModalProps {
   vanityUrl?: string;
   milestoneCount?: number;
   cheeseName?: string;
+  // Extra data for the visual card. Optional so existing call-sites keep working.
+  producerName?: string | null;
+  originCountry?: string | null;
+  imageUrl?: string | null;
+  rating?: number | null;
+  note?: string | null;
+  userName?: string | null;
+  userHandle?: string | null;
+  userAvatarUrl?: string | null;
 }
 
 export default function SharePromptModal({
@@ -23,6 +35,14 @@ export default function SharePromptModal({
   vanityUrl,
   milestoneCount,
   cheeseName,
+  producerName,
+  originCountry,
+  imageUrl,
+  rating,
+  note,
+  userName,
+  userHandle,
+  userAvatarUrl,
 }: SharePromptModalProps) {
   useEffect(() => {
     if (visible) {
@@ -30,19 +50,25 @@ export default function SharePromptModal({
     }
   }, [visible]);
 
-  const appUrl = 'https://cheezus.app';
+  const cardProps = {
+    cheeseName: cheeseName || 'this cheese',
+    producerName,
+    originCountry,
+    imageUrl,
+    rating,
+    note,
+    userName,
+    userHandle: userHandle || vanityUrl,
+    userAvatarUrl,
+    userId,
+    vanityUrl,
+  };
 
   const handleShare = async () => {
     Analytics.trackSharePromptTapped(trigger, userId);
     try {
-      const shareMessage = cheeseName
-        ? `Just added ${cheeseName} to my cheese box on Cheezus 🧀\n\n${appUrl}`
-        : `Check out my cheese journey on Cheezus! 🧀\n\n${appUrl}`;
-      const result = await Share.share({
-        message: shareMessage,
-        url: appUrl,
-      });
-      if (result.action === Share.sharedAction) {
+      const result = await generateAndShare('just_logged', cardProps);
+      if (result.shared) {
         Analytics.trackProfileShare(result.activityType || 'unknown', userId);
       }
     } catch (error) {
@@ -71,6 +97,13 @@ export default function SharePromptModal({
             {cheeseName ? `Tell a friend about ${cheeseName}.` : 'Tell a friend about your latest find.'}
           </Text>
 
+          {/* Card preview */}
+          {visible && cheeseName ? (
+            <View style={styles.previewWrap}>
+              <ShareCardPreview cardType="just_logged" props={cardProps} width={220} />
+            </View>
+          ) : null}
+
           <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
             <Text style={styles.shareButtonText}>Share Cheese</Text>
           </TouchableOpacity>
@@ -80,6 +113,8 @@ export default function SharePromptModal({
           </TouchableOpacity>
         </View>
       </View>
+      {/* Offscreen host so generateAndShare has somewhere to render into. */}
+      {visible ? <ShareCardHost /> : null}
     </Modal>
   );
 }
@@ -115,8 +150,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.subtleText,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     lineHeight: 20,
+  },
+  previewWrap: {
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
   },
   shareButton: {
     backgroundColor: Colors.primary,

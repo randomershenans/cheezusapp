@@ -1,0 +1,6 @@
+// TODO(design): drop commissioned hero cheese photography here.
+// Q1: brie.jpg, cheddar.jpg, blue.jpg, aged-gouda.jpg
+// Q2: epoisses.jpg, burrata.jpg
+// Q3: camembert.jpg, parmigiano.jpg
+// Q8: gouda.jpg, manchego.jpg
+// Code currently references remote URLs in constants/QuizQuestions.ts — swap to require() paths once shot.

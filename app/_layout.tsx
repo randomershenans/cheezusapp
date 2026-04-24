@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { SplashScreen } from 'expo-router';
@@ -17,7 +17,7 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import { AppState } from 'react-native';
-import { AuthProvider } from '@/contexts/AuthContext'
+import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
 import { Analytics } from '@/lib/analytics';
@@ -206,10 +206,12 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <PushNotificationHandler />
+      <OnboardingRouterGuard />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth/login" options={{ headerShown: false }} />
         <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="add-cheese" options={{ headerShown: false }} />
         <Stack.Screen name="cheese/new" options={{ headerShown: false }} />
         <Stack.Screen name="cheezopedia/[id]" options={{ headerShown: false }} />
@@ -220,4 +222,30 @@ export default function RootLayout() {
       <StatusBar style="auto" />
     </AuthProvider>
   );
+}
+
+/**
+ * Mounted inside AuthProvider. Routes signed-in users who haven't completed
+ * the taste quiz to /onboarding/quiz, unless they're already on an onboarding
+ * or auth route (so we don't fight the initial signup / password recovery
+ * flows). The skip path sets a session-local flag in AuthContext so we don't
+ * re-loop the same session.
+ */
+function OnboardingRouterGuard() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, loading, hasCompletedOnboarding } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+    if (hasCompletedOnboarding !== false) return; // null = still loading, true = done
+
+    const path = pathname ?? '';
+    if (path.startsWith('/onboarding') || path.startsWith('/auth')) return;
+
+    router.replace('/onboarding/quiz');
+  }, [user, loading, hasCompletedOnboarding, pathname, router]);
+
+  return null;
 }

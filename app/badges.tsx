@@ -7,11 +7,13 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { TouchableOpacity } from 'react-native';
-import { Trophy, ArrowLeft, CheckCircle, Circle } from 'lucide-react-native';
+import { Trophy, ArrowLeft, CheckCircle, Circle, Share2, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Analytics } from '@/lib/analytics';
@@ -19,6 +21,9 @@ import Colors from '@/constants/Colors';
 import Typography from '@/constants/Typography';
 import Layout from '@/constants/Layout';
 import BadgeProgressCard from '@/components/BadgeProgressCard';
+import { generateAndShare } from '@/lib/shareCard';
+import ShareCardHost from '@/components/share-cards/ShareCardHost';
+import ShareCardPreview from '@/components/share-cards/ShareCardPreview';
 
 // Types for badge data
 interface Badge {
@@ -35,11 +40,12 @@ interface Badge {
 
 export default function BadgeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCompletedFirst, setShowCompletedFirst] = useState(true);
+  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
   const [stats, setStats] = useState({
     totalBadges: 0,
     earnedBadges: 0,
@@ -131,10 +137,36 @@ export default function BadgeScreen() {
       .join(' ');
   };
   
-  // Show badge details (placeholder for future implementation)
+  // Tapping a badge opens a detail modal. Earned badges get a Share button
+  // that fires the badge share-card via `generateAndShare('badge', ...)`.
   const handleBadgePress = (badge: Badge) => {
-    // Could navigate to a detail screen or show a modal with details
-    console.log('Badge pressed:', badge.name);
+    setSelectedBadge(badge);
+  };
+
+  const handleShareBadge = async () => {
+    if (!selectedBadge) return;
+    const cardProps = {
+      badgeName: selectedBadge.name,
+      badgeDescription: selectedBadge.description,
+      badgeImgUrl: selectedBadge.img_url ?? null,
+      badgeIcon: selectedBadge.icon ?? null,
+      earnedCount: stats.earnedBadges,
+      totalBadges: stats.totalBadges,
+      userName: profile?.name ?? null,
+      userHandle: profile?.vanity_url ?? null,
+      userAvatarUrl: profile?.avatar_url ?? null,
+      userId: user?.id,
+      vanityUrl: profile?.vanity_url ?? null,
+    };
+    try {
+      Analytics.trackSharePromptTapped('badge_earned', user?.id);
+      const result = await generateAndShare('badge', cardProps);
+      if (result.shared) {
+        Analytics.trackProfileShare(result.activityType || 'unknown', user?.id);
+      }
+    } catch (e) {
+      console.error('Error sharing badge:', e);
+    }
   };
   
   // Render loading state
@@ -242,6 +274,83 @@ export default function BadgeScreen() {
         }
         contentContainerStyle={styles.listContent}
       />
+
+      {/* Badge detail modal — earned badges surface a Share button. */}
+      <Modal
+        visible={!!selectedBadge}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedBadge(null)}
+      >
+        <View style={styles.badgeModalOverlay}>
+          <View style={styles.badgeModalContent}>
+            <TouchableOpacity
+              style={styles.badgeModalClose}
+              onPress={() => setSelectedBadge(null)}
+            >
+              <X size={20} color={Colors.subtleText} />
+            </TouchableOpacity>
+
+            {selectedBadge ? (
+              <>
+                <View style={styles.badgeModalIconWrap}>
+                  {selectedBadge.img_url ? (
+                    <Image
+                      source={{ uri: selectedBadge.img_url }}
+                      style={styles.badgeModalImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <Text style={styles.badgeModalIconText}>
+                      {selectedBadge.icon || '🏆'}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.badgeModalTitle}>{selectedBadge.name}</Text>
+                <Text style={styles.badgeModalDescription}>
+                  {selectedBadge.description}
+                </Text>
+
+                {selectedBadge.completed ? (
+                  <>
+                    <View style={styles.badgePreviewWrap}>
+                      <ShareCardPreview
+                        cardType="badge"
+                        props={{
+                          badgeName: selectedBadge.name,
+                          badgeDescription: selectedBadge.description,
+                          badgeImgUrl: selectedBadge.img_url ?? null,
+                          badgeIcon: selectedBadge.icon ?? null,
+                          earnedCount: stats.earnedBadges,
+                          totalBadges: stats.totalBadges,
+                          userName: profile?.name ?? null,
+                          userHandle: profile?.vanity_url ?? null,
+                          userAvatarUrl: profile?.avatar_url ?? null,
+                          userId: user?.id,
+                        }}
+                        width={220}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={styles.badgeShareButton}
+                      onPress={handleShareBadge}
+                    >
+                      <Share2 size={18} color="#1F2937" style={{ marginRight: 8 }} />
+                      <Text style={styles.badgeShareButtonText}>Share Badge</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <Text style={styles.badgeLocked}>
+                    Keep exploring — {selectedBadge.progress}/{selectedBadge.threshold} progress
+                  </Text>
+                )}
+              </>
+            ) : null}
+          </View>
+        </View>
+        {/* Offscreen host lives inside the modal so it shares the same React root. */}
+        {selectedBadge ? <ShareCardHost /> : null}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -377,5 +486,89 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     color: Colors.subtleText,
     marginTop: Layout.spacing.m,
+  },
+  badgeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  badgeModalContent: {
+    backgroundColor: '#FFFEF7',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  badgeModalClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 6,
+    zIndex: 2,
+  },
+  badgeModalIconWrap: {
+    width: 120,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  badgeModalImage: {
+    width: 120,
+    height: 120,
+  },
+  badgeModalIconText: {
+    fontSize: 64,
+  },
+  badgeModalTitle: {
+    fontFamily: Typography.fonts.heading,
+    fontSize: Typography.sizes.xl,
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  badgeModalDescription: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.sm,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  badgePreviewWrap: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  badgeShareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    width: '100%',
+  },
+  badgeShareButtonText: {
+    fontFamily: Typography.fonts.bodySemiBold,
+    fontSize: Typography.sizes.base,
+    color: '#1F2937',
+  },
+  badgeLocked: {
+    fontFamily: Typography.fonts.bodyMedium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.subtleText,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

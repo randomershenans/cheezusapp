@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
   Linking,
+  Share,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -234,16 +235,20 @@ export default function EventDetailScreen() {
   };
 
   const handleShare = async () => {
-    // Basic share - can be enhanced with expo-sharing later
-    if (event?.title) {
-      const url = event.ticket_url || event.registration_url || '';
-      const text = `Check out ${event.title}${url ? ` - ${url}` : ''}`;
-      try {
-        Analytics.trackEventShare(event.id, 'sms', user?.id);
-        await Linking.openURL(`sms:?body=${encodeURIComponent(text)}`);
-      } catch {
-        // Fallback - do nothing
+    if (!event?.title) return;
+    const url = event.ticket_url || event.registration_url || `https://cheezus.co/event/${event.id}`;
+    const text = `Check out ${event.title} — ${url}`;
+    try {
+      const result = await Share.share({
+        message: text,
+        title: event.title,
+        url,
+      });
+      if (result.action === Share.sharedAction) {
+        Analytics.trackEventShare(event.id, result.activityType || 'unknown', user?.id);
       }
+    } catch {
+      // user cancelled
     }
   };
 

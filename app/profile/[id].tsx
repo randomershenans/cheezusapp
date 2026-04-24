@@ -1,8 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, Modal } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  SafeAreaView,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Share,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, User, MapPin, Lock, Users, Star, Award } from 'lucide-react-native';
+import { ArrowLeft, Lock, Share2 } from 'lucide-react-native';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Analytics } from '@/lib/analytics';
@@ -10,191 +23,55 @@ import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
 
-type Profile = {
-  id: string;
-  name: string | null;
-  tagline: string | null;
-  location: string | null;
-  avatar_url: string | null;
-  is_public: boolean;
-  created_at: string;
-};
+import ProfileHero from '@/components/profile/ProfileHero';
+import ProfileStatsTrio from '@/components/profile/ProfileStatsTrio';
+import TopShelfGrid from '@/components/profile/TopShelfGrid';
+import TasteFingerprint from '@/components/profile/TasteFingerprint';
+import PassportMap from '@/components/profile/PassportMap';
+import FeaturedBadges from '@/components/profile/FeaturedBadges';
+import InstallOrFollowCTA, { StickyInstallBar } from '@/components/profile/InstallOrFollowCTA';
 
-type CheeseEntry = {
-  id: string;
-  rating: number | null;
-  created_at: string;
-  producer_cheese: {
-    id: string;
-    full_name: string;
-    image_url: string | null;
-  };
-};
-
-type Badge = {
-  id: string;
-  name: string;
-  description: string | null;
-  img_url: string | null;
-  category: string;
-};
+import {
+  fetchPublicProfile,
+  type PublicProfilePayload,
+  type FeaturedBadge,
+} from '@/lib/profile-service';
 
 export default function PublicProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
-  
-  const [profile, setProfile] = useState<Profile | null>(null);
+
+  const [payload, setPayload] = useState<PublicProfilePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
-  const [stats, setStats] = useState({
-    cheeses: 0,
-    followers: 0,
-    following: 0,
-    badges: 0,
-  });
-  const [recentCheeses, setRecentCheeses] = useState<CheeseEntry[]>([]);
-  const [badges, setBadges] = useState<Badge[]>([]);
-  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+  const [selectedBadge, setSelectedBadge] = useState<FeaturedBadge | null>(null);
 
   const isOwnProfile = user?.id === id;
 
   useEffect(() => {
-    if (id) {
-      fetchProfile();
-      fetchStats();
-      fetchRecentCheeses();
-      fetchBadges();
-      Analytics.trackProfileView(id as string, user?.id);
-      if (user && !isOwnProfile) {
-        checkFollowStatus();
+    if (!id) return;
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      const data = await fetchPublicProfile(id);
+      if (!cancelled) {
+        setPayload(data);
+        setLoading(false);
       }
+    })();
+
+    Analytics.trackProfileView(id, user?.id);
+    if (user && !isOwnProfile) {
+      checkFollowStatus();
     }
-  }, [id, user]);
 
-  const fetchProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, tagline, location, avatar_url, is_public, created_at')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      setProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const { count: cheesesCount } = await supabase
-        .from('cheese_box_entries')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', id);
-
-      const { count: followersCount } = await supabase
-        .from('follows')
-        .select('*', { count: 'exact', head: true })
-        .eq('following_id', id);
-
-      const { count: followingCount } = await supabase
-        .from('follows')
-        .select('*', { count: 'exact', head: true })
-        .eq('follower_id', id);
-
-      const { count: badgesCount } = await supabase
-        .from('user_badges')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', id)
-        .eq('completed', true);
-
-      setStats({
-        cheeses: cheesesCount ?? 0,
-        followers: followersCount ?? 0,
-        following: followingCount ?? 0,
-        badges: badgesCount ?? 0,
-      });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
-
-  const fetchRecentCheeses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('cheese_box_entries')
-        .select(`
-          id,
-          rating,
-          created_at,
-          producer_cheese:producer_cheeses!cheese_id (
-            id,
-            full_name,
-            image_url
-          )
-        `)
-        .eq('user_id', id)
-        .order('created_at', { ascending: false })
-        .limit(6);
-
-      if (!error && data) {
-        setRecentCheeses(data as any);
-      }
-    } catch (error) {
-      console.error('Error fetching recent cheeses:', error);
-    }
-  };
-
-  const fetchBadges = async () => {
-    try {
-      // Fetch completed badges, prioritizing special/event categories
-      const { data, error } = await supabase
-        .from('user_badges')
-        .select(`
-          badge:badges (
-            id,
-            name,
-            description,
-            img_url,
-            category
-          )
-        `)
-        .eq('user_id', id)
-        .eq('completed', true);
-
-      if (!error && data) {
-        // Sort badges: OG/Old World first, then special/event, then others
-        const sortedBadges = data
-          .map((ub: any) => ub.badge)
-          .filter(Boolean)
-          .sort((a: Badge, b: Badge) => {
-            // Priority names first (OG, Old World)
-            const priorityNames = ['og', 'old world'];
-            const aIsPriority = priorityNames.some(p => a.name.toLowerCase().includes(p));
-            const bIsPriority = priorityNames.some(p => b.name.toLowerCase().includes(p));
-            if (aIsPriority && !bIsPriority) return -1;
-            if (!aIsPriority && bIsPriority) return 1;
-            
-            // Then by category
-            const priorityOrder = ['special', 'event', 'achievement'];
-            const aIndex = priorityOrder.indexOf(a.category);
-            const bIndex = priorityOrder.indexOf(b.category);
-            if (aIndex !== -1 && bIndex === -1) return -1;
-            if (aIndex === -1 && bIndex !== -1) return 1;
-            if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-            return a.name.localeCompare(b.name);
-          });
-        setBadges(sortedBadges);
-      }
-    } catch (error) {
-      console.error('Error fetching badges:', error);
-    }
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user?.id]);
 
   const checkFollowStatus = async () => {
     if (!user) return;
@@ -205,43 +82,52 @@ export default function PublicProfileScreen() {
         .eq('follower_id', user.id)
         .eq('following_id', id)
         .maybeSingle();
-
       setIsFollowing(!!data);
     } catch (error) {
-      console.error('Error checking follow status:', error);
+      console.error('[profile] follow status check failed', error);
     }
   };
 
-  const handleToggleFollow = async () => {
+  const handleToggleFollow = useCallback(async () => {
     if (!user) {
       Alert.alert('Sign In Required', 'Please sign in to follow users.');
       return;
     }
-
     setFollowLoading(true);
     try {
       if (isFollowing) {
-        await supabase
-          .from('follows')
-          .delete()
-          .eq('follower_id', user.id)
-          .eq('following_id', id);
+        await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', id);
         setIsFollowing(false);
-        setStats(prev => ({ ...prev, followers: prev.followers - 1 }));
         Analytics.trackUserUnfollow(id as string, user?.id);
       } else {
-        await supabase
-          .from('follows')
-          .insert({ follower_id: user.id, following_id: id });
+        await supabase.from('follows').insert({ follower_id: user.id, following_id: id });
         setIsFollowing(true);
-        setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
         Analytics.trackUserFollow(id as string, 'profile', user?.id);
       }
     } catch (error) {
-      console.error('Error toggling follow:', error);
+      console.error('[profile] toggle follow failed', error);
       Alert.alert('Error', 'Failed to update follow status');
     } finally {
       setFollowLoading(false);
+    }
+  }, [id, isFollowing, user]);
+
+  const handleShare = async () => {
+    if (!payload?.profile) return;
+    const p = payload.profile;
+    const url = p.vanity_url
+      ? `https://cheezus.co/@${p.vanity_url}`
+      : `https://cheezus.co/profile/${p.id}`;
+    try {
+      const result = await Share.share({
+        message: `${p.name || 'My'} cheese journey on Cheezus 🧀\n${url}`,
+        url,
+      });
+      if (result.action === Share.sharedAction) {
+        Analytics.trackProfileShare(result.activityType || 'unknown', user?.id);
+      }
+    } catch (e) {
+      // user cancelled
     }
   };
 
@@ -255,14 +141,10 @@ export default function PublicProfileScreen() {
     );
   }
 
-  if (!profile) {
+  if (!payload?.profile) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
+        <Header onBack={() => router.back()} />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Profile not found</Text>
         </View>
@@ -270,15 +152,12 @@ export default function PublicProfileScreen() {
     );
   }
 
-  // Private profile check
+  const { profile, stats, top_shelf, countries, flavor_fingerprint, featured_badges, tier } = payload;
+
   if (!profile.is_public && !isOwnProfile) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
+        <Header onBack={() => router.back()} />
         <View style={styles.privateContainer}>
           <Lock size={48} color={Colors.subtleText} />
           <Text style={styles.privateTitle}>Private Profile</Text>
@@ -291,166 +170,122 @@ export default function PublicProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar style="dark" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 40 }} />
-      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Info */}
-        <View style={styles.profileSection}>
-          {profile.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <User size={40} color={Colors.subtleText} />
-            </View>
-          )}
-          <Text style={styles.name}>{profile.name || 'Cheese Lover'}</Text>
-          {profile.tagline && (
-            <Text style={styles.tagline}>{profile.tagline}</Text>
-          )}
-          {profile.location && (
-            <View style={styles.locationRow}>
-              <MapPin size={14} color={Colors.subtleText} />
-              <Text style={styles.location}>{profile.location}</Text>
-            </View>
-          )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        stickyHeaderIndices={[]}
+      >
+        {/* Hero — full-bleed, below the status bar */}
+        <View>
+          <ProfileHero
+            name={profile.name}
+            tagline={profile.tagline}
+            location={profile.location}
+            avatarUrl={profile.avatar_url}
+            vanityUrl={profile.vanity_url}
+            tier={tier}
+          />
 
-          {/* Follow Button */}
-          {!isOwnProfile && (
-            <TouchableOpacity
-              style={[styles.followButton, isFollowing && styles.followingButton]}
-              onPress={handleToggleFollow}
-              disabled={followLoading}
-            >
-              {followLoading ? (
-                <ActivityIndicator size="small" color={isFollowing ? Colors.text : Colors.background} />
-              ) : (
-                <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
+          {/* Floating back + share over the hero */}
+          <SafeAreaView style={styles.heroOverlay} pointerEvents="box-none">
+            <View style={styles.heroTopRow} pointerEvents="box-none">
+              <TouchableOpacity onPress={() => router.back()} style={styles.circleButton}>
+                <ArrowLeft size={22} color={Colors.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={handleShare} style={styles.circleButton}>
+                <Share2 size={20} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
 
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.cheeses}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Cheeses</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.followers}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Followers</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.following}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Following</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.badges}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Badges</Text>
-          </View>
-        </View>
+        {/* Stats trio — overlaps the hero by -28px */}
+        <ProfileStatsTrio
+          cheeseCount={stats.cheese_count}
+          countryCount={stats.country_count}
+          avgRating={stats.avg_rating}
+        />
 
-        {/* Badges */}
-        {badges.length > 0 && (
-          <View style={styles.badgesSection}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.badgesRow}
-            >
-              {badges.map((badge) => (
-                <TouchableOpacity 
-                  key={badge.id} 
-                  style={styles.badgeCircle}
-                  onPress={() => setSelectedBadge(badge)}
-                >
-                  {badge.img_url ? (
-                    <Image source={{ uri: badge.img_url }} style={styles.badgeImageLarge} resizeMode="cover" />
-                  ) : (
-                    <Text style={styles.badgeEmoji}>🏅</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+        {/* Follow / Share / Web Install CTA */}
+        <InstallOrFollowCTA
+          isOwnProfile={isOwnProfile}
+          isFollowing={isFollowing}
+          followLoading={followLoading}
+          onToggleFollow={handleToggleFollow}
+          onShare={handleShare}
+          profileName={profile.name}
+          isLoggedIn={!!user}
+        />
 
-        {/* Recent Cheeses */}
-        {recentCheeses.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Cheeses</Text>
-            <View style={styles.cheesesGrid}>
-              {recentCheeses.map((entry) => {
-                const cheese = entry.producer_cheese as any;
-                return (
-                  <TouchableOpacity
-                    key={entry.id}
-                    style={styles.cheeseCard}
-                    onPress={() => router.push(`/producer-cheese/${cheese?.id}`)}
-                  >
-                    <Image
-                      source={{ uri: cheese?.image_url || 'https://via.placeholder.com/100?text=Cheese' }}
-                      style={styles.cheeseImage}
-                    />
-                    {entry.rating && (
-                      <View style={styles.ratingBadge}>
-                        <Star size={10} color="#FFD700" fill="#FFD700" />
-                        <Text style={styles.ratingText}>
-                          {Number(entry.rating) % 1 === 0 ? Number(entry.rating) : Number(entry.rating).toFixed(1)}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
+        {/* Top Shelf */}
+        <TopShelfGrid
+          cheeses={top_shelf}
+          totalCheeseCount={stats.cheese_count}
+          isOwnProfile={isOwnProfile}
+        />
 
-        <View style={{ height: Layout.spacing.xl }} />
+        {/* Taste Fingerprint */}
+        <TasteFingerprint
+          fingerprint={flavor_fingerprint}
+          cheeseCount={stats.cheese_count}
+        />
+
+        {/* Passport */}
+        <PassportMap countries={countries} />
+
+        {/* Achievements */}
+        <FeaturedBadges
+          badges={featured_badges}
+          onBadgePress={setSelectedBadge}
+        />
+
+        <View style={{ height: Layout.spacing.xxl }} />
       </ScrollView>
 
-      {/* Badge Detail Modal */}
+      {/* Sticky install bar (web only, no-op on native) */}
+      {!user ? <StickyInstallBar profileName={profile.name} /> : null}
+
+      {/* Badge detail modal */}
       <Modal
         visible={selectedBadge !== null}
         transparent
         animationType="fade"
         onRequestClose={() => setSelectedBadge(null)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={() => setSelectedBadge(null)}
         >
           <View style={styles.badgeModalContent}>
             {selectedBadge?.img_url ? (
-              <Image 
-                source={{ uri: selectedBadge.img_url }} 
-                style={styles.badgeModalImage} 
-                resizeMode="contain" 
-              />
+              <Image source={{ uri: selectedBadge.img_url }} style={styles.badgeModalImage} resizeMode="contain" />
             ) : (
               <Text style={styles.badgeModalEmoji}>🏅</Text>
             )}
             <Text style={styles.badgeModalTitle}>{selectedBadge?.name}</Text>
-            {selectedBadge?.description && (
+            {selectedBadge?.description ? (
               <Text style={styles.badgeModalDescription}>{selectedBadge.description}</Text>
-            )}
+            ) : null}
           </View>
         </TouchableOpacity>
       </Modal>
+    </View>
+  );
+}
+
+function Header({ onBack }: { onBack: () => void }) {
+  return (
+    <SafeAreaView>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <ArrowLeft size={22} color={Colors.text} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -459,6 +294,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    paddingBottom: Layout.spacing.xl,
   },
   loadingContainer: {
     flex: 1,
@@ -489,10 +327,51 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Layout.shadow.small,
   },
-  headerTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.heading,
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Layout.spacing.m,
+    paddingTop: Layout.spacing.s,
+  },
+  circleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 254, 247, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Layout.shadow.small,
+  },
+  ctaRow: {
+    paddingHorizontal: Layout.spacing.m,
+    marginTop: Layout.spacing.m,
+  },
+  followButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: Layout.borderRadius.large,
+    alignItems: 'center',
+  },
+  followingButton: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  followButtonText: {
+    fontSize: Typography.sizes.base,
+    fontFamily: Typography.fonts.bodyBold,
+    color: '#1F2937',
+  },
+  followingButtonText: {
     color: Colors.text,
   },
   privateContainer: {
@@ -513,160 +392,6 @@ const styles = StyleSheet.create({
     color: Colors.subtleText,
     textAlign: 'center',
     marginTop: Layout.spacing.s,
-  },
-  profileSection: {
-    alignItems: 'center',
-    paddingVertical: Layout.spacing.l,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: Layout.spacing.m,
-  },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.backgroundSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Layout.spacing.m,
-  },
-  name: {
-    fontSize: Typography.sizes['2xl'],
-    fontFamily: Typography.fonts.heading,
-    color: Colors.text,
-  },
-  tagline: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-    marginTop: Layout.spacing.xs,
-    textAlign: 'center',
-    paddingHorizontal: Layout.spacing.xl,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Layout.spacing.s,
-    gap: 4,
-  },
-  location: {
-    fontSize: Typography.sizes.sm,
-    fontFamily: Typography.fonts.body,
-    color: Colors.subtleText,
-  },
-  followButton: {
-    marginTop: Layout.spacing.m,
-    backgroundColor: Colors.primary,
-    paddingVertical: Layout.spacing.s,
-    paddingHorizontal: Layout.spacing.xl,
-    borderRadius: Layout.borderRadius.large,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  followingButton: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: Colors.subtleText,
-  },
-  followButtonText: {
-    fontSize: Typography.sizes.base,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.background,
-  },
-  followingButtonText: {
-    color: Colors.text,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.s,
-    marginBottom: Layout.spacing.l,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    padding: Layout.spacing.m,
-    borderRadius: Layout.borderRadius.large,
-    alignItems: 'center',
-    ...Layout.shadow.small,
-  },
-  statNumber: {
-    fontSize: Typography.sizes.xl,
-    fontFamily: Typography.fonts.bodyBold,
-    color: Colors.text,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  badgesSection: {
-    marginBottom: Layout.spacing.l,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Layout.spacing.m,
-    gap: Layout.spacing.m,
-  },
-  badgeCircle: {
-    width: 100,
-    height: 100,
-  },
-  badgeImageLarge: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  badgeEmoji: {
-    fontSize: 32,
-  },
-  section: {
-    paddingHorizontal: Layout.spacing.m,
-    marginBottom: Layout.spacing.l,
-  },
-  sectionTitle: {
-    fontSize: Typography.sizes.lg,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: Colors.text,
-    marginBottom: Layout.spacing.m,
-  },
-  cheesesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Layout.spacing.s,
-  },
-  cheeseCard: {
-    width: '31%',
-    aspectRatio: 1,
-    borderRadius: Layout.borderRadius.medium,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cheeseImage: {
-    width: '100%',
-    height: '100%',
-  },
-  ratingBadge: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    gap: 2,
-  },
-  ratingText: {
-    fontSize: 10,
-    fontFamily: Typography.fonts.bodySemiBold,
-    color: '#FFF',
   },
   modalOverlay: {
     flex: 1,

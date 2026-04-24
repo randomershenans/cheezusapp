@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { removePushToken } from '@/lib/push-notifications';
 import { router } from 'expo-router';
@@ -11,6 +12,7 @@ interface UserProfile {
   location: string | null;
   avatar_url: string | null;
   vanity_url: string | null;
+  onboarding_quiz_completed_at: string | null;
 }
 
 interface AuthContextType {
@@ -18,6 +20,18 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  /**
+   * true  = user has finished the onboarding taste quiz
+   * false = user has NOT finished and should be routed to /onboarding/quiz
+   * null  = unknown (still loading / no user)
+   *
+   * A session-local "skipped this session" flag is layered on top via
+   * `skipOnboardingForSession()` to stop the router guard from re-looping
+   * users who intentionally hit Skip.
+   */
+  hasCompletedOnboarding: boolean | null;
+  skipOnboardingForSession: () => void;
+  refreshOnboardingStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -34,15 +48,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [skipOnboardingSession, setSkipOnboardingSession] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, name, tagline, location, avatar_url, vanity_url')
+        .select('id, name, tagline, location, avatar_url, vanity_url, onboarding_quiz_completed_at')
         .eq('id', userId)
         .single();
-      if (data) setProfile(data);
+      if (data) setProfile(data as UserProfile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -50,6 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = async () => {
     if (user) await fetchProfile(user.id);
+  };
+
+  const refreshOnboardingStatus = async () => {
+    if (user) await fetchProfile(user.id);
+  };
+
+  const skipOnboardingForSession = () => {
+    setSkipOnboardingSession(true);
   };
 
   useEffect(() => {
@@ -91,6 +114,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // On native, re-check the session when the app returns to the foreground.
+  // Tokens can expire while the app is backgrounded; without an explicit refresh
+  // the first queries after resume fail with 401 until the user force-quits.
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      const wasBackground = appStateRef.current.match(/inactive|background/);
+      appStateRef.current = nextState;
+      if (nextState !== 'active' || !wasBackground) return;
+      try {
+        const { data: { session: refreshed } } = await supabase.auth.getSession();
+        if (refreshed?.user) {
+          setSession(refreshed);
+          setUser(refreshed.user);
+        }
+      } catch (error) {
+        console.error('[Auth] Error refreshing session on foreground:', error);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -145,11 +191,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const hasCompletedOnboarding: boolean | null = (() => {
+    if (!user) return null;
+    if (skipOnboardingSession) return true; // treat as complete for this session
+    if (!profile) return null;                // still loading profile
+    return Boolean(profile.onboarding_quiz_completed_at);
+  })();
+
   const value = {
     user,
     session,
     profile,
     loading,
+    hasCompletedOnboarding,
+    skipOnboardingForSession,
+    refreshOnboardingStatus,
     signIn,
     signUp,
     signOut,
