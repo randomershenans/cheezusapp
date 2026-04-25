@@ -3,7 +3,30 @@ import { AppState, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { removePushToken } from '@/lib/push-notifications';
 import { router } from 'expo-router';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import type { User, Session } from '@supabase/supabase-js';
+
+// Configure Google Sign In once. webClientId must match the one registered
+// with your Supabase Google provider (Supabase → Auth → Providers → Google).
+// Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in your env / EAS secrets.
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '';
+if (Platform.OS !== 'web' && GOOGLE_WEB_CLIENT_ID) {
+  try {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
+      offlineAccess: false,
+      scopes: ['profile', 'email'],
+    });
+  } catch (err) {
+    console.warn('[Auth] GoogleSignin.configure failed:', err);
+  }
+}
 
 interface UserProfile {
   id: string;
@@ -20,6 +43,8 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  /** True on iOS 13+ where Apple Sign In is available. */
+  appleSignInAvailable: boolean;
   /**
    * true  = user has finished the onboarding taste quiz
    * false = user has NOT finished and should be routed to /onboarding/quiz
@@ -35,7 +60,14 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Native Google Sign In via @react-native-google-signin, returning an id_token
+   *  we exchange with Supabase via signInWithIdToken. Falls back to web OAuth
+   *  on web or if the native SDK isn't configured. */
   signInWithGoogle: () => Promise<void>;
+  /** Native Apple Sign In (iOS 13+). Uses Apple's identityToken with Supabase's
+   *  signInWithIdToken. Apple doesn't expose email on subsequent logins, so we
+   *  pass the display name through once on first sign-in. */
+  signInWithApple: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
