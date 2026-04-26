@@ -49,8 +49,18 @@ AS $fn_public_profile$
         FROM (
           SELECT
             pc.id            AS cheese_id,
-            pc.full_name     AS name,
-            pc.producer_name,
+            -- Hide "Generic"/"Unknown" producer placeholder names — show the
+            -- cheese type instead (e.g. "Brie de Meaux" rather than "Generic").
+            CASE
+              WHEN pc.producer_name ILIKE '%generic%' OR pc.producer_name ILIKE '%unknown%'
+                THEN COALESCE(pcs.cheese_type_name, pc.full_name)
+              ELSE pc.full_name
+            END              AS name,
+            CASE
+              WHEN pc.producer_name ILIKE '%generic%' OR pc.producer_name ILIKE '%unknown%'
+                THEN NULL
+              ELSE pc.producer_name
+            END              AS producer_name,
             pc.image_url,
             cbe.rating,
             cbe.created_at,

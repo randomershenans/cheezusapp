@@ -35,8 +35,12 @@ export type QuizOption = {
   label: string;
   /** Optional subtitle shown under the label (e.g., country, milk type). */
   sublabel?: string;
-  /** Remote hero image URL. TODO: replace with bundled asset require() once photos land. */
-  imageUrl?: string;
+  /**
+   * Hero image source. Accepts either a remote URL string OR the result of
+   * a `require('@/assets/images/quiz/x.jpg')` call (a number). Components
+   * should branch on `typeof imageSource === 'string'`.
+   */
+  imageUrl?: string | number;
   /** Emoji fallback / decoration for non-photo questions (milk types, countries, flavors). */
   emoji?: string;
   /** ISO country code for flag rendering on the countries question. */
@@ -61,15 +65,22 @@ export type QuizQuestion = {
 };
 
 // ---------------------------------------------------------------------------
-// Hero photo URLs
+// Hero photos — bundled from assets/images/quiz/. Bundling > remote so the
+// quiz works offline and there's no chance of a hero image timing out mid-flow.
 // ---------------------------------------------------------------------------
-// NOTE: Unsplash URLs below are known-good cheese photography IDs that resolve
-// at the time of writing (2026-04). If any 404 in review, flip the quiz
-// component to fall back to the emoji. Designer will replace with commissioned
-// shots in assets/images/quiz/ pre-launch.
 
-const U = (id: string, w = 800) =>
-  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+const IMG = {
+  q1Brie:        require('@/assets/images/quiz/q1-brie.jpg'),
+  q1Cheddar:     require('@/assets/images/quiz/q1-cheddar.jpg'),
+  q1Blue:        require('@/assets/images/quiz/q1-blue.jpg'),
+  q1AgedGouda:   require('@/assets/images/quiz/q1-aged-gouda.jpg'),
+  q2Epoisses:    require('@/assets/images/quiz/q2-epoisses.jpg'),
+  q2Burrata:     require('@/assets/images/quiz/q2-burrata.jpg'),
+  q3Camembert:   require('@/assets/images/quiz/q3-camembert.jpg'),
+  q3Parmigiano:  require('@/assets/images/quiz/q3-parmigiano.jpg'),
+  q8Gouda:       require('@/assets/images/quiz/q8-gouda.jpg'),
+  q8Manchego:    require('@/assets/images/quiz/q8-manchego.jpg'),
+};
 
 // ---------------------------------------------------------------------------
 // Questions
@@ -87,28 +98,28 @@ export const QUIZ_QUESTIONS: readonly QuizQuestion[] = [
         value: { family: 'Soft Bloomy', type: 'Brie', flavors: ['Creamy'] },
         label: 'Creamy Brie',
         sublabel: 'Soft, buttery, pillowy',
-        imageUrl: U('photo-1486297678162-eb2a19b0a32d'),
+        imageUrl: IMG.q1Brie,
         emoji: '🧀',
       },
       {
         value: { family: 'Hard', type: 'Cheddar', flavors: ['Sharp'] },
         label: 'Sharp Cheddar',
         sublabel: 'Bold, tangy, punchy',
-        imageUrl: U('photo-1552767059-ce182ead6c1b'),
+        imageUrl: IMG.q1Cheddar,
         emoji: '🟠',
       },
       {
         value: { family: 'Blue', type: 'Blue', flavors: ['Funky'] },
         label: 'Blue',
         sublabel: 'Pungent, salty, striking',
-        imageUrl: U('photo-1509440159596-0249088772ff'),
+        imageUrl: IMG.q1Blue,
         emoji: '🔵',
       },
       {
         value: { family: 'Hard', type: 'Gouda', flavors: ['Nutty', 'Sweet'] },
         label: 'Aged Gouda',
         sublabel: 'Caramel, crystals, nutty',
-        imageUrl: U('photo-1536188309484-f76ef426e3a4'),
+        imageUrl: IMG.q1AgedGouda,
         emoji: '🟡',
       },
     ],
@@ -130,7 +141,7 @@ export const QUIZ_QUESTIONS: readonly QuizQuestion[] = [
         },
         label: 'Époisses',
         sublabel: 'Washed-rind, stinky, intense',
-        imageUrl: U('photo-1452195100486-9cc805987862'),
+        imageUrl: IMG.q2Epoisses,
         emoji: '🧅',
       },
       {
@@ -142,7 +153,7 @@ export const QUIZ_QUESTIONS: readonly QuizQuestion[] = [
         },
         label: 'Burrata',
         sublabel: 'Fresh, milky, clean',
-        imageUrl: U('photo-1626957341926-98752fc2ba90'),
+        imageUrl: IMG.q2Burrata,
         emoji: '🥛',
       },
     ],
@@ -159,14 +170,14 @@ export const QUIZ_QUESTIONS: readonly QuizQuestion[] = [
         value: { family: 'Soft Bloomy', type: 'Camembert' },
         label: 'Camembert',
         sublabel: 'Soft, oozy, rich',
-        imageUrl: U('photo-1566454419290-57a0589c9b51'),
+        imageUrl: IMG.q3Camembert,
         emoji: '🫕',
       },
       {
         value: { family: 'Hard', type: 'Parmigiano Reggiano', flavors: ['Nutty', 'Savory'] },
         label: 'Parmigiano',
         sublabel: 'Hard, crystalline, savoury',
-        imageUrl: U('photo-1618164436241-4473940d1f5c'),
+        imageUrl: IMG.q3Parmigiano,
         emoji: '🧱',
       },
     ],
@@ -246,14 +257,14 @@ export const QUIZ_QUESTIONS: readonly QuizQuestion[] = [
         value: { family: 'Hard', type: 'Gouda', milk: 'Cow', country: 'Netherlands' },
         label: 'Gouda',
         sublabel: 'Dutch, cow, caramel',
-        imageUrl: U('photo-1559561853-08451507cbe7'),
+        imageUrl: IMG.q8Gouda,
         emoji: '🟡',
       },
       {
         value: { family: 'Hard', type: 'Manchego', milk: 'Sheep', country: 'Spain' },
         label: 'Manchego',
         sublabel: 'Spanish, sheep, grassy',
-        imageUrl: U('photo-1624806992066-5ffaadf0e2d9'),
+        imageUrl: IMG.q8Manchego,
         emoji: '🟤',
       },
     ],

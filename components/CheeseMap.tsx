@@ -277,12 +277,12 @@ export default function CheeseMap({
                 />
                 {marker.highlight === 'wishlist' ? (
                   <View style={styles.highlightBadge}>
-                    <Star size={10} color="#1F2937" fill="#FCD95B" />
+                    <Star size={13} color="#FFFFFF" fill="#FFFFFF" />
                   </View>
                 ) : null}
                 {marker.highlight === 'taste_match' ? (
                   <View style={[styles.highlightBadge, styles.highlightBadgeTaste]}>
-                    <Sparkles size={10} color="#1F2937" />
+                    <Sparkles size={13} color="#FFFFFF" />
                   </View>
                 ) : null}
               </View>
@@ -425,35 +425,45 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   markerRingWishlist: {
-    padding: 3,
+    padding: 4,
     borderRadius: 999,
-    borderWidth: 2,
-    borderColor: '#FCD95B',
-    backgroundColor: 'rgba(252, 217, 91, 0.18)',
+    borderWidth: 3,
+    borderColor: '#FFB300',
+    backgroundColor: 'rgba(255, 179, 0, 0.18)',
+    shadowColor: '#FFB300',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 6,
+    elevation: 6,
   },
   markerRingTasteMatch: {
-    padding: 3,
+    padding: 4,
     borderRadius: 999,
-    borderWidth: 2,
-    borderColor: '#9A7B4F',
-    backgroundColor: 'rgba(154, 123, 79, 0.15)',
+    borderWidth: 3,
+    borderColor: '#7C3AED',
+    backgroundColor: 'rgba(124, 58, 237, 0.18)',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 6,
   },
   highlightBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FCD95B',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFB300',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
-    ...Layout.shadow.small,
+    ...Layout.shadow.medium,
   },
   highlightBadgeTaste: {
-    backgroundColor: '#F3E9D3',
+    backgroundColor: '#7C3AED',
   },
   markerImage: {
     width: 44,

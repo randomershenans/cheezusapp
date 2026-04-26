@@ -64,6 +64,14 @@ export type EventName =
   | 'signup'
   | 'login'
   | 'logout'
+  // OAuth (Apple / Google native sign-in)
+  | 'oauth_start'
+  | 'oauth_success'
+  | 'oauth_failure'
+  // Signed-out conversion funnel
+  | 'signin_prompt_shown'
+  | 'signin_prompt_action'
+  | 'signed_out_cta_tapped'
   // AI events
   | 'ai_scan_start'
   | 'ai_scan_success'
@@ -274,6 +282,12 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
   signup: 'session',
   login: 'session',
   logout: 'session',
+  oauth_start: 'session',
+  oauth_success: 'session',
+  oauth_failure: 'session',
+  signin_prompt_shown: 'session',
+  signin_prompt_action: 'session',
+  signed_out_cta_tapped: 'session',
   // AI
   ai_scan_start: 'ai',
   ai_scan_success: 'ai',
@@ -480,8 +494,24 @@ export const Analytics = {
   trackLogin: (userId?: string) => 
     trackEvent('login', {}, userId),
   
-  trackLogout: (userId?: string) => 
+  trackLogout: (userId?: string) =>
     trackEvent('logout', {}, userId),
+
+  // OAuth native sign-in funnel
+  trackOAuthStart: (provider: 'apple' | 'google', mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_start', { method: provider, step: mode }, userId),
+  trackOAuthSuccess: (provider: 'apple' | 'google', mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_success', { method: provider, step: mode }, userId),
+  trackOAuthFailure: (provider: 'apple' | 'google', error: string, mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_failure', { method: provider, error_message: error, step: mode }, userId),
+
+  // Signed-out conversion funnel
+  trackSignInPromptShown: (context: string) =>
+    trackEvent('signin_prompt_shown', { context }),
+  trackSignInPromptAction: (context: string, action: string) =>
+    trackEvent('signin_prompt_action', { context, action }),
+  trackSignedOutCtaTapped: (context: string) =>
+    trackEvent('signed_out_cta_tapped', { context }),
   
   // AI Scanner
   trackAIScanStart: (userId?: string) => 

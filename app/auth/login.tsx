@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { X, Mail, Lock } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Analytics } from '@/lib/analytics';
+import OAuthButtons from '@/components/auth/OAuthButtons';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -121,7 +122,7 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
@@ -132,7 +133,11 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
-                        
+            <OAuthButtons
+              mode="login"
+              onSuccess={() => router.replace('/(tabs)/profile')}
+            />
+
             <View style={styles.bottomActions}>
               <TouchableOpacity 
                 style={styles.signupButton}

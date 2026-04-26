@@ -1,6 +1,7 @@
 import { Tabs, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Plus } from 'lucide-react-native';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,11 +10,21 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../../contexts/AuthContext';
+import SignInPromptSheet from '@/components/auth/SignInPromptSheet';
 import Colors from '@/constants/Colors';
 
 export default function TabLayout() {
   const router = useRouter();
   const { user } = useAuth();
+  const [signInPromptVisible, setSignInPromptVisible] = useState(false);
+
+  const handleAddPress = () => {
+    if (user) {
+      router.push('/add-cheese');
+    } else {
+      setSignInPromptVisible(true);
+    }
+  };
 
   const iconColor = '#888888';
   const activeIconColor = '#FCD95B';
@@ -84,16 +95,25 @@ export default function TabLayout() {
         />
       </Tabs>
 
-      {/* Floating "+" button that routes to /add-cheese - only show when logged in */}
-      {user && (
-        <TouchableOpacity
-          style={styles.floatingAddButton}
-          onPress={() => router.push('/add-cheese')}
-          activeOpacity={0.8}
-        >
-          <Plus size={28} color="#2C3E50" />
-        </TouchableOpacity>
-      )}
+      {/* Floating "+" button — signed-in users route to /add-cheese,
+          signed-out users see the sign-in prompt sheet. */}
+      <TouchableOpacity
+        style={styles.floatingAddButton}
+        onPress={handleAddPress}
+        activeOpacity={0.8}
+      >
+        <Plus size={28} color="#2C3E50" />
+      </TouchableOpacity>
+
+      <SignInPromptSheet
+        visible={signInPromptVisible}
+        onDismiss={() => setSignInPromptVisible(false)}
+        context="add_cheese"
+        onAuthenticated={() => {
+          setSignInPromptVisible(false);
+          router.push('/add-cheese');
+        }}
+      />
     </View>
   );
 }

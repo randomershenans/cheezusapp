@@ -81,14 +81,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [skipOnboardingSession, setSkipOnboardingSession] = useState(false);
+  const [appleSignInAvailable, setAppleSignInAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    AppleAuthentication.isAvailableAsync()
+      .then(setAppleSignInAvailable)
+      .catch(() => setAppleSignInAvailable(false));
+  }, []);
 
   const fetchProfile = async (userId: string) => {
-    try {
+    // Use maybeSingle (no throw on empty) so an OAuth signup that races the
+    // handle_new_user trigger doesn't leave profile = null forever. Retry
+    // once after a short delay if the row isn't there yet.
+    const fetchOnce = async () => {
       const { data } = await supabase
         .from('profiles')
         .select('id, name, tagline, location, avatar_url, vanity_url, onboarding_quiz_completed_at')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
+      return data;
+    };
+
+    try {
+      let data = await fetchOnce();
+      if (!data) {
+        await new Promise((r) => setTimeout(r, 800));
+        data = await fetchOnce();
+      }
       if (data) setProfile(data as UserProfile);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -203,10 +223,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    });
-    if (error) throw error;
+    // Web: fall back to the browser OAuth flow.
+    if (Platform.OS === 'web') {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+      if (error) throw error;
+      return;
+    }
+
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      throw new Error('Google Sign In is not configured (missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID).');
+    }
+
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result: any = await GoogleSignin.signIn();
+      // The new Google Sign In returns { type: 'success', data: {...} } while
+      // older versions return the user object directly. Normalise.
+      const payload = result?.data ?? result;
+      const idToken = payload?.idToken ?? payload?.data?.idToken;
+      if (!idToken) {
+        throw new Error('Google Sign In did not return an id_token');
+      }
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: idToken,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err?.code === statusCodes.SIGN_IN_CANCELLED) return; // user cancelled
+      if (err?.code === statusCodes.IN_PROGRESS) return;
+      console.error('[Auth] Google sign-in failed:', err);
+      throw err;
+    }
+  };
+
+  const signInWithApple = async () => {
+    if (Platform.OS !== 'ios') {
+      throw new Error('Apple Sign In is only available on iOS.');
+    }
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        throw new Error('Apple Sign In did not return an identityToken');
+      }
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (error) throw error;
+
+      // Apple only exposes the full name on FIRST sign-in. If the name came
+      // through and the profile row doesn't have one yet, persist it.
+      const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (fullName) {
+        const { data: sess } = await supabase.auth.getSession();
+        const uid = sess.session?.user?.id;
+        if (uid) {
+          const { data: existing } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', uid)
+            .maybeSingle();
+          if (existing && !existing.name) {
+            await supabase.from('profiles').update({ name: fullName }).eq('id', uid);
+          }
+        }
+      }
+    } catch (err: any) {
+      // User cancelled — silent exit.
+      if (err?.code === 'ERR_REQUEST_CANCELED' || err?.code === 'ERR_CANCELED') return;
+      console.error('[Auth] Apple sign-in failed:', err);
+      throw err;
+    }
   };
 
   const resetPassword = async (email: string) => {
@@ -238,10 +334,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasCompletedOnboarding,
     skipOnboardingForSession,
     refreshOnboardingStatus,
+    appleSignInAvailable,
     signIn,
     signUp,
     signOut,
     signInWithGoogle,
+    signInWithApple,
     resetPassword,
     updatePassword,
     refreshProfile,

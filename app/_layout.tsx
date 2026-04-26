@@ -261,11 +261,18 @@ function OnboardingRouterGuard() {
           .eq('id', user.id)
           .maybeSingle();
         if (cancelled) return;
-        const createdAt = data?.created_at ? new Date(data.created_at).getTime() : 0;
-        const isFresh = createdAt > 0 && Date.now() - createdAt < FRESH_SIGNUP_WINDOW_MS;
+        // If the profiles row doesn't exist yet, the handle_new_user trigger
+        // hasn't fired — this is an OAuth (Apple/Google) signup mid-flight.
+        // Treat as a fresh signup so they're routed into the quiz.
+        if (!data?.created_at) {
+          setIsExistingUser(false);
+          return;
+        }
+        const createdAt = new Date(data.created_at).getTime();
+        const isFresh = Date.now() - createdAt < FRESH_SIGNUP_WINDOW_MS;
         setIsExistingUser(!isFresh);
       } catch {
-        // On read failure, default to bypass — safer than looping existing users.
+        // On real read failure, default to bypass — safer than looping existing users.
         if (!cancelled) setIsExistingUser(true);
       }
     })();

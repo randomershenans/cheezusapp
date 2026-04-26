@@ -70,7 +70,9 @@ export default function TopShelfGrid({ cheeses, totalCheeseCount, isOwnProfile }
 
             <View style={styles.caption}>
               <Text style={styles.name} numberOfLines={1}>{cheese.name}</Text>
-              {cheese.producer_name ? (
+              {cheese.producer_name &&
+                !cheese.producer_name.toLowerCase().includes('generic') &&
+                !cheese.producer_name.toLowerCase().includes('unknown') ? (
                 <Text style={styles.producer} numberOfLines={1}>{cheese.producer_name}</Text>
               ) : null}
             </View>

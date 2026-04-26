@@ -30,6 +30,7 @@ import TasteFingerprint from '@/components/profile/TasteFingerprint';
 import PassportMap from '@/components/profile/PassportMap';
 import FeaturedBadges from '@/components/profile/FeaturedBadges';
 import InstallOrFollowCTA, { StickyInstallBar } from '@/components/profile/InstallOrFollowCTA';
+import SignInPromptSheet from '@/components/auth/SignInPromptSheet';
 
 import {
   fetchPublicProfile,
@@ -47,6 +48,7 @@ export default function PublicProfileScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<FeaturedBadge | null>(null);
+  const [signInPromptVisible, setSignInPromptVisible] = useState(false);
 
   const isOwnProfile = user?.id === id;
 
@@ -90,7 +92,7 @@ export default function PublicProfileScreen() {
 
   const handleToggleFollow = useCallback(async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to follow users.');
+      setSignInPromptVisible(true);
       return;
     }
     setFollowLoading(true);
@@ -248,6 +250,13 @@ export default function PublicProfileScreen() {
 
       {/* Sticky install bar (web only, no-op on native) */}
       {!user ? <StickyInstallBar profileName={profile.name} /> : null}
+
+      {/* Sign-in sheet for native unauth follow attempts */}
+      <SignInPromptSheet
+        visible={signInPromptVisible}
+        onDismiss={() => setSignInPromptVisible(false)}
+        context="follow"
+      />
 
       {/* Badge detail modal */}
       <Modal

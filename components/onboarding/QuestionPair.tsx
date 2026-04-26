@@ -35,7 +35,11 @@ export default function QuestionPair({ options, onSelect }: Props) {
             onPress={() => handleTap(opt, idx)}
           >
             {opt.imageUrl ? (
-              <Image source={{ uri: opt.imageUrl }} style={styles.image} resizeMode="cover" />
+              <Image
+                source={typeof opt.imageUrl === 'string' ? { uri: opt.imageUrl } : opt.imageUrl}
+                style={styles.image}
+                resizeMode="cover"
+              />
             ) : (
               <View style={[styles.image, styles.imageFallback]}>
                 <Text style={styles.emoji}>{opt.emoji ?? '🧀'}</Text>

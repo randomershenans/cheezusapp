@@ -555,7 +555,7 @@ export default function DiscoverScreen() {
         ) : null}
         <View style={styles.headerTitleWrap}>
           <Text style={styles.title}>Cheese near you</Text>
-          <Text style={styles.subtitle}>Gold pins = on your wishlist · Tan pins = your taste</Text>
+          <Text style={styles.subtitle}>Amber = your wishlist · Purple = your taste</Text>
         </View>
         <NotificationBell />
       </View>
