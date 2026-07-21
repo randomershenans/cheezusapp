@@ -6,10 +6,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
-  Alert,
-  Image,
+  Alert,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import GoogleLogo from './GoogleLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { Analytics } from '@/lib/analytics';
 import Colors from '@/constants/Colors';
@@ -25,7 +25,6 @@ type Props = {
   onSuccess?: () => void;
 };
 
-const GOOGLE_LOGO_URI = 'https://developers.google.com/identity/images/g-logo.png';
 
 export default function OAuthButtons({ mode = 'login', dividerLabel, onSuccess }: Props) {
   const { signInWithGoogle, signInWithApple, appleSignInAvailable } = useAuth();
@@ -108,7 +107,7 @@ export default function OAuthButtons({ mode = 'login', dividerLabel, onSuccess }
           <ActivityIndicator size="small" color={Colors.text} />
         ) : (
           <>
-            <Image source={{ uri: GOOGLE_LOGO_URI }} style={styles.googleLogo} />
+            <GoogleLogo size={18} />
             <Text style={styles.googleText}>
               {mode === 'signup' ? 'Sign up with Google' : 'Continue with Google'}
             </Text>
@@ -170,11 +169,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     ...Layout.shadow.small,
-  },
-  googleLogo: {
-    width: 20,
-    height: 20,
-  },
+  },
   googleText: {
     fontSize: Typography.sizes.base,
     fontFamily: Typography.fonts.bodySemiBold,

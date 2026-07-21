@@ -18,3 +18,13 @@ node_modules
 
 # Supabase CLI scratch
 supabase/.temp/
+
+# Native projects are PREBUILD OUTPUT, not source.
+# android/ was committed in Jan 2026 and then drifted: it still declared RECORD_AUDIO
+# and SYSTEM_ALERT_WINDOW (neither used), pinned versionName 1.0.1 against
+# app.config.js's 1.0.3, and - because a committed native project makes EAS skip
+# prebuild - silently ignored six months of app.config.js changes. ios/ was never
+# committed, so the two platforms were being built from different configuration.
+# app.config.js is the single source of truth; let EAS generate these.
+/android
+/ios

@@ -42,6 +42,10 @@ export default {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FCD95B"
       },
+      // NOTE: eas.json sets "appVersionSource": "remote" with autoIncrement on the
+      // production profile, so EAS assigns the build number server-side and this local
+      // value is IGNORED for EAS builds. Kept only so local/bare tooling has something
+      // sane; do not rely on it matching what ships.
       versionCode: 12,
       package: "com.cheezus.app",
       // Read by expo-store-review's storeUrl() on Android.
