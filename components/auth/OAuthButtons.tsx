@@ -36,7 +36,14 @@ export default function OAuthButtons({ mode = 'login', dividerLabel, onSuccess }
     setBusy('google');
     try {
       Analytics.trackOAuthStart('google', mode);
-      await signInWithGoogle();
+      const outcome = await signInWithGoogle();
+      // Dismissing the provider sheet is not a sign-in. Reporting it as one both
+      // inflated oauth_success to ~100% and navigated the user into
+      // authenticated-only screens while still signed out.
+      if (outcome?.status === 'cancelled') {
+        Analytics.trackOAuthCancelled('google', mode);
+        return;
+      }
       Analytics.trackOAuthSuccess('google', mode);
       onSuccess?.();
     } catch (err: any) {
@@ -53,7 +60,11 @@ export default function OAuthButtons({ mode = 'login', dividerLabel, onSuccess }
     setBusy('apple');
     try {
       Analytics.trackOAuthStart('apple', mode);
-      await signInWithApple();
+      const outcome = await signInWithApple();
+      if (outcome?.status === 'cancelled') {
+        Analytics.trackOAuthCancelled('apple', mode);
+        return;
+      }
       Analytics.trackOAuthSuccess('apple', mode);
       onSuccess?.();
     } catch (err: any) {

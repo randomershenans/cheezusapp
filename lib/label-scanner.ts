@@ -62,7 +62,17 @@ Respond in JSON format:
   "error": "error message if not a cheese label or unclear"
 }`;
 
-export async function scanCheeseLabel(imageBase64: string): Promise<{ success: true; data: LabelScanResult } | { success: false; error: ScanError }> {
+/**
+ * Outcome of a label scan.
+ *
+ * A flat shape rather than a discriminated union. This project compiles with
+ * "strict" unset, so TypeScript cannot narrow a union on a boolean literal, and
+ * every `if (!result.success) { result.error }` failed to compile even though the
+ * runtime logic was correct. Exactly one of data/error is ever populated.
+ */
+export type ScanOutcome = { success: boolean; data?: LabelScanResult; error?: ScanError };
+
+export async function scanCheeseLabel(imageBase64: string): Promise<ScanOutcome> {
   // Try Supabase Edge Function first (preferred for keeping API key secure)
   try {
     const result = await scanViaEdgeFunction(imageBase64);
@@ -156,7 +166,7 @@ export async function scanCheeseLabel(imageBase64: string): Promise<{ success: t
   }
 }
 
-async function scanViaEdgeFunction(imageBase64: string): Promise<{ success: true; data: LabelScanResult } | { success: false; error: ScanError }> {
+async function scanViaEdgeFunction(imageBase64: string): Promise<ScanOutcome> {
   const { data, error } = await supabase.functions.invoke('scan-cheese-label', {
     body: { image: imageBase64 },
   });
@@ -178,7 +188,7 @@ async function scanViaEdgeFunction(imageBase64: string): Promise<{ success: true
   };
 }
 
-function parseOpenAIResponse(content: string): { success: true; data: LabelScanResult } | { success: false; error: ScanError } {
+function parseOpenAIResponse(content: string): ScanOutcome {
   try {
     // Extract JSON from the response (handle markdown code blocks)
     let jsonStr = content;

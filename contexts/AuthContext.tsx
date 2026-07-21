@@ -38,6 +38,20 @@ interface UserProfile {
   onboarding_quiz_completed_at: string | null;
 }
 
+/**
+ * Result of a native OAuth attempt.
+ *
+ * Cancellation is NOT an error and must not be reported as one, but it is also
+ * emphatically not a success: previously both sign-in methods returned void and
+ * swallowed cancellation with a bare `return`, so callers could not tell the two
+ * apart. Every caller fired an oauth_success event and navigated as though the
+ * user were signed in, stranding them in authenticated-only screens.
+ *
+ * A plain string field rather than a discriminated union, because this project
+ * compiles with `strict` unset and TypeScript cannot narrow unions without it.
+ */
+export type OAuthOutcome = { status: 'success' | 'cancelled' };
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -62,12 +76,15 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   /** Native Google Sign In via @react-native-google-signin, returning an id_token
    *  we exchange with Supabase via signInWithIdToken. Falls back to web OAuth
-   *  on web or if the native SDK isn't configured. */
-  signInWithGoogle: () => Promise<void>;
+   *  on web or if the native SDK isn't configured.
+   *  Resolves with status 'cancelled' when the user dismisses the sheet - callers
+   *  MUST check this before treating the call as a successful sign-in. */
+  signInWithGoogle: () => Promise<OAuthOutcome>;
   /** Native Apple Sign In (iOS 13+). Uses Apple's identityToken with Supabase's
    *  signInWithIdToken. Apple doesn't expose email on subsequent logins, so we
-   *  pass the display name through once on first sign-in. */
-  signInWithApple: () => Promise<void>;
+   *  pass the display name through once on first sign-in.
+   *  Resolves with status 'cancelled' when the user dismisses the sheet. */
+  signInWithApple: () => Promise<OAuthOutcome>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -222,21 +239,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (): Promise<OAuthOutcome> => {
     // Web: fall back to the browser OAuth flow.
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
       if (error) throw error;
-      return;
+      return { status: 'success' };
     }
 
     if (!GOOGLE_WEB_CLIENT_ID) {
-      throw new Error('Google Sign In is not configured (missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID).');
+      throw new Error('Google Sign In is not available right now. Please use email or Apple sign-in.');
     }
 
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const result: any = await GoogleSignin.signIn();
+
+      // Since v13 the SDK RESOLVES with { type: 'cancelled' } instead of throwing
+      // SIGN_IN_CANCELLED. Without this check the cancellation fell through to the
+      // "did not return an id_token" throw below and surfaced to the user as a
+      // "Sign in failed" error alert. The statusCodes catch further down is kept
+      // only for older SDK behaviour.
+      if (result?.type === 'cancelled') {
+        return { status: 'cancelled' };
+      }
+
       // The new Google Sign In returns { type: 'success', data: {...} } while
       // older versions return the user object directly. Normalise.
       const payload = result?.data ?? result;
@@ -249,15 +276,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token: idToken,
       });
       if (error) throw error;
+      return { status: 'success' };
     } catch (err: any) {
-      if (err?.code === statusCodes.SIGN_IN_CANCELLED) return; // user cancelled
-      if (err?.code === statusCodes.IN_PROGRESS) return;
+      if (err?.code === statusCodes.SIGN_IN_CANCELLED) return { status: 'cancelled' };
+      if (err?.code === statusCodes.IN_PROGRESS) return { status: 'cancelled' };
       console.error('[Auth] Google sign-in failed:', err);
       throw err;
     }
   };
 
-  const signInWithApple = async () => {
+  const signInWithApple = async (): Promise<OAuthOutcome> => {
     if (Platform.OS !== 'ios') {
       throw new Error('Apple Sign In is only available on iOS.');
     }
@@ -297,9 +325,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
+      return { status: 'success' };
     } catch (err: any) {
-      // User cancelled — silent exit.
-      if (err?.code === 'ERR_REQUEST_CANCELED' || err?.code === 'ERR_CANCELED') return;
+      // User cancelled. Not an error, but emphatically not a success either -
+      // callers must not navigate as though a session now exists.
+      if (err?.code === 'ERR_REQUEST_CANCELED' || err?.code === 'ERR_CANCELED') {
+        return { status: 'cancelled' };
+      }
       console.error('[Auth] Apple sign-in failed:', err);
       throw err;
     }

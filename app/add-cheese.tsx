@@ -11,6 +11,7 @@ import { NewCheeseForm, NewCheeseFormData, CheeseTypePrefill } from '@/component
 import SharePromptModal from '@/components/SharePromptModal';
 import MilestoneSharePrompt, { checkMilestone, hasShownMilestone, MilestoneNumber } from '@/components/MilestoneSharePrompt';
 import { useAuth } from '@/contexts/AuthContext';
+import SignInPromptSheet from '@/components/auth/SignInPromptSheet';
 import Colors from '@/constants/Colors';
 
 type Step = 'search' | 'add-existing' | 'add-new';
@@ -545,6 +546,26 @@ export default function AddCheeseScreen() {
       router.back();
     }
   };
+
+  // Route-level auth guard. The tab bar's "+" gates on `user` before pushing here,
+  // but this route is reachable by other means (search results, deep links, and
+  // previously a cancelled OAuth attempt). Without this a signed-out user could
+  // complete the entire form and only discover the problem when the insert threw
+  // "Not authenticated", surfacing as a generic "Failed to add cheese" alert.
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <SignInPromptSheet
+          visible
+          context="add_cheese"
+          onDismiss={() => router.back()}
+          onAuthenticated={() => {
+            /* Session now exists; this screen re-renders into the real form. */
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

@@ -68,6 +68,7 @@ export type EventName =
   | 'oauth_start'
   | 'oauth_success'
   | 'oauth_failure'
+  | 'oauth_cancelled'
   // Signed-out conversion funnel
   | 'signin_prompt_shown'
   | 'signin_prompt_action'
@@ -285,6 +286,7 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
   oauth_start: 'session',
   oauth_success: 'session',
   oauth_failure: 'session',
+  oauth_cancelled: 'session',
   signin_prompt_shown: 'session',
   signin_prompt_action: 'session',
   signed_out_cta_tapped: 'session',
@@ -504,6 +506,13 @@ export const Analytics = {
     trackEvent('oauth_success', { method: provider, step: mode }, userId),
   trackOAuthFailure: (provider: 'apple' | 'google', error: string, mode: 'login' | 'signup', userId?: string) =>
     trackEvent('oauth_failure', { method: provider, error_message: error, step: mode }, userId),
+
+  /** User dismissed the provider sheet. Kept separate from oauth_failure so that
+   *  genuine failures stay visible: cancellations were previously recorded as
+   *  oauth_success, which pinned the start->success rate at ~100% and hid the
+   *  real social-auth drop-off entirely. */
+  trackOAuthCancelled: (provider: 'apple' | 'google', mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_cancelled', { method: provider, step: mode }, userId),
 
   // Signed-out conversion funnel
   trackSignInPromptShown: (context: string) =>
