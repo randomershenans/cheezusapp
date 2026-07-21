@@ -9,12 +9,18 @@ interface SearchResultItemProps {
   onPress: (result: SearchResult) => void;
 }
 
+// Callers pass the pairing SUBTYPE ('food' / 'drink') here rather than 'pairing'
+// itself, so those need their own cases. The old `case 'pairing'` compared the
+// already-narrowed `type` against 'food', which could never be true.
 const getResultIcon = (type: string): string => {
   switch (type) {
     case 'cheese':
       return '🧀';
+    case 'food':
+      return '🍯';
+    case 'drink':
     case 'pairing':
-      return type === 'food' ? '🍯' : '🍷';
+      return '🍷';
     case 'article':
       return '📝';
     case 'recipe':

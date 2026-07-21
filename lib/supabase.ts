@@ -55,14 +55,19 @@ const supabaseUrl = 'https://xkvjqhgnwqawpojjegtr.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrdmpxaGdud3Fhd3BvamplZ3RyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY0MzU3OTMsImV4cCI6MjA2MjAxMTc5M30.mHOLCmKkuED3X5PkXyvD-_6PM6jGNL0-3q7aychAK1s';
 
 const createCustomFetch = () => {
-  return (...args: Parameters<typeof fetch>) => {
+  // The signal must be merged INTO the init object. Passing it as a third
+  // argument to fetch() is silently ignored, which left every request without
+  // a timeout: on a poor connection the app hung indefinitely instead of
+  // aborting after MOBILE_TIMEOUT.
+  return (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, MOBILE_TIMEOUT);
 
-    return fetch(...args, {
-      signal: controller.signal
+    return fetch(input, {
+      ...init,
+      signal: controller.signal,
     }).finally(() => {
       clearTimeout(timeoutId);
     });
