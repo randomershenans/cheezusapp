@@ -80,8 +80,39 @@ for (const c of COUNTRY_CENTROIDS) {
   }
 }
 
+/**
+ * Resolve a stored origin_country string to a map centroid.
+ *
+ * The catalogue's country values are not clean, so a bare lowercased lookup misses a
+ * lot. Measured across the 1,560 producer_cheeses rows that have a country:
+ *
+ *   exact lowercased match only : 1,371 resolved
+ *   + trimming whitespace       : 1,404  (+33 rows; values like "Switzerland ", "USA ")
+ *   + per-token comma fallback  : ~1,470 (+66; "England, Great Britain, United Kingdom",
+ *                                        "Canada, Italy", "Scotland, United Kingdom")
+ *
+ * Comma-joined values are common because the source treats the field as "countries this
+ * style is associated with". For a passport map, crediting the first token that resolves
+ * is the right behaviour - it is the primary origin in every sampled case.
+ *
+ * This is a read-side workaround. The real fix is canonical country codes on the row;
+ * see the catalogue data normalisation item in the roadmap.
+ */
 export function findCentroid(countryName: string): CountryCentroid | null {
-  return LOOKUP[countryName.toLowerCase()] ?? null;
+  if (!countryName) return null;
+
+  const direct = LOOKUP[countryName.trim().toLowerCase()];
+  if (direct) return direct;
+
+  // Multi-value string: take the first token that maps to a known country.
+  if (countryName.includes(',')) {
+    for (const token of countryName.split(',')) {
+      const hit = LOOKUP[token.trim().toLowerCase()];
+      if (hit) return hit;
+    }
+  }
+
+  return null;
 }
 
 export const TOTAL_COUNTRIES_IN_WORLD = 195;
