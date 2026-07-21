@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Shield, Lock, Eye, Download, Trash2, Smartphone } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { deleteAccount } from '@/lib/delete-account';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -236,14 +237,19 @@ export default function PrivacyScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your account and all associated data. This action cannot be undone.',
+      'This permanently deletes your account, your cheese box, your wishlist and your follows. It cannot be undone.\n\nCheeses and producers you added to the shared Cheezus catalogue will stay, but will no longer be linked to you.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Coming Soon', 'Account deletion will be available soon');
+          onPress: async () => {
+            const result = await deleteAccount();
+            if (!result.success) {
+              Alert.alert('Could not delete account', result.message);
+              return;
+            }
+            router.replace('/(tabs)');
           },
         },
       ]

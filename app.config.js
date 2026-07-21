@@ -26,8 +26,10 @@ export default {
       infoPlist: {
         NSCameraUsageDescription: "Cheezus uses your camera to take photos of cheese for your cheese box entries and to scan cheese labels for automatic identification. For example, you can photograph a cheese wheel to add it to your collection or scan a label to auto-fill cheese details.",
         NSPhotoLibraryUsageDescription: "Cheezus accesses your photo library so you can select existing photos of cheese to add to your cheese box entries and set your profile picture. For example, you can choose a photo you took earlier at a cheese shop.",
-        NSLocationWhenInUseUsageDescription: "Cheezus uses your location to show you cheese shops, producers, and cheese events near you. For example, you can discover local artisan cheese makers in your area.",
-        NSMicrophoneUsageDescription: "Cheezus may use the microphone when recording video of cheese tastings to share with the community."
+        NSLocationWhenInUseUsageDescription: "Cheezus uses your location to show you cheese shops, producers, and cheese events near you. For example, you can discover local artisan cheese makers in your area."
+        // No NSMicrophoneUsageDescription: there is no video or audio recording
+        // feature in the app. Declaring a permission the app never requests is an
+        // App Review flag and shows up on the privacy nutrition label for nothing.
       }
     },
     android: {
@@ -104,8 +106,10 @@ export default {
       [
         "expo-camera",
         {
-          "cameraPermission": "Cheezus uses your camera to take photos of cheese for your cheese box entries and to scan cheese labels for automatic identification. For example, you can photograph a cheese wheel to add it to your collection or scan a label to auto-fill cheese details.",
-          "microphonePermission": "Cheezus may use the microphone when recording video of cheese tastings to share with the community."
+          // microphonePermission deliberately omitted - the app records no audio
+          // or video. Setting it makes expo-camera add RECORD_AUDIO on Android
+          // and NSMicrophoneUsageDescription on iOS for a feature that does not exist.
+          "cameraPermission": "Cheezus uses your camera to take photos of cheese for your cheese box entries and to scan cheese labels for automatic identification. For example, you can photograph a cheese wheel to add it to your collection or scan a label to auto-fill cheese details."
         }
       ],
       [

@@ -111,8 +111,18 @@ export default function QuizScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const startTrackedRef = useRef(false);
+  // Latches while an auto-advance is pending, so a second tap inside the delay
+  // window cannot schedule a second timer. Both timers would have been created by
+  // the same render and would therefore both act on the same stale questionIndex,
+  // skipping a question and eventually walking past the end of the array.
+  const advancingRef = useRef(false);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const question: QuizQuestion = QUIZ_QUESTIONS[questionIndex];
+  // Clamp rather than index raw. If anything ever advances past the last question,
+  // QUIZ_QUESTIONS[i] is undefined and the next line throws mid-onboarding, which
+  // is unrecoverable for the user because no progress is persisted.
+  const safeIndex = Math.min(questionIndex, QUIZ_QUESTION_COUNT - 1);
+  const question: QuizQuestion = QUIZ_QUESTIONS[safeIndex];
   const currentSelections = selections[question.id] ?? [];
 
   // Track quiz_started exactly once on mount.
@@ -142,6 +152,19 @@ export default function QuizScreen() {
     ]).start();
   }, [questionIndex, fadeAnim, slideAnim]);
 
+  // Release the advance latch once the question actually changes, and make sure a
+  // pending timer can never fire after this screen unmounts (which would call
+  // router.replace on a dead component).
+  useEffect(() => {
+    advancingRef.current = false;
+    return () => {
+      if (advanceTimerRef.current) {
+        clearTimeout(advanceTimerRef.current);
+        advanceTimerRef.current = null;
+      }
+    };
+  }, [questionIndex]);
+
   const goNext = () => {
     Analytics.trackQuizQuestionAnswered(question.id, questionIndex, user?.id);
     if (questionIndex + 1 >= QUIZ_QUESTION_COUNT) {
@@ -156,9 +179,13 @@ export default function QuizScreen() {
   };
 
   const handleSingleSelect = (opt: QuizOption) => {
+    // Ignore further taps while an advance is already queued. Without this a
+    // double tap (or changing your mind inside the delay) queued two advances.
+    if (advancingRef.current || submitting) return;
+    advancingRef.current = true;
     // Overwrite single-select answer and autoadvance.
     setSelections((prev) => ({ ...prev, [question.id]: [opt] }));
-    setTimeout(goNext, AUTOADVANCE_DELAY_MS);
+    advanceTimerRef.current = setTimeout(goNext, AUTOADVANCE_DELAY_MS);
   };
 
   const handleToggleMulti = (opt: QuizOption) => {
@@ -207,6 +234,11 @@ export default function QuizScreen() {
       );
     } finally {
       setSubmitting(false);
+      // The advance latch is normally released by the questionIndex effect, but
+      // finalize runs on the LAST question, where the index never changes. If the
+      // save failed the user is still sitting on that question, so the latch has
+      // to be released here or re-tapping an option to retry would do nothing.
+      advancingRef.current = false;
     }
   };
 
