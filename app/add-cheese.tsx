@@ -155,11 +155,14 @@ export default function AddCheeseScreen() {
 
         // Check if already in wishlist
         const { data: existing } = await supabase
-          .from('wishlist')
+          .from('wishlists')
           .select('id')
           .eq('user_id', user.id)
           .eq('cheese_id', selectedCheese.id)
-          .single();
+          // maybeSingle, not single: single() returns an error when zero rows match,
+          // which is the normal case here. It only worked because the error was
+          // discarded, leaving `existing` null by accident.
+          .maybeSingle();
 
         if (existing) {
           Alert.alert('Already saved', 'This cheese is already in your wishlist');
@@ -169,7 +172,7 @@ export default function AddCheeseScreen() {
 
         // Add to wishlist
         const { error } = await supabase
-          .from('wishlist')
+          .from('wishlists')
           .insert({
             user_id: user.id,
             cheese_id: selectedCheese.id,
@@ -514,11 +517,11 @@ export default function AddCheeseScreen() {
       } else {
         // Add to wishlist
         const { data: existingWishlist } = await supabase
-          .from('wishlist')
+          .from('wishlists')
           .select('id')
           .eq('user_id', user.id)
           .eq('cheese_id', producerCheeseId)
-          .single();
+          .maybeSingle();
 
         if (existingWishlist) {
           router.replace(`/producer-cheese/${producerCheeseId}`);
@@ -526,7 +529,7 @@ export default function AddCheeseScreen() {
         }
 
         const { error: wishlistError } = await supabase
-          .from('wishlist')
+          .from('wishlists')
           .insert({
             user_id: user.id,
             cheese_id: producerCheeseId,
