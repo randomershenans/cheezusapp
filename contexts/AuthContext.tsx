@@ -68,7 +68,13 @@ interface AuthContextType {
    * `skipOnboardingForSession()` to stop the router guard from re-looping
    * users who intentionally hit Skip.
    */
+  /** True only if the quiz was actually COMPLETED. A skip leaves this false, so
+   *  TuneYourFeedBanner can still invite the user back. */
   hasCompletedOnboarding: boolean | null;
+  /** True if the quiz has been completed OR offered and declined. Only the router
+   *  guard should use this - it is what prevents re-forcing the quiz on a skipper
+   *  every cold start, without suppressing the banner. */
+  onboardingResolved: boolean | null;
   skipOnboardingForSession: () => void;
   refreshOnboardingStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -155,9 +161,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await fetchProfile(user.id);
   };
 
+  // Persisted per-user record that the quiz was offered and declined.
+  //
+  // Skipping deliberately does NOT write profiles.onboarding_quiz_completed_at (that
+  // column means "completed", and TuneYourFeedBanner keys off it to invite the user
+  // back). But the router guard fires on hasCompletedOnboarding === false, so without
+  // a durable record of the skip the user is pushed into the quiz again on every cold
+  // start. Device-local is the right scope: a reinstall re-offering the quiz is fine.
+  const skipKey = (userId: string) => `onboarding_skipped:${userId}`;
+
   const skipOnboardingForSession = () => {
     setSkipOnboardingSession(true);
+    const uid = user?.id;
+    if (!uid || Platform.OS === 'web') return;
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      void AsyncStorage.setItem(skipKey(uid), '1');
+    } catch (err) {
+      // Falls back to session-only behaviour: they get asked again next launch.
+      console.warn('[Auth] could not persist onboarding skip:', err);
+    }
   };
+
+  // Restore the persisted skip whenever the signed-in user changes.
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid || Platform.OS === 'web') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const skipped = await AsyncStorage.getItem(skipKey(uid));
+        if (!cancelled && skipped === '1') setSkipOnboardingSession(true);
+      } catch {
+        // Non-fatal; worst case the quiz is offered again.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     // Get initial session
@@ -366,10 +409,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  // Did the user actually COMPLETE the quiz? Skipping does not count.
+  // TuneYourFeedBanner keys off this, so a skipper still gets invited back.
   const hasCompletedOnboarding: boolean | null = (() => {
     if (!user) return null;
-    if (skipOnboardingSession) return true; // treat as complete for this session
-    if (!profile) return null;                // still loading profile
+    if (!profile) return null; // still loading profile
+    return Boolean(profile.onboarding_quiz_completed_at);
+  })();
+
+  // Has the quiz question been SETTLED one way or the other - completed, or offered
+  // and declined? Only the router guard should use this. Keeping it separate from
+  // hasCompletedOnboarding is what stops a skip from silently suppressing the banner
+  // while also stopping the guard re-forcing the quiz on every cold start.
+  const onboardingResolved: boolean | null = (() => {
+    if (!user) return null;
+    if (skipOnboardingSession) return true;
+    if (!profile) return null;
     return Boolean(profile.onboarding_quiz_completed_at);
   })();
 
@@ -379,6 +434,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     loading,
     hasCompletedOnboarding,
+    onboardingResolved,
     skipOnboardingForSession,
     refreshOnboardingStatus,
     appleSignInAvailable,

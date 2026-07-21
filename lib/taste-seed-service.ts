@@ -78,17 +78,54 @@ export async function saveTasteSeed(
   }
 
   if (!skipped) {
-    const { error: profileError } = await supabase
+    await markQuizCompleted(userId, now);
+  }
+}
+
+/**
+ * Write the completion flag to `profiles`, and make sure it actually landed.
+ *
+ * This is NOT optional, despite a previous comment here claiming the router guard
+ * falls back to `user_taste_seed`. It does not: `hasCompletedOnboarding` is derived
+ * solely from `profiles.onboarding_quiz_completed_at`, both in AuthContext and in the
+ * helper below. If this write is lost, the user is routed back into the quiz on their
+ * next cold start and has to do the whole thing again.
+ *
+ * Two failure modes are handled:
+ *  - a transient error, which is retried;
+ *  - an update matching ZERO rows, which PostgREST reports as success with no error.
+ *    That happens when the profiles row does not exist yet (the handle_new_user race
+ *    on a first OAuth sign-in), and previously passed silently. `.select('id')` makes
+ *    the affected-row count observable.
+ */
+async function markQuizCompleted(userId: string, now: string): Promise<void> {
+  const RETRY_DELAYS_MS = [0, 500, 1500];
+  let lastProblem = '';
+
+  for (const delay of RETRY_DELAYS_MS) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+
+    const { data, error } = await supabase
       .from('profiles')
       .update({ onboarding_quiz_completed_at: now })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select('id');
 
-    if (profileError) {
-      // Profile mirror failing is non-fatal — the seed is saved and the user
-      // can continue. Router guard falls back to reading user_taste_seed.
-      console.warn('[taste-seed] profile mirror update failed (non-fatal):', profileError);
+    if (error) {
+      lastProblem = error.message;
+      continue;
     }
+    if (!data || data.length === 0) {
+      lastProblem = 'update matched no profiles row';
+      continue;
+    }
+    return; // landed
   }
+
+  // Surface it. finalize() catches this and shows a retry-able error, which is far
+  // better than sending the user on and silently re-quizzing them tomorrow.
+  console.error('[taste-seed] could not record quiz completion:', lastProblem);
+  throw new Error(`Could not save quiz completion: ${lastProblem}`);
 }
 
 /**

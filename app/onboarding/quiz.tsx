@@ -117,6 +117,14 @@ export default function QuizScreen() {
   // skipping a question and eventually walking past the end of the array.
   const advancingRef = useRef(false);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Authoritative copy of the answers, updated SYNCHRONOUSLY alongside state.
+  //
+  // finalize() runs from a setTimeout created during the tap that answers the LAST
+  // question. That callback closes over the `selections` value from the render it was
+  // created in, which does not yet include the answer just given - so the final
+  // question's answer was silently dropped from every completed quiz. Reading the ref
+  // instead removes the dependency on React having re-rendered first.
+  const selectionsRef = useRef<SelectionsById>({});
 
   // Clamp rather than index raw. If anything ever advances past the last question,
   // QUIZ_QUESTIONS[i] is undefined and the next line throws mid-onboarding, which
@@ -183,24 +191,27 @@ export default function QuizScreen() {
     // double tap (or changing your mind inside the delay) queued two advances.
     if (advancingRef.current || submitting) return;
     advancingRef.current = true;
-    // Overwrite single-select answer and autoadvance.
-    setSelections((prev) => ({ ...prev, [question.id]: [opt] }));
+    // Overwrite single-select answer and autoadvance. The ref is updated first and
+    // synchronously so finalize() can never read a stale answer set.
+    const next = { ...selectionsRef.current, [question.id]: [opt] };
+    selectionsRef.current = next;
+    setSelections(next);
     advanceTimerRef.current = setTimeout(goNext, AUTOADVANCE_DELAY_MS);
   };
 
   const handleToggleMulti = (opt: QuizOption) => {
-    setSelections((prev) => {
-      const cur = prev[question.id] ?? [];
-      const already = cur.some((s) => s.value === opt.value);
-      let next: QuizOption[];
-      if (already) {
-        next = cur.filter((s) => s.value !== opt.value);
-      } else {
-        if (question.maxSelections && cur.length >= question.maxSelections) return prev;
-        next = [...cur, opt];
-      }
-      return { ...prev, [question.id]: next };
-    });
+    const cur = selectionsRef.current[question.id] ?? [];
+    const already = cur.some((s) => s.value === opt.value);
+    let nextForQuestion: QuizOption[];
+    if (already) {
+      nextForQuestion = cur.filter((s) => s.value !== opt.value);
+    } else {
+      if (question.maxSelections && cur.length >= question.maxSelections) return;
+      nextForQuestion = [...cur, opt];
+    }
+    const next = { ...selectionsRef.current, [question.id]: nextForQuestion };
+    selectionsRef.current = next;
+    setSelections(next);
   };
 
   const finalize = async () => {
@@ -210,7 +221,7 @@ export default function QuizScreen() {
       return;
     }
     setSubmitting(true);
-    const answers = aggregateAnswers(selections);
+    const answers = aggregateAnswers(selectionsRef.current);
     try {
       await saveTasteSeed(user.id, answers, false);
       Analytics.trackQuizCompleted(user.id);
@@ -251,7 +262,7 @@ export default function QuizScreen() {
     }
     setSubmitting(true);
     try {
-      const answers = aggregateAnswers(selections); // save partial progress
+      const answers = aggregateAnswers(selectionsRef.current); // save partial progress
       await saveTasteSeed(user.id, answers, true);
       Analytics.trackQuizSkipped(questionIndex, user.id);
     } catch (err) {

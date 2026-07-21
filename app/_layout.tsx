@@ -245,7 +245,11 @@ const ONBOARDING_LAUNCH_AT = Date.parse('2026-07-21T00:00:00Z');
 function OnboardingRouterGuard() {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading, hasCompletedOnboarding } = useAuth();
+  // onboardingResolved, NOT hasCompletedOnboarding. A user who skipped has settled the
+  // question and must not be pushed back into the quiz on every cold start, but should
+  // still see TuneYourFeedBanner - and that banner keys off hasCompletedOnboarding,
+  // which a skip deliberately leaves false.
+  const { user, loading, onboardingResolved } = useAuth();
   // null = unknown yet, true = existing user (bypass quiz), false = fresh signup
   const [isExistingUser, setIsExistingUser] = useState<boolean | null>(null);
 
@@ -254,7 +258,7 @@ function OnboardingRouterGuard() {
       setIsExistingUser(null);
       return;
     }
-    if (hasCompletedOnboarding === true) {
+    if (onboardingResolved === true) {
       setIsExistingUser(true);
       return;
     }
@@ -284,19 +288,19 @@ function OnboardingRouterGuard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, loading, hasCompletedOnboarding]);
+  }, [user?.id, loading, onboardingResolved]);
 
   useEffect(() => {
     if (loading) return;
     if (!user) return;
-    if (hasCompletedOnboarding !== false) return; // null = still loading, true = done
+    if (onboardingResolved !== false) return; // null = still loading, true = done
     if (isExistingUser !== false) return;          // null = still checking, true = bypass
 
     const path = pathname ?? '';
     if (path.startsWith('/onboarding') || path.startsWith('/auth')) return;
 
     router.replace('/onboarding/quiz');
-  }, [user, loading, hasCompletedOnboarding, isExistingUser, pathname, router]);
+  }, [user, loading, onboardingResolved, isExistingUser, pathname, router]);
 
   return null;
 }
