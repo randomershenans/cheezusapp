@@ -31,10 +31,18 @@ export default {
       infoPlist: {
         NSCameraUsageDescription: "Cheezus uses your camera to take photos of cheese for your cheese box entries and to scan cheese labels for automatic identification. For example, you can photograph a cheese wheel to add it to your collection or scan a label to auto-fill cheese details.",
         NSPhotoLibraryUsageDescription: "Cheezus accesses your photo library so you can select existing photos of cheese to add to your cheese box entries and set your profile picture. For example, you can choose a photo you took earlier at a cheese shop.",
-        NSLocationWhenInUseUsageDescription: "Cheezus uses your location to show you cheese shops, producers, and cheese events near you. For example, you can discover local artisan cheese makers in your area."
+        NSLocationWhenInUseUsageDescription: "Cheezus uses your location to show you cheese shops, producers, and cheese events near you. For example, you can discover local artisan cheese makers in your area.",
         // No NSMicrophoneUsageDescription: there is no video or audio recording
         // feature in the app. Declaring a permission the app never requests is an
         // App Review flag and shows up on the privacy nutrition label for nothing.
+
+        // US export compliance. Declaring false means the app uses only encryption
+        // that is EXEMPT - i.e. standard HTTPS/TLS for talking to Supabase, Mapbox
+        // and the App Store. Cheezus implements no proprietary or non-standard
+        // cryptography, so the exemption applies and this is the correct answer.
+        // Without it App Store Connect asks the same question on every single
+        // submission and holds the build until answered.
+        ITSAppUsesNonExemptEncryption: false
       }
     },
     android: {
@@ -137,6 +145,32 @@ export default {
           // iOS URL scheme comes from your GoogleService-Info.plist REVERSED_CLIENT_ID.
           // Set GOOGLE_IOS_URL_SCHEME in your env (EAS secret) for builds.
           iosUrlScheme: process.env.GOOGLE_IOS_URL_SCHEME || "com.googleusercontent.apps.PLACEHOLDER"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          ios: {
+            // Fixes the pod install failure:
+            //   "The Swift pod `AppCheckCore` depends upon `GoogleUtilities` and
+            //    `RecaptchaInterop`, which do not define modules."
+            //
+            // GoogleSignIn 9.x pulls in AppCheckCore, which is Swift. Swift pods can
+            // only import static-library dependencies that generate module maps, and
+            // these two do not by default. Declaring them with modular_headers makes
+            // CocoaPods emit those maps.
+            //
+            // Deliberately targeted rather than useFrameworks: 'static'. That global
+            // switch also resolves it, but @rnmapbox/maps explicitly converts
+            // MapboxCommon, MapboxCoreMaps, MapboxMaps and Turf to DYNAMIC frameworks
+            // during pod install, and mixing that with a global static-framework
+            // linkage is a well-known source of build breakage. Only the two pods
+            // named in the error are changed.
+            extraPods: [
+              { name: "GoogleUtilities", modular_headers: true },
+              { name: "RecaptchaInterop", modular_headers: true }
+            ]
+          }
         }
       ]
     ],
