@@ -233,10 +233,11 @@ export default function QuizScreen() {
     try {
       await saveTasteSeed(user.id, answers, false);
       Analytics.trackQuizCompleted(user.id);
-      // The single activation event for the whole new-user funnel. quiz_completed is
-      // quiz-specific; onboarding_completed is the one to join against signup so
-      // "installs -> signup -> activated" can be computed end to end.
-      Analytics.trackOnboardingCompleted('quiz', false, user.id);
+      // NOTE: onboarding_completed is deliberately NOT fired here. The quiz is no longer
+      // the end of onboarding - first-cheese and wishlist follow it - so the single
+      // activation event is emitted once, when the user actually exits the flow, in
+      // app/onboarding/wishlist.tsx. Firing it in both places would double-count the one
+      // metric the whole new-user funnel is joined against.
       // Mark complete in session state + refetch profile so the router guard
       // sees hasCompletedOnboarding === true before we navigate away.
       // Without this, the guard fires on /(tabs) and sends the user back to

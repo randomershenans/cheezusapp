@@ -151,9 +151,19 @@ export default function ResultScreen() {
     });
   };
 
-  const onSeeFeed = () => {
-    Analytics.trackFirstFeedViewAfterQuiz(user?.id);
-    router.replace('/(tabs)');
+  /**
+   * Continue into the activation steps rather than straight to the feed.
+   *
+   * This screen used to be the end of onboarding, dropping the user into a feed they had
+   * no content in. 44% of signups never logged a cheese. The next two steps convert the
+   * taste answers they just gave into a one-tap first log, and the feed exit now happens
+   * at the end of the wishlist step.
+   */
+  const onContinue = () => {
+    router.replace({
+      pathname: '/onboarding/first-cheese',
+      params: { answers: (params.answers as string) ?? '{}' },
+    });
   };
 
   if (!revealed) {
@@ -214,8 +224,8 @@ export default function ResultScreen() {
             <Text style={styles.shareButtonText}>Share my taste</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={onSeeFeed}>
-            <Text style={styles.primaryButtonText}>See your feed</Text>
+          <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={onContinue}>
+            <Text style={styles.primaryButtonText}>Start your cheese box</Text>
             <ArrowRight size={18} color={Colors.text} />
           </TouchableOpacity>
         </View>
