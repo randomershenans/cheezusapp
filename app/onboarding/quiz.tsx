@@ -140,6 +140,14 @@ export default function QuizScreen() {
     Analytics.trackQuizStarted(user?.id);
   }, [user?.id]);
 
+  // Per-step impression. quiz_question_answered only fires on the way OUT of a
+  // question, so without this there is no denominator: a user who abandons on
+  // question 3 is indistinguishable from one who never reached it, and the drop-off
+  // curve the quiz exists to optimise cannot be drawn.
+  useEffect(() => {
+    Analytics.trackOnboardingStepViewed(`quiz_${safeIndex + 1}_${question.id}`, user?.id);
+  }, [safeIndex, question.id, user?.id]);
+
   // Fade/slide in whenever the question changes.
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -225,6 +233,10 @@ export default function QuizScreen() {
     try {
       await saveTasteSeed(user.id, answers, false);
       Analytics.trackQuizCompleted(user.id);
+      // The single activation event for the whole new-user funnel. quiz_completed is
+      // quiz-specific; onboarding_completed is the one to join against signup so
+      // "installs -> signup -> activated" can be computed end to end.
+      Analytics.trackOnboardingCompleted('quiz', false, user.id);
       // Mark complete in session state + refetch profile so the router guard
       // sees hasCompletedOnboarding === true before we navigate away.
       // Without this, the guard fires on /(tabs) and sends the user back to

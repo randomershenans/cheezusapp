@@ -350,6 +350,24 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
 };
 
 /**
+ * Currently signed-in user, mirrored here by AuthContext.
+ *
+ * Most call sites do not thread a userId through, and trackEvent previously wrote
+ * user_id: null whenever one was not passed explicitly. That silently anonymised a
+ * large share of events - including the entire acquisition funnel - which makes any
+ * per-user funnel or retention analysis impossible to compute after the fact.
+ *
+ * Cached rather than read via supabase.auth.getUser() per event, because trackEvent
+ * is deliberately fire-and-forget and must not await a network round trip.
+ */
+let currentUserId: string | null = null;
+
+/** Called by AuthContext whenever the signed-in user changes. Pass null on sign-out. */
+export const setAnalyticsUser = (userId: string | null) => {
+  currentUserId = userId;
+};
+
+/**
  * Track an analytics event
  * Fire-and-forget - doesn't block UI
  */
@@ -367,7 +385,9 @@ export const trackEvent = async (
       .insert({
         event_name: eventName,
         event_category: category,
-        user_id: userId || null,
+        // Explicit argument wins; otherwise fall back to the signed-in user so
+        // events are not silently anonymised by call sites that don't pass one.
+        user_id: userId || currentUserId || null,
         properties: properties || {},
         platform: getPlatform(),
         app_version: getAppVersion(),

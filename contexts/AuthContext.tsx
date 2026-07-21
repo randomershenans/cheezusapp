@@ -9,6 +9,9 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import type { User, Session } from '@supabase/supabase-js';
+// Keeps analytics events attributed to the right user. Without this, every event
+// whose call site does not explicitly thread a userId is written with user_id null.
+import { setAnalyticsUser, Analytics } from '@/lib/analytics';
 
 // Configure Google Sign In once. webClientId must match the one registered
 // with your Supabase Google provider (Supabase → Auth → Providers → Google).
@@ -51,6 +54,34 @@ interface UserProfile {
  * compiles with `strict` unset and TypeScript cannot narrow unions without it.
  */
 export type OAuthOutcome = { status: 'success' | 'cancelled' };
+
+/**
+ * How recently an account must have been created for an OAuth sign-in to count as a
+ * SIGNUP rather than a returning login.
+ *
+ * Evaluated immediately after signInWithIdToken resolves, so a genuinely new account
+ * is seconds old at this point; the window only needs to absorb clock skew between
+ * the device and Supabase. This is analytics attribution only - nothing about the
+ * user's experience depends on it, unlike the onboarding routing decision.
+ */
+const NEW_ACCOUNT_WINDOW_MS = 60_000;
+
+/**
+ * Emit a signup event for a native OAuth sign-in.
+ *
+ * trackSignup previously fired from exactly one place - the email signup screen,
+ * hardcoded to method 'email' - so every Apple and Google signup was missing from
+ * acquisition entirely. Social users appeared as pure activation with no acquisition
+ * row, which meant every signup-to-activation rate was computed against the wrong
+ * denominator.
+ */
+function reportOAuthSignup(provider: 'apple' | 'google', authUser?: User | null) {
+  if (!authUser?.created_at) return;
+  const ageMs = Date.now() - new Date(authUser.created_at).getTime();
+  if (ageMs >= 0 && ageMs <= NEW_ACCOUNT_WINDOW_MS) {
+    Analytics.trackSignup(provider, undefined, authUser.id);
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -208,6 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[Auth] Initial session loaded:', session ? `User: ${session.user?.id}` : 'No session');
       setSession(session);
       setUser(session?.user ?? null);
+      setAnalyticsUser(session?.user?.id ?? null);
       if (session?.user) {
         await fetchProfile(session.user.id);
       }
@@ -224,6 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Auth event:', event);
       setSession(session);
       setUser(session?.user ?? null);
+      setAnalyticsUser(session?.user?.id ?? null);
       
       if (session?.user) {
         await fetchProfile(session.user.id);
@@ -258,6 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (refreshed?.user) {
           setSession(refreshed);
           setUser(refreshed.user);
+          setAnalyticsUser(refreshed.user?.id ?? null);
         }
       } catch (error) {
         console.error('[Auth] Error refreshing session on foreground:', error);
@@ -329,11 +363,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!idToken) {
         throw new Error('Google Sign In did not return an id_token');
       }
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: idToken,
       });
       if (error) throw error;
+      reportOAuthSignup('google', data?.user);
       return { status: 'success' };
     } catch (err: any) {
       if (err?.code === statusCodes.SIGN_IN_CANCELLED) return { status: 'cancelled' };
@@ -357,11 +392,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!credential.identityToken) {
         throw new Error('Apple Sign In did not return an identityToken');
       }
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken,
       });
       if (error) throw error;
+      reportOAuthSignup('apple', data?.user);
 
       // Apple only exposes the full name on FIRST sign-in. If the name came
       // through and the profile row doesn't have one yet, persist it.

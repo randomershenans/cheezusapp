@@ -26,6 +26,10 @@ import PushNotificationHandler from '@/components/PushNotificationHandler';
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
+// Marks that this install has been opened at least once, so app_first_open fires
+// exactly once per install rather than never (previously) or on every launch.
+const FIRST_OPEN_KEY = 'analytics:first_open_at';
+
 export default function RootLayout() {
   useFrameworkReady();
   const router = useRouter();
@@ -48,15 +52,43 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // Track app open on mount and foreground
+  // Track app open on mount and foreground.
+  //
+  // The cold-start call has to decide whether this is the very FIRST open on this
+  // install, because that flag is the sole trigger for the app_first_open event.
+  // It was previously hardcoded to false, so app_first_open never fired even once
+  // and installs-to-signup conversion could not be computed at all.
   useEffect(() => {
-    Analytics.trackAppOpen(false);
+    let cancelled = false;
+
+    (async () => {
+      let isFirstOpen = false;
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const seen = await AsyncStorage.getItem(FIRST_OPEN_KEY);
+        if (!seen) {
+          isFirstOpen = true;
+          await AsyncStorage.setItem(FIRST_OPEN_KEY, new Date().toISOString());
+        }
+      } catch (err) {
+        // If storage is unavailable, fall back to treating this as a normal open.
+        // Over-reporting first opens would corrupt the acquisition funnel far worse
+        // than under-reporting a rare edge case.
+        console.warn('[Analytics] first-open check failed:', err);
+      }
+      if (!cancelled) Analytics.trackAppOpen(isFirstOpen);
+    })();
+
+    // Foregrounding is never a first open.
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
         Analytics.trackAppOpen(false);
       }
     });
-    return () => subscription.remove();
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
   }, []);
 
   // Handle deep links
