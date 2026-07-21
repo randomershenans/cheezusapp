@@ -107,10 +107,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setAppleSignInAvailable(false));
   }, []);
 
+  // Backoff between attempts to read a freshly-created profile row, in ms.
+  // A first OAuth sign-in races the handle_new_user trigger, so the row may not
+  // exist for a moment. Previously there were only two attempts (immediate, then
+  // 800ms); if both missed, `profile` stayed null for the whole session, which
+  // left hasCompletedOnboarding as null and made the onboarding router guard
+  // silently never fire - so the new user skipped the taste quiz entirely.
+  const PROFILE_RETRY_DELAYS_MS = [400, 800, 1600, 3200];
+
   const fetchProfile = async (userId: string) => {
-    // Use maybeSingle (no throw on empty) so an OAuth signup that races the
-    // handle_new_user trigger doesn't leave profile = null forever. Retry
-    // once after a short delay if the row isn't there yet.
+    // maybeSingle: no throw when the row is absent, so a missing row is a retry
+    // condition rather than an error.
     const fetchOnce = async () => {
       const { data } = await supabase
         .from('profiles')
@@ -122,11 +129,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       let data = await fetchOnce();
-      if (!data) {
-        await new Promise((r) => setTimeout(r, 800));
+      for (const delay of PROFILE_RETRY_DELAYS_MS) {
+        if (data) break;
+        await new Promise((r) => setTimeout(r, delay));
         data = await fetchOnce();
       }
-      if (data) setProfile(data as UserProfile);
+      if (data) {
+        setProfile(data as UserProfile);
+      } else {
+        // Six seconds and still nothing. Either handle_new_user is broken or RLS
+        // is blocking the read. Worth being loud: the user is now in a state where
+        // onboarding cannot be evaluated.
+        console.warn(`[Auth] No profiles row for ${userId} after ${PROFILE_RETRY_DELAYS_MS.length + 1} attempts.`);
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     }

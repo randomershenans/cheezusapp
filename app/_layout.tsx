@@ -231,10 +231,16 @@ export default function RootLayout() {
  * flows). The skip path sets a session-local flag in AuthContext so we don't
  * re-loop the same session.
  */
-// A fresh signup's `profiles.created_at` will be within seconds of "now".
-// All 370 existing pre-migration users have `created_at` from weeks/months ago.
-// Everyone with an existing account gets the feed banner instead of the quiz.
-const FRESH_SIGNUP_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+// Accounts created BEFORE the taste quiz shipped belong to pre-existing users, who
+// should not be dropped into onboarding retroactively - they get TuneYourFeedBanner
+// instead. Accounts created after it shipped are new users and should see the quiz.
+//
+// This replaces a "created_at is less than 10 minutes old" check. That proxy decayed:
+// email signup does not enter the app at all, it sends a confirmation email, so anyone
+// confirming and logging in more than 10 minutes later - a lunch break, an evening -
+// was classified as pre-existing and NEVER saw the quiz. A fixed cutoff cannot expire,
+// so a user who signs up today and confirms on Thursday still gets onboarded.
+const ONBOARDING_LAUNCH_AT = Date.parse('2026-07-21T00:00:00Z');
 
 function OnboardingRouterGuard() {
   const router = useRouter();
@@ -269,8 +275,7 @@ function OnboardingRouterGuard() {
           return;
         }
         const createdAt = new Date(data.created_at).getTime();
-        const isFresh = Date.now() - createdAt < FRESH_SIGNUP_WINDOW_MS;
-        setIsExistingUser(!isFresh);
+        setIsExistingUser(createdAt < ONBOARDING_LAUNCH_AT);
       } catch {
         // On real read failure, default to bypass — safer than looping existing users.
         if (!cancelled) setIsExistingUser(true);
