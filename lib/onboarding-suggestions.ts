@@ -169,15 +169,23 @@ export async function getOnboardingSuggestions(
   }
 
   let rows: Row[] = [];
-  try {
-    const results = await Promise.all(queries.map((q) => q.catch(() => ({ data: null }))));
-    results.forEach((r) => {
-      if (r?.data) rows = rows.concat(r.data);
-    });
-  } catch (err) {
-    console.warn('[onboarding] suggestion query failed:', err);
-    return [];
-  }
+  // Supabase query builders are THENABLE but are not Promises: they implement
+  // .then() and nothing else. Calling .catch() on one throws
+  // "x.catch is not a function", which the outer try/catch then swallowed,
+  // making this function silently return [] on every single call. Wrapping in
+  // Promise.resolve() turns each builder into a real promise that .catch()
+  // exists on. Do not "simplify" this back.
+  const results = await Promise.all(
+    queries.map((q) =>
+      Promise.resolve(q).catch((err) => {
+        console.warn('[onboarding] one suggestion query failed:', err);
+        return { data: null } as { data: Row[] | null };
+      })
+    )
+  );
+  results.forEach((r) => {
+    if (r?.data) rows = rows.concat(r.data);
+  });
 
   // Dedupe by id, scoring each cheese by how many stated preferences it satisfies so the
   // strongest matches surface first.
@@ -200,10 +208,18 @@ export async function getOnboardingSuggestions(
     // Many catalogue rows carry the literal producer_name "Generic", which makes
     // full_name read as "Generic Saint Nectaire". Show the cheese on its own in that
     // case, and suppress the producer line entirely.
+    //
+    // Falling back to full_name is not enough: when product_name is also null the
+    // result was the bare word "Generic" as the cheese's name. So strip the prefix
+    // off full_name, and drop any row that still has nothing real left to show.
     const isGeneric = (row.producer_name || '').trim().toLowerCase() === 'generic';
+    const stripped = (row.full_name || '').replace(/^\s*generic\s+/i, '').trim();
     const displayName = isGeneric
-      ? row.product_name || row.full_name || 'Unnamed cheese'
-      : row.full_name || row.product_name || 'Unnamed cheese';
+      ? row.product_name?.trim() || stripped
+      : row.full_name?.trim() || row.product_name?.trim() || '';
+
+    // A suggestion tile with no readable name is worse than one fewer tile.
+    if (!displayName || displayName.toLowerCase() === 'generic') continue;
 
     byId.set(row.id, {
       id: row.id,

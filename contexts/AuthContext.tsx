@@ -254,16 +254,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
+
+      // A null session does NOT always mean the user signed out.
+      //
+      // supabase-js emits events with session === null transiently whenever a
+      // token refresh fails - most commonly when the app returns to the
+      // foreground before the network has reconnected. This handler used to
+      // treat every such event as a sign-out: setUser(null) plus
+      // setProfile(null), which wiped the user's data and left the feed empty
+      // until they force-quit the app and cold-started it. That is exactly the
+      // "come back later and everything is gone" bug.
+      //
+      // So only an EXPLICIT sign-out clears state. Anything else with a null
+      // session is treated as a temporary blip and the existing session is kept;
+      // the foreground handler below will recover it.
+      const isExplicitSignOut = event === 'SIGNED_OUT';
+      if (!session && !isExplicitSignOut) {
+        console.warn(`[Auth] null session on "${event}" - keeping current session`);
+        setLoading(false);
+        return;
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       setAnalyticsUser(session?.user?.id ?? null);
-      
+
       if (session?.user) {
         await fetchProfile(session.user.id);
       } else {
         setProfile(null);
       }
-      
+
       setLoading(false);
       
       // Handle password recovery - navigate to reset password screen
@@ -287,12 +308,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       appStateRef.current = nextState;
       if (nextState !== 'active' || !wasBackground) return;
       try {
-        const { data: { session: refreshed } } = await supabase.auth.getSession();
-        if (refreshed?.user) {
-          setSession(refreshed);
-          setUser(refreshed.user);
-          setAnalyticsUser(refreshed.user?.id ?? null);
+        // getSession() alone is not enough: it reads the locally stored session,
+        // and while the app was backgrounded auto-refresh was stopped, so that
+        // token may already be expired. The session object still looks valid, so
+        // the app carried on and every query then failed with a 401 - the feed
+        // simply never loaded.
+        const { data: { session: stored } } = await supabase.auth.getSession();
+        if (!stored) return; // genuinely signed out; nothing to recover
+
+        // Refresh if the token is expired or close to it. expires_at is seconds.
+        const expiresAt = (stored.expires_at ?? 0) * 1000;
+        const needsRefresh = !expiresAt || expiresAt - Date.now() < 60_000;
+
+        let live = stored;
+        if (needsRefresh) {
+          const { data, error } = await supabase.auth.refreshSession();
+          if (error || !data.session) {
+            // Refresh failed, usually because the network has not come back yet.
+            // Do NOT clear the user: keep the stored session so the UI stays
+            // intact, and let auto-refresh retry once connectivity returns.
+            console.warn('[Auth] foreground refresh failed, keeping session:', error?.message);
+            return;
+          }
+          live = data.session;
         }
+
+        setSession(live);
+        setUser(live.user);
+        setAnalyticsUser(live.user?.id ?? null);
+        // Re-fetch the profile too. Without this, a resumed session restored the
+        // user but left `profile` stale or null, so onboarding state and the
+        // banner could both be wrong after a resume.
+        await fetchProfile(live.user.id);
       } catch (error) {
         console.error('[Auth] Error refreshing session on foreground:', error);
       }

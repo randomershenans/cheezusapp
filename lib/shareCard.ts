@@ -82,9 +82,21 @@ function getHost(timeoutMs = 1500): Promise<ShareCardHostHandle> {
 }
 
 function buildFallbackText(cardType: ShareCardType, props: any): { message: string; url?: string } {
+  // Every share needs to point at the SHARER, not the homepage.
+  //
+  // This used to fall straight back to https://cheezus.co when vanityUrl was
+  // missing - and 623 of 651 profiles have no vanity_url, including every recent
+  // signup, so almost every share was an unattributed link to the front page.
+  // A share that cannot identify who sent it wastes the whole point of sharing.
+  //
+  // /profile/<id> is a real share landing page with its own OG card, so it is a
+  // perfectly good fallback. Only drop to the bare domain when there is no user
+  // at all (a signed-out share, which should not happen).
   const url = props?.vanityUrl
     ? `https://cheezus.co/@${props.vanityUrl}`
-    : 'https://cheezus.co';
+    : props?.userId
+      ? `https://cheezus.co/profile/${props.userId}`
+      : 'https://cheezus.co';
   switch (cardType) {
     case 'just_logged':
       return {
