@@ -74,10 +74,10 @@ export default function ShareCardHost() {
 
   useEffect(() => {
     const handle: ShareCardHostHandle = { generate };
-    registerShareCardHost(handle);
-    return () => {
-      registerShareCardHost(null);
-    };
+    // Unregister via the returned closure, which removes THIS host only. Passing null
+    // used to clear the single global slot, disabling any other host still mounted.
+    const unregister = registerShareCardHost(handle);
+    return unregister;
   }, [generate]);
 
   const renderCard = () => {

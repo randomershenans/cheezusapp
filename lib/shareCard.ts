@@ -13,6 +13,8 @@
  * it without prop-drilling.
  */
 import { Share, Platform } from 'react-native';
+// Required for Android image sharing - RN's own Share cannot attach files there.
+import * as Sharing from 'expo-sharing';
 import { Analytics } from '@/lib/analytics';
 import type { ShareCardFormat } from '@/components/share-cards/ShareCardRenderer';
 
@@ -31,20 +33,41 @@ export type ShareCardHostHandle = {
   ) => Promise<string>;
 };
 
-let registeredHost: ShareCardHostHandle | null = null;
+// Hosts form a STACK: the most recently mounted one is active, which matches the UI
+// (a modal mounts over a screen and should own rendering while it is up).
+//
+// This was a single slot cleared unconditionally on unmount, which broke whenever two
+// hosts coexisted. Concretely: the profile screen mounts a host unconditionally via
+// ShareProfileCard; opening a milestone or share modal over it registered a second host,
+// and DISMISSING that modal wrote null - wiping the slot even though the profile's host
+// was still mounted and never re-registers. Every later profile share then stalled for
+// the full 1500ms timeout and silently degraded to a text-only share.
+let hostStack: ShareCardHostHandle[] = [];
 let hostWaiters: Array<(host: ShareCardHostHandle) => void> = [];
 
-export function registerShareCardHost(host: ShareCardHostHandle | null) {
-  registeredHost = host;
-  if (host) {
-    const waiters = hostWaiters;
-    hostWaiters = [];
-    waiters.forEach((fn) => fn(host));
-  }
+function activeHost(): ShareCardHostHandle | null {
+  return hostStack.length ? hostStack[hostStack.length - 1] : null;
+}
+
+/**
+ * Register a host. Returns its own unregister function - call THAT on unmount rather
+ * than passing null, because null cannot say which host went away.
+ */
+export function registerShareCardHost(host: ShareCardHostHandle | null): () => void {
+  if (!host) return () => {};
+  hostStack.push(host);
+  const waiters = hostWaiters;
+  hostWaiters = [];
+  waiters.forEach((fn) => fn(host));
+  return () => {
+    const i = hostStack.lastIndexOf(host);
+    if (i !== -1) hostStack.splice(i, 1);
+  };
 }
 
 function getHost(timeoutMs = 1500): Promise<ShareCardHostHandle> {
-  if (registeredHost) return Promise.resolve(registeredHost);
+  const current = activeHost();
+  if (current) return Promise.resolve(current);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       hostWaiters = hostWaiters.filter((w) => w !== wrap);
@@ -137,9 +160,41 @@ export async function generateAndShare(
   // Share with the rendered image
   try {
     const fb = buildFallbackText(cardType, props);
-    // iOS supports `url` as a file:// path; Android reads `message` and
-    // accepts the URL on share targets that support it. We pass both so
-    // we degrade gracefully if the target doesn't support the image.
+
+    // Android cannot attach the image via React Native's Share at all: its Android
+    // implementation reads only `title` and `message` and ignores `url` entirely. This
+    // previously passed fb.url (the WEB url, not even the image), so Android users have
+    // never received a card - only text.
+    //
+    // expo-sharing is the only API that can put the PNG on the Android sheet. It accepts
+    // file:// URIs ONLY (SharingModule rejects any other scheme), and view-shot's
+    // tmpfile result is already file:///data/..., so the prefix guard is belt-and-braces.
+    //
+    // Deliberately wrapped so that ANY failure falls through to the text share below.
+    // Without that, an expo-sharing throw would leave the user with nothing at all,
+    // which is worse than today's text-only behaviour.
+    if (Platform.OS === 'android' && imageUri) {
+      try {
+        if (await Sharing.isAvailableAsync()) {
+          const fileUri = imageUri.startsWith('file://') ? imageUri : `file://${imageUri}`;
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'image/png',
+            dialogTitle: 'Share your cheese card',
+          });
+          // NOTE: expo-sharing resolves when the chooser closes, whether or not the user
+          // actually shared - Android does not report the outcome. This activityType is
+          // therefore deliberately distinct so downstream metrics (profile_share and
+          // friends) can exclude unconfirmed Android shares rather than silently
+          // inflating a growth-loop number.
+          Analytics.trackShareCardImageShared(cardType, 'android_sheet_unconfirmed', variant, userId);
+          return { shared: true, activityType: 'android_sheet_unconfirmed' };
+        }
+      } catch {
+        // Fall through to the text share.
+      }
+    }
+
+    // iOS supports `url` as a file:// path and attaches the image properly.
     const result = await Share.share(
       {
         message: fb.message,

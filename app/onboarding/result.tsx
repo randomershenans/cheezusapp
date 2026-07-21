@@ -18,6 +18,7 @@ import { derivePersonalityTagline } from '@/lib/taste-personality';
 import { CURATED_FLAVOR_TAGS } from '@/constants/FlavorTags';
 import type { QuizAnswers } from '@/lib/taste-seed-service';
 import TasteRevealAnimation from '@/components/onboarding/TasteRevealAnimation';
+import ShareCardHost from '@/components/share-cards/ShareCardHost';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -47,6 +48,13 @@ async function shareTasteResult(args: {
   tagline: string;
   flavorTags: string[];
   fingerprint: Record<string, number>;
+  /** Attributes the analytics events. Without it every share from this screen is anonymous. */
+  userId?: string;
+  /** buildFallbackText reads `vanityUrl` specifically - not userId, not a handle - so
+   *  omitting it makes the text share fall back to a bare cheezus.co link with no
+   *  attribution back to the user. Every other share call site passes it. */
+  vanityUrl?: string | null;
+  userName?: string | null;
 }) {
   const fallbackText =
     `My cheese taste: ${args.tagline}. Figure out yours on Cheezus → ${PROFILE_URL}`;
@@ -69,6 +77,9 @@ async function shareTasteResult(args: {
         tagline: args.tagline,
         flavorTags: args.flavorTags,
         fingerprint: args.fingerprint,
+        userId: args.userId,
+        vanityUrl: args.vanityUrl,
+        userName: args.userName,
       });
       return;
     }
@@ -99,7 +110,7 @@ function buildMiniFingerprint(favoriteFlavors: string[] | undefined): Record<str
 
 export default function ResultScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const params = useLocalSearchParams();
   const answers = useMemo(() => parseAnswersParam(params.answers), [params.answers]);
 
@@ -130,7 +141,14 @@ export default function ResultScreen() {
   }, [revealed, contentFade, contentSlide]);
 
   const onShare = async () => {
-    await shareTasteResult({ tagline, flavorTags: topFlavors, fingerprint });
+    await shareTasteResult({
+      tagline,
+      flavorTags: topFlavors,
+      fingerprint,
+      userId: user?.id,
+      vanityUrl: profile?.vanity_url,
+      userName: profile?.name,
+    });
   };
 
   const onSeeFeed = () => {
@@ -202,6 +220,14 @@ export default function ResultScreen() {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/*
+        Offscreen renderer for generateAndShare. Without it getHost() has nothing to
+        resolve against: "Share my taste" stalled for the full 1500ms timeout and then
+        silently degraded to a text-only share. This screen is the onboarding payoff and
+        the most shareable moment in the app, and it has never produced an image.
+      */}
+      <ShareCardHost />
     </SafeAreaView>
   );
 }
