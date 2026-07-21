@@ -19,6 +19,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.cheezus.app",
+      usesAppleSignIn: true,
       associatedDomains: [
         "applinks:cheezus.co"
       ],
@@ -113,7 +114,16 @@ export default {
           RNMapboxMapsDownloadToken: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN,
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          // iOS URL scheme comes from your GoogleService-Info.plist REVERSED_CLIENT_ID.
+          // Set GOOGLE_IOS_URL_SCHEME in your env (EAS secret) for builds.
+          iosUrlScheme: process.env.GOOGLE_IOS_URL_SCHEME || "com.googleusercontent.apps.PLACEHOLDER"
+        }
+      ]
     ],
     extra: {
       router: {

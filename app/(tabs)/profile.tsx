@@ -43,7 +43,7 @@ export default function ProfileScreen() {
   const { user, signOut, profile: authProfile, refreshProfile } = useAuth();
   
   // Use profile from AuthContext as initial value for instant display
-  const [profile, setProfile] = useState<Profile | null>(authProfile as Profile | null);
+  const [profile, setProfile] = useState<Profile | null>(authProfile as unknown as Profile | null);
   const [loading, setLoading] = useState(!authProfile);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -74,7 +74,7 @@ export default function ProfileScreen() {
   // Sync local profile state with AuthContext profile
   useEffect(() => {
     if (authProfile) {
-      setProfile(prev => prev ? { ...prev, ...authProfile } : authProfile as Profile);
+      setProfile(prev => prev ? { ...prev, ...authProfile } : authProfile as unknown as Profile);
       setLoading(false);
     }
   }, [authProfile]);

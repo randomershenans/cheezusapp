@@ -64,6 +64,14 @@ export type EventName =
   | 'signup'
   | 'login'
   | 'logout'
+  // OAuth (Apple / Google native sign-in)
+  | 'oauth_start'
+  | 'oauth_success'
+  | 'oauth_failure'
+  // Signed-out conversion funnel
+  | 'signin_prompt_shown'
+  | 'signin_prompt_action'
+  | 'signed_out_cta_tapped'
   // AI events
   | 'ai_scan_start'
   | 'ai_scan_success'
@@ -100,6 +108,10 @@ export type EventName =
   | 'share_prompt_shown'
   | 'share_prompt_dismissed'
   | 'share_prompt_tapped'
+  // Share card events
+  | 'share_card_rendered'
+  | 'share_card_render_failed'
+  | 'share_card_image_shared'
   // Share events
   | 'profile_share'
   | 'event_share'
@@ -107,7 +119,16 @@ export type EventName =
   // Onboarding events
   | 'app_first_open'
   | 'onboarding_step_viewed'
-  | 'onboarding_completed';
+  | 'onboarding_completed'
+  // Taste quiz events
+  | 'quiz_started'
+  | 'quiz_question_answered'
+  | 'quiz_skipped'
+  | 'quiz_completed'
+  | 'first_feed_view_after_quiz'
+  | 'tune_feed_banner_shown'
+  | 'tune_feed_banner_dismissed'
+  | 'tune_feed_banner_tapped';
 
 // Event properties type
 export interface EventProperties {
@@ -177,6 +198,11 @@ export interface EventProperties {
 
   // Action tracking
   action?: string;
+
+  // Share card
+  card_type?: string;
+  variant?: string;
+  error?: string;
 
   // Any additional custom properties
   [key: string]: any;
@@ -256,6 +282,12 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
   signup: 'session',
   login: 'session',
   logout: 'session',
+  oauth_start: 'session',
+  oauth_success: 'session',
+  oauth_failure: 'session',
+  signin_prompt_shown: 'session',
+  signin_prompt_action: 'session',
+  signed_out_cta_tapped: 'session',
   // AI
   ai_scan_start: 'ai',
   ai_scan_success: 'ai',
@@ -292,6 +324,10 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
   share_prompt_shown: 'share_prompt',
   share_prompt_dismissed: 'share_prompt',
   share_prompt_tapped: 'share_prompt',
+  // Share card
+  share_card_rendered: 'share',
+  share_card_render_failed: 'share',
+  share_card_image_shared: 'share',
   // Share
   profile_share: 'share',
   event_share: 'share',
@@ -300,6 +336,15 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
   app_first_open: 'onboarding',
   onboarding_step_viewed: 'onboarding',
   onboarding_completed: 'onboarding',
+  // Taste quiz
+  quiz_started: 'onboarding',
+  quiz_question_answered: 'onboarding',
+  quiz_skipped: 'onboarding',
+  quiz_completed: 'onboarding',
+  first_feed_view_after_quiz: 'onboarding',
+  tune_feed_banner_shown: 'onboarding',
+  tune_feed_banner_dismissed: 'onboarding',
+  tune_feed_banner_tapped: 'onboarding',
 };
 
 /**
@@ -398,8 +443,11 @@ export const Analytics = {
     trackEvent('pairing_share', { pairing_id: pairingId, share_method: method }, userId),
   
   // Producer
-  trackProducerView: (producerId: string, userId?: string) => 
+  trackProducerView: (producerId: string, userId?: string) =>
     trackEvent('producer_view', { producer_id: producerId }, userId),
+
+  trackProducerShare: (producerId: string, method?: string, userId?: string) =>
+    trackEvent('producer_share', { producer_id: producerId, share_method: method }, userId),
   
   // Article
   trackArticleView: (articleId: string, userId?: string) => 
@@ -446,8 +494,24 @@ export const Analytics = {
   trackLogin: (userId?: string) => 
     trackEvent('login', {}, userId),
   
-  trackLogout: (userId?: string) => 
+  trackLogout: (userId?: string) =>
     trackEvent('logout', {}, userId),
+
+  // OAuth native sign-in funnel
+  trackOAuthStart: (provider: 'apple' | 'google', mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_start', { method: provider, step: mode }, userId),
+  trackOAuthSuccess: (provider: 'apple' | 'google', mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_success', { method: provider, step: mode }, userId),
+  trackOAuthFailure: (provider: 'apple' | 'google', error: string, mode: 'login' | 'signup', userId?: string) =>
+    trackEvent('oauth_failure', { method: provider, error_message: error, step: mode }, userId),
+
+  // Signed-out conversion funnel
+  trackSignInPromptShown: (context: string) =>
+    trackEvent('signin_prompt_shown', { context }),
+  trackSignInPromptAction: (context: string, action: string) =>
+    trackEvent('signin_prompt_action', { context, action }),
+  trackSignedOutCtaTapped: (context: string) =>
+    trackEvent('signed_out_cta_tapped', { context }),
   
   // AI Scanner
   trackAIScanStart: (userId?: string) => 
@@ -559,6 +623,58 @@ export const Analytics = {
 
   trackEventShare: (eventId: string, method?: string, userId?: string) =>
     trackEvent('event_share', { item_id: eventId, share_method: method }, userId),
+
+  // Share card lifecycle
+  trackShareCardRendered: (cardType: string, variant?: string, userId?: string) =>
+    trackEvent('share_card_rendered', { card_type: cardType, variant }, userId),
+
+  trackShareCardRenderFailed: (cardType: string, error: string, userId?: string) =>
+    trackEvent('share_card_render_failed', { card_type: cardType, error }, userId),
+
+  trackShareCardImageShared: (
+    cardType: string,
+    shareMethod: string,
+    variant?: string,
+    userId?: string
+  ) =>
+    trackEvent(
+      'share_card_image_shared',
+      { card_type: cardType, variant, share_method: shareMethod },
+      userId
+    ),
+
+  // Taste quiz
+  trackQuizStarted: (userId?: string) =>
+    trackEvent('quiz_started', {}, userId),
+
+  trackQuizQuestionAnswered: (
+    questionId: string,
+    questionIndex: number,
+    userId?: string
+  ) =>
+    trackEvent(
+      'quiz_question_answered',
+      { item_id: questionId, position: questionIndex },
+      userId
+    ),
+
+  trackQuizSkipped: (atQuestionIndex: number, userId?: string) =>
+    trackEvent('quiz_skipped', { position: atQuestionIndex }, userId),
+
+  trackQuizCompleted: (userId?: string) =>
+    trackEvent('quiz_completed', {}, userId),
+
+  trackFirstFeedViewAfterQuiz: (userId?: string) =>
+    trackEvent('first_feed_view_after_quiz', {}, userId),
+
+  trackTuneFeedBannerShown: (userId?: string) =>
+    trackEvent('tune_feed_banner_shown', {}, userId),
+
+  trackTuneFeedBannerDismissed: (userId?: string) =>
+    trackEvent('tune_feed_banner_dismissed', {}, userId),
+
+  trackTuneFeedBannerTapped: (userId?: string) =>
+    trackEvent('tune_feed_banner_tapped', {}, userId),
 };
 
 export default Analytics;

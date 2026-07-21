@@ -150,56 +150,83 @@ export default function AnalyticsScreen() {
 
       if (error) throw error;
 
-      // Fetch producer cheese details for each entry
+      // Fetch producer cheese details for each entry.
+      // `producer_cheese_stats` is a view that already includes origin_country,
+      // cheese_type (category), cheese_type_name, producer_name, full_name —
+      // one query instead of three. The previous version joined `cheese_types`
+      // via PostgREST which returned `cheese_type` as an ARRAY not an object,
+      // causing every row to fall through to 'Unknown' and empty country.
       const cheeseIds = boxEntries?.map(e => e.cheese_id) || [];
-      
-      // Get basic info from producer_cheese_stats view
+
       const { data: producerCheeses } = await supabase
         .from('producer_cheese_stats')
-        .select('id, full_name, cheese_type_name, producer_name')
+        .select('id, full_name, cheese_type, cheese_type_name, cheese_family, producer_name, origin_country')
         .in('id', cheeseIds);
 
-      // Get additional details from producer_cheeses table with cheese_type info
-      const { data: producerCheeseDetails } = await supabase
+      // For flavors we also pull the rich inline `flavor` text from
+      // producer_cheeses (comma-separated, populated on ~every row) instead of
+      // relying on the sparse producer_cheese_flavor_tags join table (tagged
+      // on ~20% of rows). Keep the tag-table data as a supplementary source.
+      const { data: producerCheeseFlavors } = await supabase
         .from('producer_cheeses')
-        .select('id, origin_country, cheese_type:cheese_types(type)')
+        .select('id, flavor, aroma')
         .in('id', cheeseIds);
 
-      // Get flavor tags for these cheeses
       const { data: flavorTags } = await supabase
         .from('producer_cheese_flavor_tags')
         .select('producer_cheese_id, flavor_tag:flavor_tags(name)')
         .in('producer_cheese_id', cheeseIds);
 
+      // Parse inline "creamy, tangy, milky, buttery" text into individual tokens,
+      // title-case them so Creamy/creamy collapse, and strip qualifiers
+      // ("slightly sweet" → "Sweet").
+      const parseFlavorText = (raw: string | null | undefined): string[] => {
+        if (!raw) return [];
+        return raw
+          .split(/[,;]\s*/)
+          .map((t) => t.trim().replace(/^slightly\s+/i, '').replace(/^very\s+/i, ''))
+          .map((t) => (t.length ? t[0].toUpperCase() + t.slice(1).toLowerCase() : t))
+          .filter((t) => t.length > 0 && t.length <= 20);
+      };
+
       // Map entries to include cheese data
       const entriesWithCheese: CheeseEntry[] = boxEntries?.map(entry => {
         const cheese = producerCheeses?.find(c => c.id === entry.cheese_id);
-        const details = producerCheeseDetails?.find(d => d.id === entry.cheese_id);
-        const cheeseFlavors = flavorTags?.filter(t => t.producer_cheese_id === entry.cheese_id) || [];
-        
+        const textFlavorRow = producerCheeseFlavors?.find(f => f.id === entry.cheese_id);
+        const cheeseTagRows = flavorTags?.filter(t => t.producer_cheese_id === entry.cheese_id) || [];
+
         // Hide generic/unknown producers - just show cheese type name
-        const isGeneric = cheese?.producer_name?.toLowerCase().includes('generic') || 
+        const isGeneric = cheese?.producer_name?.toLowerCase().includes('generic') ||
                           cheese?.producer_name?.toLowerCase().includes('unknown');
         const displayName = isGeneric ? cheese?.cheese_type_name : cheese?.full_name;
-        
-        // Map flavor tags to flavor objects
-        const flavors = cheeseFlavors.map(t => ({ 
-          flavor: (t.flavor_tag as any)?.name || '' 
-        })).filter(f => f.flavor);
-        
-        // Get cheese type category (hard, soft, fresh, etc.)
-        const cheeseTypeCategory = (details?.cheese_type as any)?.type || 'Unknown';
-        
+
+        // Union: tag-table + parsed inline flavor text, deduped.
+        const tagFlavors = cheeseTagRows
+          .map((t) => {
+            const raw = (t.flavor_tag as any);
+            const name = Array.isArray(raw) ? raw[0]?.name : raw?.name;
+            return typeof name === 'string' ? name : '';
+          })
+          .filter((f): f is string => !!f);
+        const textFlavors = parseFlavorText(textFlavorRow?.flavor ?? null);
+        const combined = new Set<string>([...tagFlavors, ...textFlavors]);
+        const flavors = Array.from(combined).map((flavor) => ({ flavor }));
+
+        // Country may be a comma-separated list ("Canada, India, United States")
+        // — keep the first one for aggregation purposes.
+        const countryRaw = cheese?.origin_country ?? '';
+        const country = countryRaw.split(',')[0].trim();
+
         return {
           id: entry.id,
           rating: entry.rating,
           created_at: entry.created_at,
           cheese: {
             id: cheese?.id || '',
-            name: displayName || '',
-            type: cheeseTypeCategory,
-            origin_country: details?.origin_country || '',
-            flavors: flavors,
+            name: displayName || cheese?.cheese_type_name || 'Cheese',
+            type: cheese?.cheese_type || 'Unknown',
+            origin_country: country,
+            flavors,
           },
         };
       }) || [];

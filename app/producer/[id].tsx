@@ -180,10 +180,13 @@ export default function ProducerDetailScreen() {
   const handleShare = async () => {
     if (!producer) return;
     try {
-      await Share.share({
+      const result = await Share.share({
         message: `Check out ${producer.name} on Cheezus! 🧀`,
         title: producer.name,
       });
+      if (result.action === Share.sharedAction) {
+        Analytics.trackProducerShare(producer.id, result.activityType || 'unknown', user?.id);
+      }
     } catch (e) {
       // user cancelled
     }

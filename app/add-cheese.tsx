@@ -36,14 +36,45 @@ export default function AddCheeseScreen() {
   const [showSharePrompt, setShowSharePrompt] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [sharedCheeseName, setSharedCheeseName] = useState<string | null>(null);
+  // Share-card context so the post-log card has rich data to render
+  const [shareContext, setShareContext] = useState<{
+    producerName?: string | null;
+    originCountry?: string | null;
+    imageUrl?: string | null;
+    rating?: number | null;
+    note?: string | null;
+  }>({});
 
   // State for milestone share prompt
   const [showMilestonePrompt, setShowMilestonePrompt] = useState(false);
   const [milestoneCount, setMilestoneCount] = useState<MilestoneNumber | null>(null);
 
+  /**
+   * Gate the post-log share prompt to rating >= 4 OR note.length >= 20.
+   * Milestones always show regardless of rating/note.
+   * Plan spec: avoid negativity surface + share fatigue.
+   */
+  const shouldShowPostLogShare = (rating?: number | null, note?: string | null): boolean => {
+    if (rating && rating >= 4) return true;
+    if (note && note.trim().length >= 20) return true;
+    return false;
+  };
+
   // Check if user hit a milestone and show the appropriate prompt
-  const checkAndShowMilestoneOrShare = async (userId: string, navigateFn: () => void, cheeseName?: string) => {
+  const checkAndShowMilestoneOrShare = async (
+    userId: string,
+    navigateFn: () => void,
+    cheeseName?: string,
+    context?: {
+      rating?: number | null;
+      note?: string | null;
+      producerName?: string | null;
+      originCountry?: string | null;
+      imageUrl?: string | null;
+    }
+  ) => {
     setSharedCheeseName(cheeseName || null);
+    setShareContext(context ?? {});
     try {
       const { count, error } = await supabase
         .from('cheese_box_entries')
@@ -66,7 +97,13 @@ export default function AddCheeseScreen() {
       // Non-critical — fall through to regular share prompt
     }
 
-    // No milestone — show regular share prompt
+    // Post-log share gate: rating >= 4 OR note.length >= 20.
+    if (!shouldShowPostLogShare(context?.rating, context?.note)) {
+      navigateFn();
+      return;
+    }
+
+    // Gate passed — show regular share prompt.
     setPendingNavigation(() => navigateFn);
     setShowSharePrompt(true);
 
@@ -207,7 +244,14 @@ export default function AddCheeseScreen() {
       await checkAndShowMilestoneOrShare(
         user.id,
         () => router.replace('/(tabs)/cheese-box'),
-        selectedCheese.name
+        selectedCheese.name,
+        {
+          rating: formData.rating ?? null,
+          note: formData.notes ?? null,
+          producerName: selectedCheese.producer_name ?? null,
+          originCountry: selectedCheese.origin_country ?? null,
+          imageUrl: imageUrl ?? selectedCheese.image_url ?? null,
+        }
       );
     } catch (error) {
       console.error('Error adding to cheese box:', error);
@@ -447,7 +491,14 @@ export default function AddCheeseScreen() {
         await checkAndShowMilestoneOrShare(
           user.id,
           () => router.replace('/(tabs)/cheese-box'),
-          cheeseName
+          cheeseName,
+          {
+            rating: rating || null,
+            note: notes || null,
+            producerName: formData.producerName ?? null,
+            originCountry: formData.originCountry ?? null,
+            imageUrl: imageUrl ?? null,
+          }
         );
         return;
       } else {
@@ -634,6 +685,14 @@ export default function AddCheeseScreen() {
         userId={user?.id}
         vanityUrl={profile?.vanity_url ?? undefined}
         cheeseName={sharedCheeseName ?? undefined}
+        producerName={shareContext.producerName ?? null}
+        originCountry={shareContext.originCountry ?? null}
+        imageUrl={shareContext.imageUrl ?? null}
+        rating={shareContext.rating ?? null}
+        note={shareContext.note ?? null}
+        userName={profile?.name ?? null}
+        userHandle={profile?.vanity_url ?? null}
+        userAvatarUrl={profile?.avatar_url ?? null}
       />
 
       {/* Milestone Share Prompt - shown when user hits a cheese-logging milestone */}
@@ -651,6 +710,8 @@ export default function AddCheeseScreen() {
           milestoneCount={milestoneCount}
           userId={user?.id}
           vanityUrl={profile?.vanity_url ?? undefined}
+          userName={profile?.name ?? null}
+          userAvatarUrl={profile?.avatar_url ?? null}
         />
       )}
 

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { SplashScreen } from 'expo-router';
@@ -17,7 +17,7 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import { AppState } from 'react-native';
-import { AuthProvider } from '@/contexts/AuthContext'
+import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
 import { Analytics } from '@/lib/analytics';
@@ -206,10 +206,12 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <PushNotificationHandler />
+      <OnboardingRouterGuard />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth/login" options={{ headerShown: false }} />
         <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="add-cheese" options={{ headerShown: false }} />
         <Stack.Screen name="cheese/new" options={{ headerShown: false }} />
         <Stack.Screen name="cheezopedia/[id]" options={{ headerShown: false }} />
@@ -220,4 +222,76 @@ export default function RootLayout() {
       <StatusBar style="auto" />
     </AuthProvider>
   );
+}
+
+/**
+ * Mounted inside AuthProvider. Routes signed-in users who haven't completed
+ * the taste quiz to /onboarding/quiz, unless they're already on an onboarding
+ * or auth route (so we don't fight the initial signup / password recovery
+ * flows). The skip path sets a session-local flag in AuthContext so we don't
+ * re-loop the same session.
+ */
+// A fresh signup's `profiles.created_at` will be within seconds of "now".
+// All 370 existing pre-migration users have `created_at` from weeks/months ago.
+// Everyone with an existing account gets the feed banner instead of the quiz.
+const FRESH_SIGNUP_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
+function OnboardingRouterGuard() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, loading, hasCompletedOnboarding } = useAuth();
+  // null = unknown yet, true = existing user (bypass quiz), false = fresh signup
+  const [isExistingUser, setIsExistingUser] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (loading || !user) {
+      setIsExistingUser(null);
+      return;
+    }
+    if (hasCompletedOnboarding === true) {
+      setIsExistingUser(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('created_at')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        // If the profiles row doesn't exist yet, the handle_new_user trigger
+        // hasn't fired — this is an OAuth (Apple/Google) signup mid-flight.
+        // Treat as a fresh signup so they're routed into the quiz.
+        if (!data?.created_at) {
+          setIsExistingUser(false);
+          return;
+        }
+        const createdAt = new Date(data.created_at).getTime();
+        const isFresh = Date.now() - createdAt < FRESH_SIGNUP_WINDOW_MS;
+        setIsExistingUser(!isFresh);
+      } catch {
+        // On real read failure, default to bypass — safer than looping existing users.
+        if (!cancelled) setIsExistingUser(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, loading, hasCompletedOnboarding]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+    if (hasCompletedOnboarding !== false) return; // null = still loading, true = done
+    if (isExistingUser !== false) return;          // null = still checking, true = bypass
+
+    const path = pathname ?? '';
+    if (path.startsWith('/onboarding') || path.startsWith('/auth')) return;
+
+    router.replace('/onboarding/quiz');
+  }, [user, loading, hasCompletedOnboarding, isExistingUser, pathname, router]);
+
+  return null;
 }

@@ -1,0 +1,19 @@
+name = "cheezus-profile-meta"
+main = "profile-meta.ts"
+compatibility_date = "2026-04-24"
+
+# Routes — attach this worker to the production domain.
+# Replace the pattern when the actual cheezus.co CDN is set up.
+routes = [
+  { pattern = "cheezus.co/@*",       zone_name = "cheezus.co" },
+  { pattern = "cheezus.co/profile/*", zone_name = "cheezus.co" },
+]
+
+[vars]
+# STATIC_ORIGIN = where the SPA build is hosted (Pages, Vercel, etc.)
+# Rebind in production via `wrangler secret put` if sensitive.
+STATIC_ORIGIN = "https://cheezus-web.pages.dev"
+SUPABASE_URL = "https://xkvjqhgnwqawpojjegtr.supabase.co"
+
+# SUPABASE_ANON_KEY is sensitive — set via:
+#   wrangler secret put SUPABASE_ANON_KEY

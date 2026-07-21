@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { X, User, Mail, Lock } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Analytics } from '@/lib/analytics';
+import OAuthButtons from '@/components/auth/OAuthButtons';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
 import Typography from '@/constants/Typography';
@@ -165,7 +166,7 @@ export default function SignupScreen() {
               </View>
             </View>
             
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.signupButton, isLoading && styles.signupButtonDisabled]}
               onPress={handleSignup}
               disabled={isLoading}
@@ -175,7 +176,12 @@ export default function SignupScreen() {
                 {isLoading ? 'Creating Account...' : 'Join the Community'}
               </Text>
             </TouchableOpacity>
-            
+
+            <OAuthButtons
+              mode="signup"
+              onSuccess={() => router.replace('/(tabs)/profile')}
+            />
+
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>Already have an account?</Text>
               <TouchableOpacity 

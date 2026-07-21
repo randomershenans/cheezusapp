@@ -5,4 +5,16 @@
 expo-env.d.ts
 # @end expo-cli
 node_modules
-.env.local
+
+.DS_Store
+
+# Local env files.
+# NOTE: `.env` is ALREADY TRACKED in this repo, so these rules do not untrack it.
+# They only stop new env files being added. Untracking the existing one needs
+# `git rm --cached .env` as a deliberate, separate change.
+.env
+.env.*
+*.env
+
+# Supabase CLI scratch
+supabase/.temp/

@@ -13,6 +13,9 @@ import NearbyCheeseCard from '@/components/NearbyCheeseCard';
 import NotificationBell from '@/components/NotificationBell';
 import ShareProfileCard from '@/components/ShareProfileCard';
 import FollowSuggestions from '@/components/FollowSuggestions';
+import TuneYourFeedBanner from '@/components/TuneYourFeedBanner';
+import SignedOutCTABanner from '@/components/auth/SignedOutCTABanner';
+import InlineSignUpCard from '@/components/auth/InlineSignUpCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/Colors';
 import Layout from '@/constants/Layout';
@@ -114,7 +117,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { search: searchParam } = useLocalSearchParams();
   const initialSearch = typeof searchParam === 'string' ? searchParam : '';
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [allFeedItems, setAllFeedItems] = useState<FeedItem[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -132,9 +135,10 @@ export default function HomeScreen() {
   const [showFollowSuggestions, setShowFollowSuggestions] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
     loadPersonalizedFeed();
     Analytics.trackFeedView(user?.id);
-  }, [user]);
+  }, [user, authLoading]);
 
   // Fetch follower count for share profile card
   useEffect(() => {
@@ -145,7 +149,7 @@ export default function HomeScreen() {
     const fetchFollowerCount = async () => {
       try {
         const { count, error } = await supabase
-          .from('followers')
+          .from('follows')
           .select('*', { count: 'exact', head: true })
           .eq('following_id', user.id);
         if (!error) {
@@ -1103,6 +1107,9 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={styles.feedContainer}>
+            {/* Signed-out users get the conversion banner at the top; signed-in
+                users see the quiz-tuning banner instead. */}
+            {!user ? <SignedOutCTABanner placement="home_feed" /> : <TuneYourFeedBanner />}
             {user && followerCount === 0 && (
               <ShareProfileCard
                 followerCount={followerCount}
@@ -1111,9 +1118,17 @@ export default function HomeScreen() {
               />
             )}
             {feedItems.map((item, index) => (
-              <View key={item.id} style={styles.feedItem}>
-                {renderFeedItem(item)}
-              </View>
+              <React.Fragment key={item.id}>
+                {/* Signed-out users see an inline conversion card every 5 items */}
+                {!user && index > 0 && index % 5 === 0 ? (
+                  <View style={styles.feedItem}>
+                    <InlineSignUpCard variantIndex={Math.floor(index / 5) - 1} />
+                  </View>
+                ) : null}
+                <View style={styles.feedItem}>
+                  {renderFeedItem(item)}
+                </View>
+              </React.Fragment>
             ))}
             
             {/* Loading more indicator */}

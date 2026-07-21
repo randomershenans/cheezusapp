@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Bell, Globe, MapPin, Sparkles } from 'lucide-react-native';
+import { ArrowLeft, Bell, Globe, MapPin, Sparkles, ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/Colors';
@@ -210,6 +210,25 @@ export default function PreferencesScreen() {
               thumbColor="#FFFFFF"
             />
           </View>
+
+          <TouchableOpacity
+            style={styles.settingItem}
+            activeOpacity={0.7}
+            onPress={() => router.push('/onboarding/quiz')}
+          >
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIcon, { backgroundColor: '#FFF5E5' }]}>
+                <Sparkles size={20} color="#FF9800" />
+              </View>
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Retake Taste Quiz</Text>
+                <Text style={styles.settingDescription}>
+                  Re-answer the 8 taste questions to refresh your feed
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color={Colors.subtleText} />
+          </TouchableOpacity>
         </View>
 
         <View style={{ height: 40 }} />
