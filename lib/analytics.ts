@@ -19,7 +19,8 @@ export type EventCategory =
   | 'contact_sync'
   | 'activity_feed'
   | 'share_prompt'
-  | 'onboarding';
+  | 'onboarding'
+  | 'review';
 
 // All trackable events
 export type EventName =
@@ -69,6 +70,9 @@ export type EventName =
   | 'oauth_success'
   | 'oauth_failure'
   | 'oauth_cancelled'
+  | 'review_prompt_shown'
+  | 'review_prompt_skipped'
+  | 'review_store_opened'
   // Signed-out conversion funnel
   | 'signin_prompt_shown'
   | 'signin_prompt_action'
@@ -287,6 +291,9 @@ const eventCategoryMap: Record<EventName, EventCategory> = {
   oauth_success: 'session',
   oauth_failure: 'session',
   oauth_cancelled: 'session',
+  review_prompt_shown: 'review',
+  review_prompt_skipped: 'review',
+  review_store_opened: 'review',
   signin_prompt_shown: 'session',
   signin_prompt_action: 'session',
   signed_out_cta_tapped: 'session',
@@ -533,6 +540,20 @@ export const Analytics = {
    *  real social-auth drop-off entirely. */
   trackOAuthCancelled: (provider: 'apple' | 'google', mode: 'login' | 'signup', userId?: string) =>
     trackEvent('oauth_cancelled', { method: provider, step: mode }, userId),
+
+  // Store review.
+  // NOTE: the OS never tells us whether the user actually left a review, or even
+  // whether a dialog was displayed. review_prompt_shown means "we asked the OS to
+  // ask" - measure success against the store's rating count, not against these rows.
+  trackReviewPromptShown: (trigger: string, userId?: string) =>
+    trackEvent('review_prompt_shown', { trigger }, userId),
+
+  /** `reason` must be a small fixed vocabulary so the breakdown stays groupable. */
+  trackReviewPromptSkipped: (trigger: string, reason: string, userId?: string) =>
+    trackEvent('review_prompt_skipped', { trigger, reason }, userId),
+
+  trackReviewStoreOpened: (userId?: string) =>
+    trackEvent('review_store_opened', {}, userId),
 
   // Signed-out conversion funnel
   trackSignInPromptShown: (context: string) =>

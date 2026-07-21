@@ -20,6 +20,11 @@ export default {
       supportsTablet: true,
       bundleIdentifier: "com.cheezus.app",
       usesAppleSignIn: true,
+      // Read by expo-store-review's storeUrl(), used for the explicit "Rate Cheezus"
+      // action. ?action=write-review opens straight to the review composer.
+      // 6756271218 is the live App Store id - two other ids in the legacy web app
+      // were wrong, so do not copy one from there.
+      appStoreUrl: "https://apps.apple.com/app/id6756271218?action=write-review",
       associatedDomains: [
         "applinks:cheezus.co"
       ],
@@ -39,6 +44,8 @@ export default {
       },
       versionCode: 12,
       package: "com.cheezus.app",
+      // Read by expo-store-review's storeUrl() on Android.
+      playStoreUrl: "https://play.google.com/store/apps/details?id=com.cheezus.app",
       intentFilters: [
         {
           action: "VIEW",

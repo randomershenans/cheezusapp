@@ -11,6 +11,7 @@ import { NewCheeseForm, NewCheeseFormData, CheeseTypePrefill } from '@/component
 import SharePromptModal from '@/components/SharePromptModal';
 import MilestoneSharePrompt, { checkMilestone, hasShownMilestone, MilestoneNumber } from '@/components/MilestoneSharePrompt';
 import { useAuth } from '@/contexts/AuthContext';
+import { maybeAskForReview } from '@/lib/review-prompt';
 import SignInPromptSheet from '@/components/auth/SignInPromptSheet';
 import Colors from '@/constants/Colors';
 
@@ -76,6 +77,7 @@ export default function AddCheeseScreen() {
   ) => {
     setSharedCheeseName(cheeseName || null);
     setShareContext(context ?? {});
+    let lifetimeLogs = 0;
     try {
       const { count, error } = await supabase
         .from('cheese_box_entries')
@@ -83,6 +85,7 @@ export default function AddCheeseScreen() {
         .eq('user_id', userId);
 
       if (!error && count !== null) {
+        lifetimeLogs = count;
         const milestone = checkMilestone(count);
         if (milestone) {
           const alreadyShown = await hasShownMilestone(milestone);
@@ -101,6 +104,12 @@ export default function AddCheeseScreen() {
     // Post-log share gate: rating >= 4 OR note.length >= 20.
     if (!shouldShowPostLogShare(context?.rating, context?.note)) {
       navigateFn();
+      // Nothing else is competing for the user's attention on this path, which makes
+      // it the safest place to ask for a review: they have just completed the app's
+      // core action and no modal is in the way. Deliberately NOT asked on the
+      // milestone or share-prompt branches above, where a modal is already showing.
+      // Fire-and-forget; maybeAskForReview handles all its own gating and never throws.
+      void maybeAskForReview('cheese_logged', lifetimeLogs, userId);
       return;
     }
 
