@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -91,9 +91,38 @@ export default function RootLayout() {
     };
   }, []);
 
+  /**
+   * URLs already processed this session. A ref, not state: it must be readable
+   * synchronously inside the handler, and updating it must not re-render.
+   */
+  const handledUrlsRef = useRef<Set<string>>(new Set());
+
   // Handle deep links
   useEffect(() => {
+    /**
+     * Every URL is handled ONCE, and this is the bug that made confirmation
+     * flash onboarding and then dump you back in the app.
+     *
+     * handleDeepLink is wired to two sources: Linking.getInitialURL() for a
+     * cold launch, and the 'url' event for one already running. On a launch
+     * caused BY the link, both fire with the same URL.
+     *
+     * A PKCE code is single use. The first call redeemed it, signed in, and
+     * replaced the route with /onboarding/quiz, which is the flash. The second
+     * call ran the same code again, got "invalid request" because it was
+     * already spent, concluded the link had failed, and fell through to the
+     * login fallback. Two navigations, the second one landing on top of a
+     * perfectly good session.
+     *
+     * The same duplicate would spend a recovery token or a token_hash twice.
+     */
     const handleDeepLink = async (url: string) => {
+      if (handledUrlsRef.current.has(url)) {
+        console.log('Deep link already handled, ignoring duplicate:', url);
+        return;
+      }
+      handledUrlsRef.current.add(url);
+
       // Skip localhost URLs - these are normal web navigation, not deep links
       if (url.includes('localhost') || url.includes('127.0.0.1')) {
         return;
@@ -215,8 +244,22 @@ export default function RootLayout() {
           return;
         }
 
-        // No usable tokens, or the server rejected them: an expired or reused
-        // link. Login is the right destination, but only as the fallback.
+        /**
+         * Nothing usable in the link. Before assuming a failure, check whether
+         * a session exists anyway: a reused or already-redeemed link is exactly
+         * what a duplicate delivery looks like, and the person is signed in
+         * regardless. Sending them to login in that state is how a working
+         * confirmation ended up dumping someone back into the app.
+         */
+        const { data: current } = await supabase.auth.getSession();
+        if (current.session) {
+          console.log('Link had nothing usable, but a session exists. Continuing.');
+          setTimeout(() => router.replace('/onboarding/quiz'), 100);
+          return;
+        }
+
+        // Genuinely no session and nothing redeemable: an expired or reused
+        // link with nobody signed in. Login is the right destination.
         setTimeout(() => {
           router.replace('/auth/login');
         }, 100);
