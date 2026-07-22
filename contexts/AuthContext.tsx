@@ -155,6 +155,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // silently never fire - so the new user skipped the taste quiz entirely.
   const PROFILE_RETRY_DELAYS_MS = [400, 800, 1600, 3200];
 
+  /**
+   * Keep the SAME user object while it is the same person.
+   *
+   * supabase-js hands back a freshly deserialised user on every auth event, and
+   * it emits them freely: SIGNED_IN, TOKEN_REFRESHED, and again each time the
+   * app foregrounds. Passing those straight to setUser changed the object
+   * identity without changing the person, and ten screens have `[user]` in a
+   * dependency array. Every one of them re-ran on every event. On the feed that
+   * meant loadPersonalizedFeed restarting and putting the spinner back up, so
+   * arriving there while auth was still settling, exactly what happens after
+   * confirming an email, left it stuck on "Loading your feed...". Force-quitting
+   * appeared to fix it only because a cold start has no burst of events.
+   *
+   * Fixed here rather than in the ten call sites, so the dependency arrays that
+   * are already written stay correct instead of each needing to remember this.
+   */
+  const setUserStable = (next: User | null) => {
+    setUser((prev) => (prev?.id && prev.id === next?.id ? prev : next));
+  };
+
   const fetchProfile = async (userId: string) => {
     // maybeSingle: no throw when the row is absent, so a missing row is a retry
     // condition rather than an error.
@@ -276,7 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const applySession = async (session: Session | null) => {
       if (cancelled) return;
       setSession(session);
-      setUser(session?.user ?? null);
+      setUserStable(session?.user ?? null);
       setAnalyticsUser(session?.user?.id ?? null);
       if (session?.user) await fetchProfile(session.user.id);
     };
@@ -355,7 +375,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSession(session);
-      setUser(session?.user ?? null);
+      setUserStable(session?.user ?? null);
       setAnalyticsUser(session?.user?.id ?? null);
 
       if (session?.user) {
@@ -416,7 +436,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         setSession(live);
-        setUser(live.user);
+        setUserStable(live.user);
         setAnalyticsUser(live.user?.id ?? null);
         // Re-fetch the profile too. Without this, a resumed session restored the
         // user but left `profile` stale or null, so onboarding state and the

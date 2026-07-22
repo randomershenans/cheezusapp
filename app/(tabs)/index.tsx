@@ -134,11 +134,29 @@ export default function HomeScreen() {
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [showFollowSuggestions, setShowFollowSuggestions] = useState(false);
 
+  /**
+   * Reload the feed when WHO is signed in changes. Not when the user OBJECT
+   * changes.
+   *
+   * supabase-js hands back a freshly deserialised user on every auth event, and
+   * it emits them often: SIGNED_IN, TOKEN_REFRESHED, and again whenever the app
+   * returns to the foreground. Depending on the object meant a new reference
+   * arrived with the same person inside it, this effect re-ran, and
+   * loadPersonalizedFeed set loading back to true. Land on the feed while any
+   * of that is still settling, as you do immediately after confirming an email,
+   * and the screen sits on "Loading your feed..." because something keeps
+   * restarting it. Force-quitting fixed it because a cold start has no burst of
+   * events to churn through.
+   *
+   * It was also firing trackFeedView on every one of those, which is part of
+   * why feed appears in 99% of sessions.
+   */
   useEffect(() => {
     if (authLoading) return;
     loadPersonalizedFeed();
     Analytics.trackFeedView(user?.id);
-  }, [user, authLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
 
   // Fetch follower count for share profile card
   useEffect(() => {
