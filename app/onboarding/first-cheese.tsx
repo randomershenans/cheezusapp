@@ -7,14 +7,16 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowRight } from 'lucide-react-native';
+import { ArrowRight, Search, X } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Analytics } from '@/lib/analytics';
 import {
   getOnboardingSuggestions,
+  searchCheesesForOnboarding,
   logCheeseToBox,
   type SuggestedCheese,
 } from '@/lib/onboarding-suggestions';
@@ -45,6 +47,9 @@ export default function FirstCheeseScreen() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loggedIds, setLoggedIds] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SuggestedCheese[]>([]);
+  const [searching, setSearching] = useState(false);
   // Guards against a second write while one is in flight. State alone is not enough:
   // two taps in the same tick both read the pre-update value.
   const writingRef = useRef(false);
@@ -110,10 +115,45 @@ export default function FirstCheeseScreen() {
     setTimeout(goNext, 550);
   };
 
+  /**
+   * Debounced search.
+   *
+   * The generation counter is what stops a slow response for "ch" landing after
+   * a fast one for "cheddar" and replacing the right results with stale ones.
+   * Comparing against the latest query string alone would not catch it, since
+   * the user can type back to a term that is already in flight.
+   */
+  const searchGenRef = useRef(0);
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    const gen = ++searchGenRef.current;
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      const results = await searchCheesesForOnboarding(term, { excludeCheeseIds: loggedIds });
+      if (gen !== searchGenRef.current) return;
+      setSearchResults(results);
+      setSearching(false);
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // loggedIds is read for exclusion only; re-running on every log would clear
+    // the results out from under someone mid-tap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
   const handleSkip = () => {
     Analytics.trackOnboardingStepViewed('first_cheese_skipped', user?.id);
     goNext();
   };
+
+  /** Showing search results rather than suggestions. */
+  const isSearching = query.trim().length >= 2;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -123,16 +163,64 @@ export default function FirstCheeseScreen() {
         <Text style={styles.badge}>Your cheese box</Text>
         <Text style={styles.title}>Add your first cheese</Text>
         <Text style={styles.subtitle}>
-          {suggestions.length
-            ? 'Based on what you just told us. Tap one you have tried.'
-            : 'Tap one you have tried to start your collection.'}
+          Tap one you have tried, or search for it.
         </Text>
+      </View>
+
+      {/* The escape hatch. Suggestions are a guess at what someone has eaten;
+          this is for the person who knows exactly what they had last week and
+          cannot see it on the grid. Without it the only options are pick
+          something you have not tried, or skip. */}
+      <View style={styles.searchWrap}>
+        <Search size={16} color={Colors.subtleText} />
+        <TextInput
+          style={styles.searchInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search for a cheese"
+          placeholderTextColor={Colors.subtleText}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {query.length > 0 ? (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+            <X size={16} color={Colors.subtleText} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {loading ? (
         <View style={styles.centre}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
+      ) : isSearching ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {searching ? (
+            <View style={styles.centre}>
+              <ActivityIndicator color={Colors.primary} />
+            </View>
+          ) : searchResults.length === 0 ? (
+            <View style={styles.centre}>
+              <Text style={styles.emptyText}>
+                Nothing matching &ldquo;{query.trim()}&rdquo;. Try a shorter word, or pick one
+                below.
+              </Text>
+            </View>
+          ) : (
+            <CheesePickerGrid
+              cheeses={searchResults}
+              busyId={busyId}
+              doneIds={loggedIds}
+              onSelect={handleSelect}
+            />
+          )}
+        </ScrollView>
       ) : suggestions.length === 0 ? (
         // No suggestions at all (offline, or the query failed). Never dead-end the user:
         // onboarding arrives here via router.replace with gestures disabled, so there is
@@ -199,6 +287,26 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.base,
     color: Colors.subtleText,
     lineHeight: 22,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.s,
+    marginHorizontal: Layout.spacing.l,
+    marginBottom: Layout.spacing.m,
+    paddingHorizontal: Layout.spacing.m,
+    paddingVertical: Layout.spacing.s,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border ?? '#E7E5DF',
+    backgroundColor: '#FFFFFF',
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.base,
+    color: Colors.text,
+    padding: 0,
   },
   scroll: {
     flex: 1,
