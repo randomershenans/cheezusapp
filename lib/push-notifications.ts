@@ -16,36 +16,106 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Register for push notifications and save token to database
+ * ASKING FOR PUSH PERMISSION IS A ONE-SHOT. SPEND IT WELL.
+ *
+ * This file used to expose a single function that checked permission and, if
+ * it did not have it, immediately raised the OS dialog. It was called from a
+ * useEffect that ran the moment a user object existed, which is app launch. So
+ * the very first thing a new person saw, before they knew what Cheezus was,
+ * was iOS asking whether this unfamiliar app could send them notifications.
+ *
+ * On iOS that question can only be asked once. A "no" is permanent and can
+ * only be undone by the person going to Settings themselves, which nobody
+ * does. 21% of accounts have a push token, and that number is the ceiling on
+ * every re-engagement idea we might ever have.
+ *
+ * So the two things are now separate:
+ *   syncPushTokenIfGranted  never prompts, safe to call on launch
+ *   requestPushPermission   prompts, and is only called from a moment where
+ *                           the person has just seen the app do something
+ *                           worth being notified about
  */
-export async function registerForPushNotifications(userId: string): Promise<string | null> {
-  // Skip on web - push notifications only work on native
-  if (Platform.OS === 'web') {
-    console.log('Push notifications not supported on web');
+
+/**
+ * Whether we have already shown our own primer.
+ *
+ * Separate from the OS permission state on purpose. Someone who taps "Not now"
+ * on our screen never reaches the OS dialog, so canAskForPermission stays true
+ * and they would be asked again on every single log. One ask, then leave them
+ * alone. Matches the milestone tracking pattern.
+ */
+const PUSH_PRIMER_KEY = 'cheezus_push_primer_shown';
+
+export async function hasAskedForPush(): Promise<boolean> {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    return (await AsyncStorage.getItem(PUSH_PRIMER_KEY)) === '1';
+  } catch {
+    // Storage unavailable: treat as already asked. Better to miss the prompt
+    // than to show it on a loop.
+    return true;
+  }
+}
+
+export async function markAskedForPush(): Promise<void> {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    await AsyncStorage.setItem(PUSH_PRIMER_KEY, '1');
+  } catch {
+    // Non-critical.
+  }
+}
+
+/** Whether the OS will still show a prompt. False once answered either way. */
+export async function canAskForPushPermission(): Promise<boolean> {
+  if (Platform.OS === 'web' || !Device.isDevice) return false;
+  try {
+    const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+    return status !== 'granted' && canAskAgain;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keep the stored token fresh for people who have ALREADY granted permission.
+ * Never prompts, so this is safe to call on every launch. Tokens rotate, so
+ * without this a granted user can silently become unreachable.
+ */
+export async function syncPushTokenIfGranted(userId: string): Promise<string | null> {
+  if (Platform.OS === 'web' || !Device.isDevice) return null;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return null;
+  } catch {
     return null;
   }
+  return registerToken(userId);
+}
 
-  // Only works on physical devices
-  if (!Device.isDevice) {
-    console.log('Push notifications only work on physical devices');
-    return null;
-  }
+/**
+ * Raise the OS prompt, then register on success. Call this only from a primed
+ * moment, never cold.
+ */
+export async function requestPushPermission(userId: string): Promise<string | null> {
+  if (Platform.OS === 'web' || !Device.isDevice) return null;
 
-  // Check/request permissions
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== 'granted') {
+  try {
     const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    console.log('Push notification permission denied');
+    if (status !== 'granted') {
+      console.log('Push notification permission denied');
+      return null;
+    }
+  } catch (error) {
+    console.log('Push permission request failed:', (error as Error).message);
     return null;
   }
 
-  // Get the Expo push token
+  return registerToken(userId);
+}
+
+/** Fetch the Expo token and store it. Assumes permission is already granted. */
+async function registerToken(userId: string): Promise<string | null> {
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     

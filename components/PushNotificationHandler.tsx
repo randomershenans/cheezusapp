@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  registerForPushNotifications,
+  syncPushTokenIfGranted,
   setupNotificationListeners,
   getInitialNotification,
   setBadgeCount,
@@ -20,8 +20,10 @@ export default function PushNotificationHandler() {
     if (Platform.OS === 'web') return;
 
     if (user) {
-      // Register for push notifications
-      registerForPushNotifications(user.id);
+      // Refresh the token for people who have already said yes. Deliberately
+      // the non-prompting version: this runs at launch, which is the worst
+      // possible moment to ask someone who has not.
+      syncPushTokenIfGranted(user.id);
 
       // Check if app was opened from a notification
       getInitialNotification().then((response) => {

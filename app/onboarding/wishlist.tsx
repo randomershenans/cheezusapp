@@ -19,6 +19,12 @@ import {
   type SuggestedCheese,
 } from '@/lib/onboarding-suggestions';
 import { maybeAskForReview } from '@/lib/review-prompt';
+import {
+  canAskForPushPermission,
+  hasAskedForPush,
+  markAskedForPush,
+} from '@/lib/push-notifications';
+import PushPrimerModal from '@/components/PushPrimerModal';
 import type { QuizAnswers } from '@/lib/taste-seed-service';
 import CheesePickerGrid from '@/components/onboarding/CheesePickerGrid';
 import Colors from '@/constants/Colors';
@@ -48,6 +54,7 @@ export default function OnboardingWishlistScreen() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [showPushPrimer, setShowPushPrimer] = useState(false);
   const writingRef = useRef(false);
   const exitingRef = useRef(false);
 
@@ -91,6 +98,16 @@ export default function OnboardingWishlistScreen() {
    * own gating (threshold, annual cap, availability) and never throws, so this is
    * fire-and-forget and cannot delay or block the exit.
    */
+  /** Leave onboarding. Called from every exit path, and must always land. */
+  const leave = () => {
+    if (user) {
+      // Lifetime count is at least what they logged in step 3. The helper re-checks its
+      // own thresholds; passing the known floor avoids another round trip here.
+      void maybeAskForReview('cheese_logged', alreadyLogged.length, user.id);
+    }
+    router.replace('/(tabs)');
+  };
+
   const finish = (via: 'saved' | 'skipped') => {
     if (exitingRef.current) return;
     exitingRef.current = true;
@@ -98,13 +115,36 @@ export default function OnboardingWishlistScreen() {
     Analytics.trackOnboardingCompleted(via === 'saved' ? 'full' : 'partial', false, user?.id);
     Analytics.trackFirstFeedViewAfterQuiz(user?.id);
 
-    if (user) {
-      // Lifetime count is at least what they logged in step 3. The helper re-checks its
-      // own thresholds; passing the known floor avoids another round trip here.
-      void maybeAskForReview('cheese_logged', alreadyLogged.length, user.id);
+    /**
+     * The end of onboarding is the best moment we will ever get to ask about
+     * notifications, and it only works if they actually logged something in
+     * step 3, because otherwise there is nothing to promise them news about.
+     *
+     * The permission prompt used to fire at app launch instead, before anyone
+     * knew what Cheezus was, and only 21% said yes. On iOS that answer is
+     * final, so where we ask is the whole ballgame.
+     *
+     * This must never be able to trap someone in onboarding. Two checks, both
+     * fast and local, both wrapped: any failure at all falls through to the
+     * exit rather than swallowing it.
+     */
+    if (user && alreadyLogged.length > 0) {
+      void (async () => {
+        try {
+          if (!(await hasAskedForPush()) && (await canAskForPushPermission())) {
+            await markAskedForPush();
+            setShowPushPrimer(true);
+            return;
+          }
+        } catch {
+          // Fall through and leave.
+        }
+        leave();
+      })();
+      return;
     }
 
-    router.replace('/(tabs)');
+    leave();
   };
 
   const handleSelect = async (cheese: SuggestedCheese) => {
@@ -176,6 +216,13 @@ export default function OnboardingWishlistScreen() {
           <ArrowRight size={16} color={Colors.subtleText} />
         </TouchableOpacity>
       </View>
+
+      {/* Asked here because they have just logged a cheese and saved a wishlist,
+          which is the only point where "we will tell you when" means anything.
+          Resolving it either way always leaves onboarding. */}
+      {user?.id ? (
+        <PushPrimerModal visible={showPushPrimer} userId={user.id} onResolved={leave} />
+      ) : null}
     </SafeAreaView>
   );
 }

@@ -12,6 +12,12 @@ import SharePromptModal from '@/components/SharePromptModal';
 import MilestoneSharePrompt, { checkMilestone, hasShownMilestone, MilestoneNumber } from '@/components/MilestoneSharePrompt';
 import { useAuth } from '@/contexts/AuthContext';
 import { maybeAskForReview } from '@/lib/review-prompt';
+import PushPrimerModal from '@/components/PushPrimerModal';
+import {
+  canAskForPushPermission,
+  hasAskedForPush,
+  markAskedForPush,
+} from '@/lib/push-notifications';
 import SignInPromptSheet from '@/components/auth/SignInPromptSheet';
 import Colors from '@/constants/Colors';
 
@@ -50,6 +56,7 @@ export default function AddCheeseScreen() {
   // State for milestone share prompt
   const [showMilestonePrompt, setShowMilestonePrompt] = useState(false);
   const [milestoneCount, setMilestoneCount] = useState<MilestoneNumber | null>(null);
+  const [showPushPrimer, setShowPushPrimer] = useState(false);
 
   /**
    * Gate the post-log share prompt to rating >= 4 OR note.length >= 20.
@@ -99,6 +106,27 @@ export default function AddCheeseScreen() {
       }
     } catch {
       // Non-critical — fall through to regular share prompt
+    }
+
+    /**
+     * The safety net for the push ask.
+     *
+     * Onboarding is where most people log their first cheese, so that flow asks
+     * first and this rarely fires. But anyone who skipped onboarding, or was
+     * never shown it, would otherwise never be asked at all, and having just
+     * logged a cheese is exactly the primed moment we want either way.
+     * hasAskedForPush is the shared latch, so whichever path gets there first
+     * is the only one that ever asks.
+     *
+     * Placed after the milestone branch so two modals never stack, and before
+     * the review ask because a review is worth less than being able to contact
+     * someone at all.
+     */
+    if (lifetimeLogs >= 1 && !(await hasAskedForPush()) && (await canAskForPushPermission())) {
+      await markAskedForPush();
+      setPendingNavigation(() => navigateFn);
+      setShowPushPrimer(true);
+      return;
     }
 
     // Post-log share gate: rating >= 4 OR note.length >= 20.
@@ -727,6 +755,21 @@ export default function AddCheeseScreen() {
         userHandle={profile?.vanity_url ?? null}
         userAvatarUrl={profile?.avatar_url ?? null}
       />
+
+      {/* Push primer - first log only, asked before the OS dialog is spent */}
+      {user?.id ? (
+        <PushPrimerModal
+          visible={showPushPrimer}
+          userId={user.id}
+          onResolved={() => {
+            setShowPushPrimer(false);
+            if (pendingNavigation) {
+              pendingNavigation();
+              setPendingNavigation(null);
+            }
+          }}
+        />
+      ) : null}
 
       {/* Milestone Share Prompt - shown when user hits a cheese-logging milestone */}
       {milestoneCount && (
