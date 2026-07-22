@@ -117,39 +117,64 @@ export default function RootLayout() {
         console.log('Email confirmation deep link detected:', url);
 
         /**
-         * Consume the tokens. Do not throw them away.
+         * Consume whatever the link carries. Do not throw it away.
          *
-         * A Supabase confirmation link carries access_token and refresh_token
-         * in its hash. This used to ignore them and bounce to the login screen,
-         * which is the worst of both worlds: the person just proved they own
-         * the address, and we asked them to prove it again. Worse, whatever
-         * partial state was left made the app look signed in while no session
-         * existed, so the feed rendered for someone who was not logged in.
+         * Clicking confirm IS the sign-in, so this has to end with a session or
+         * it has failed. There are two payload shapes and they arrive in
+         * different parts of the URL, which is what made this so easy to get
+         * wrong:
          *
-         * Clicking confirm IS the sign-in. Treat it as one.
+         *   #access_token=...&refresh_token=...   an already-minted session
+         *   ?token_hash=...&type=signup           a one-shot code to redeem
+         *
+         * Reading only the hash meant the second shape fell straight through to
+         * the login screen, and since the token can only be redeemed once and
+         * the web page had already handed it over, nothing else could redeem it
+         * either. The account stayed unconfirmed and the person was bounced
+         * back to a login they could not complete.
          */
-        const hash = url.split('#')[1];
-        if (hash) {
-          const params = new URLSearchParams(hash);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
+        const [beforeHash, hashPart] = url.split('#');
+        const queryIndex = beforeHash.indexOf('?');
+        const query = new URLSearchParams(queryIndex >= 0 ? beforeHash.slice(queryIndex + 1) : '');
+        const hashParams = new URLSearchParams(hashPart ?? '');
 
-          if (accessToken && refreshToken) {
-            const { data, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
+        const accessToken = hashParams.get('access_token') ?? query.get('access_token');
+        const refreshToken = hashParams.get('refresh_token') ?? query.get('refresh_token');
+        const tokenHash = query.get('token_hash') ?? hashParams.get('token_hash');
+        const otpType = query.get('type') ?? hashParams.get('type');
 
-            if (!error && data.session) {
-              console.log('Email confirmed and signed in:', data.session.user?.id);
-              // Straight into onboarding. This is a brand new account by
-              // definition, and the router guard would otherwise have to race
-              // the profile load to work it out.
-              setTimeout(() => router.replace('/onboarding/quiz'), 100);
-              return;
-            }
+        let signedIn = false;
+
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!error && data.session) {
+            console.log('Email confirmed and signed in:', data.session.user?.id);
+            signedIn = true;
+          } else {
             console.error('Could not sign in from the confirmation link:', error?.message);
           }
+        } else if (tokenHash) {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: otpType === 'magiclink' ? 'magiclink' : otpType === 'email' ? 'email' : 'signup',
+          });
+          if (!error && data.session) {
+            console.log('Email confirmed via token_hash:', data.session.user?.id);
+            signedIn = true;
+          } else {
+            console.error('Could not redeem the confirmation token:', error?.message);
+          }
+        }
+
+        if (signedIn) {
+          // Straight into onboarding. This is a brand new account by
+          // definition, and the router guard would otherwise have to race
+          // the profile load to work it out.
+          setTimeout(() => router.replace('/onboarding/quiz'), 100);
+          return;
         }
 
         // No usable tokens, or the server rejected them: an expired or reused
