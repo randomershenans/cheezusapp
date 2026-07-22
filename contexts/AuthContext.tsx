@@ -286,8 +286,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const AsyncStorage = require('@react-native-async-storage/async-storage').default;
         const keys: string[] = await AsyncStorage.getAllKeys();
-        // supabase-js persists under sb-<project-ref>-auth-token.
-        return keys.some((k) => k.startsWith('sb-') && k.includes('auth-token'));
+        /**
+         * supabase-js persists the session under sb-<project-ref>-auth-token.
+         *
+         * It ALSO persists the PKCE code verifier under
+         * sb-<project-ref>-auth-token-code-verifier, which starts with sb- and
+         * contains auth-token, so a naive match treats it as a stored session.
+         *
+         * That is not a hypothetical. Signing up creates a verifier and no
+         * session, because confirmation is still pending. This then reported a
+         * session that did not exist, entered the retry loop, and spent
+         * 500 + 1500 + 4000ms calling refreshSession with nothing to refresh.
+         * Six seconds of loading true, during which the feed shows its spinner
+         * AND the onboarding guard cannot fire, because both bail while
+         * loading. Exactly the window between confirming an email and landing
+         * in the app.
+         */
+        return keys.some(
+          (k) => k.startsWith('sb-') && k.endsWith('-auth-token')
+        );
       } catch {
         return false;
       }
@@ -322,11 +339,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // There IS a stored session, so the restore failed rather than the user
         // being logged out. Back off and try again; connectivity on launch
         // usually settles within a couple of seconds.
+        /**
+         * Every `return` in here used to leave loading true forever if it fired
+         * on a cancelled run. `loading` gates the feed AND the onboarding
+         * guard, so one missed clear is a permanently empty app rather than a
+         * cosmetic bug. Breaking out and letting the single clear below run is
+         * the same logic with no way to skip it.
+         */
         for (const delay of [500, 1500, 4000]) {
-          if (cancelled) return;
+          if (cancelled) break;
           await new Promise((r) => setTimeout(r, delay));
           const { data: retry, error } = await supabase.auth.refreshSession();
-          if (cancelled) return;
+          if (cancelled) break;
           if (retry.session) {
             console.log('[Auth] Session recovered on retry.');
             await applySession(retry.session);
