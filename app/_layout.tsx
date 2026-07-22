@@ -101,16 +101,43 @@ export default function RootLayout() {
       
       console.log('Deep link received:', url);
       
-      // Handle email confirmation deep link (from Supabase signup email)
-      // URL formats can vary:
-      // - cheezus://#access_token=...&type=signup
-      // - cheezus://auth/confirm?token=...&type=signup
-      // - https://cheezus.co/auth/confirm#access_token=...&type=signup
-      const isEmailConfirmation = 
-        url.includes('type=signup') || 
+      /**
+       * Handle the email confirmation deep link.
+       *
+       * THE ACTUAL SHAPE, confirmed by asking Supabase for a real signup link
+       * rather than guessing at it: the Site URL is `cheezus://`, so the email
+       * button goes to
+       *   <project>.supabase.co/auth/v1/verify?token=...&type=signup&redirect_to=cheezus://
+       * and after verifying, Supabase redirects to the bare app scheme. The
+       * website is not in this flow at ALL, which is why fixing cheezus.co
+       * three times changed nothing.
+       *
+       * And because lib/supabase.ts sets flowType 'pkce', what lands is
+       *   cheezus://?code=<uuid>
+       * a PKCE authorisation code in the QUERY. Not a hash, not a token_hash.
+       * None of the tests below matched it, so the link fell through every
+       * branch, nothing ran, and the app just sat on the feed signed out.
+       *
+       * detectSessionInUrl is false on that client, so supabase-js will not
+       * pick this up on its own. It has to be done here.
+       *
+       * The PKCE verifier lives in THIS app's storage, which is also why the
+       * website could never have redeemed the code even if it were involved.
+       */
+      const isEmailConfirmation =
+        url.includes('type=signup') ||
         url.includes('type=email') ||
         url.includes('type=magiclink') ||
         url.includes('auth/confirm') ||
+        // A PKCE code with no path is a signup confirmation, because the Site
+        // URL is the bare scheme. Recovery arrives on the auth/callback path
+        // instead (resetPasswordForEmail sends people via cheezus.co), carries
+        // no type of its own, and must NOT be treated as a confirmation or the
+        // person resetting a password gets signed in and dropped into
+        // onboarding rather than the reset screen.
+        (url.includes('code=') &&
+          !url.includes('type=recovery') &&
+          !url.includes('auth/callback')) ||
         (url.includes('access_token') && !url.includes('type=recovery'));
       
       if (isEmailConfirmation) {
@@ -124,20 +151,21 @@ export default function RootLayout() {
          * different parts of the URL, which is what made this so easy to get
          * wrong:
          *
+         *   ?code=<uuid>                          a PKCE code. THIS IS THE REAL ONE.
          *   #access_token=...&refresh_token=...   an already-minted session
-         *   ?token_hash=...&type=signup           a one-shot code to redeem
+         *   ?token_hash=...&type=signup           a one-shot token to redeem
          *
-         * Reading only the hash meant the second shape fell straight through to
-         * the login screen, and since the token can only be redeemed once and
-         * the web page had already handed it over, nothing else could redeem it
-         * either. The account stayed unconfirmed and the person was bounced
-         * back to a login they could not complete.
+         * All three are handled because the shape depends on Supabase config
+         * that can change from a dashboard without anyone touching this file,
+         * and every previous attempt at this bug failed by handling exactly one
+         * of them and assuming.
          */
         const [beforeHash, hashPart] = url.split('#');
         const queryIndex = beforeHash.indexOf('?');
         const query = new URLSearchParams(queryIndex >= 0 ? beforeHash.slice(queryIndex + 1) : '');
         const hashParams = new URLSearchParams(hashPart ?? '');
 
+        const pkceCode = query.get('code') ?? hashParams.get('code');
         const accessToken = hashParams.get('access_token') ?? query.get('access_token');
         const refreshToken = hashParams.get('refresh_token') ?? query.get('refresh_token');
         const tokenHash = query.get('token_hash') ?? hashParams.get('token_hash');
@@ -145,7 +173,17 @@ export default function RootLayout() {
 
         let signedIn = false;
 
-        if (accessToken && refreshToken) {
+        if (pkceCode) {
+          // The verifier that pairs with this code was stored by THIS app when
+          // it called signUp, so this is the only place it can be redeemed.
+          const { data, error } = await supabase.auth.exchangeCodeForSession(pkceCode);
+          if (!error && data.session) {
+            console.log('Email confirmed via PKCE code:', data.session.user?.id);
+            signedIn = true;
+          } else {
+            console.error('Could not exchange the confirmation code:', error?.message);
+          }
+        } else if (accessToken && refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -185,11 +223,38 @@ export default function RootLayout() {
         return;
       }
       
-      // Handle password recovery deep link (from Supabase email)
-      // URL format: cheezus://#access_token=...&type=recovery
-      if (url.includes('type=recovery') || url.includes('recovery')) {
+      /**
+       * Handle the password recovery deep link.
+       *
+       * Two shapes again, for the same reason as confirmation. The classic one
+       * is cheezus://#access_token=...&type=recovery. But resetPasswordForEmail
+       * sends people to https://cheezus.co/auth/callback, and under PKCE that
+       * arrives as ?code=<uuid> with no type at all, relayed on to
+       * cheezus://auth/callback?code=... by the website. Handling only the hash
+       * would leave a password reset as dead as the signup confirmation was.
+       */
+      const recoveryCode = (() => {
+        if (!url.includes('auth/callback')) return null;
+        const before = url.split('#')[0];
+        const qi = before.indexOf('?');
+        if (qi < 0) return null;
+        return new URLSearchParams(before.slice(qi + 1)).get('code');
+      })();
+
+      if (url.includes('type=recovery') || url.includes('recovery') || recoveryCode) {
         console.log('Password recovery deep link detected');
-        
+
+        if (recoveryCode) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(recoveryCode);
+          if (!error && data.session) {
+            router.replace('/auth/reset-password');
+            return;
+          }
+          console.error('Could not exchange the recovery code:', error?.message);
+          setTimeout(() => router.replace('/auth/login'), 100);
+          return;
+        }
+
         // Extract tokens from the URL hash fragment
         // Supabase redirects with tokens in the hash: #access_token=...&refresh_token=...&type=recovery
         const hashPart = url.split('#')[1];
