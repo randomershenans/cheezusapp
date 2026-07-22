@@ -39,6 +39,9 @@ interface UserProfile {
   avatar_url: string | null;
   vanity_url: string | null;
   onboarding_quiz_completed_at: string | null;
+  /** Used by the onboarding router guard to tell a new account from one that
+      pre-dates the quiz. */
+  created_at: string | null;
 }
 
 /**
@@ -158,7 +161,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchOnce = async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('id, name, tagline, location, avatar_url, vanity_url, onboarding_quiz_completed_at')
+        .select(
+          // created_at is here for the onboarding router guard, which decides
+          // whether an account pre-dates the quiz. Without it the guard cannot
+          // classify anyone and silently never fires.
+          'id, name, tagline, location, avatar_url, vanity_url, onboarding_quiz_completed_at, created_at'
+        )
         .eq('id', userId)
         .maybeSingle();
       return data;
@@ -234,20 +242,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('[Auth] Initial session loaded:', session ? `User: ${session.user?.id}` : 'No session');
+    /**
+     * Restore the session on cold start, and do NOT take the first "no" for an
+     * answer.
+     *
+     * getSession() reads the stored session and refreshes it if the access
+     * token has expired. On a cold start that refresh is a network call made at
+     * the worst possible moment: the app has just launched, and after an app
+     * UPDATE it launches into a fresh process with connectivity still settling.
+     * When that call fails, getSession() returns null, and the old code took
+     * that as "signed out" and set loading false. The user then sat looking at
+     * "loading feed" with no profile, still holding a perfectly valid refresh
+     * token on disk.
+     *
+     * So: if there is no session but a persisted one EXISTS in storage, retry
+     * before concluding anything. Only genuinely empty storage, or a refresh
+     * the server actively rejects, means signed out.
+     */
+    let cancelled = false;
+
+    const hasStoredSession = async () => {
+      if (Platform.OS === 'web') return false;
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const keys: string[] = await AsyncStorage.getAllKeys();
+        // supabase-js persists under sb-<project-ref>-auth-token.
+        return keys.some((k) => k.startsWith('sb-') && k.includes('auth-token'));
+      } catch {
+        return false;
+      }
+    };
+
+    const applySession = async (session: Session | null) => {
+      if (cancelled) return;
       setSession(session);
       setUser(session?.user ?? null);
       setAnalyticsUser(session?.user?.id ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      if (session?.user) await fetchProfile(session.user.id);
+    };
+
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          console.log('[Auth] Initial session loaded:', data.session.user?.id);
+          await applySession(data.session);
+          if (!cancelled) setLoading(false);
+          return;
+        }
+
+        // No session in hand. Is that because there is genuinely none?
+        const stored = await hasStoredSession();
+        if (!stored) {
+          console.log('[Auth] No session and nothing stored: signed out.');
+          if (!cancelled) setLoading(false);
+          return;
+        }
+
+        // There IS a stored session, so the restore failed rather than the user
+        // being logged out. Back off and try again; connectivity on launch
+        // usually settles within a couple of seconds.
+        for (const delay of [500, 1500, 4000]) {
+          if (cancelled) return;
+          await new Promise((r) => setTimeout(r, delay));
+          const { data: retry, error } = await supabase.auth.refreshSession();
+          if (cancelled) return;
+          if (retry.session) {
+            console.log('[Auth] Session recovered on retry.');
+            await applySession(retry.session);
+            if (!cancelled) setLoading(false);
+            return;
+          }
+          // A refresh token the server REJECTS is a real sign-out. Anything
+          // else is a network problem and deserves another attempt.
+          if (error && /invalid|expired|revoked|not found/i.test(error.message)) {
+            console.warn('[Auth] Stored session rejected by the server:', error.message);
+            break;
+          }
+        }
+        console.warn('[Auth] Could not restore the stored session.');
+        if (!cancelled) setLoading(false);
+      } catch (error) {
+        console.error('[Auth] Error getting initial session:', error);
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
-    }).catch(error => {
-      console.error('[Auth] Error getting initial session:', error);
-      setLoading(false);
-    });
+    })();
 
     // Listen for auth changes
     const {
@@ -294,7 +373,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // On native, re-check the session when the app returns to the foreground.

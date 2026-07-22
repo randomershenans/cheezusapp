@@ -115,7 +115,45 @@ export default function RootLayout() {
       
       if (isEmailConfirmation) {
         console.log('Email confirmation deep link detected:', url);
-        // Small delay to ensure app is fully loaded before navigation
+
+        /**
+         * Consume the tokens. Do not throw them away.
+         *
+         * A Supabase confirmation link carries access_token and refresh_token
+         * in its hash. This used to ignore them and bounce to the login screen,
+         * which is the worst of both worlds: the person just proved they own
+         * the address, and we asked them to prove it again. Worse, whatever
+         * partial state was left made the app look signed in while no session
+         * existed, so the feed rendered for someone who was not logged in.
+         *
+         * Clicking confirm IS the sign-in. Treat it as one.
+         */
+        const hash = url.split('#')[1];
+        if (hash) {
+          const params = new URLSearchParams(hash);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (!error && data.session) {
+              console.log('Email confirmed and signed in:', data.session.user?.id);
+              // Straight into onboarding. This is a brand new account by
+              // definition, and the router guard would otherwise have to race
+              // the profile load to work it out.
+              setTimeout(() => router.replace('/onboarding/quiz'), 100);
+              return;
+            }
+            console.error('Could not sign in from the confirmation link:', error?.message);
+          }
+        }
+
+        // No usable tokens, or the server rejected them: an expired or reused
+        // link. Login is the right destination, but only as the fallback.
         setTimeout(() => {
           router.replace('/auth/login');
         }, 100);
@@ -281,54 +319,35 @@ function OnboardingRouterGuard() {
   // question and must not be pushed back into the quiz on every cold start, but should
   // still see TuneYourFeedBanner - and that banner keys off hasCompletedOnboarding,
   // which a skip deliberately leaves false.
-  const { user, loading, onboardingResolved } = useAuth();
-  // null = unknown yet, true = existing user (bypass quiz), false = fresh signup
-  const [isExistingUser, setIsExistingUser] = useState<boolean | null>(null);
+  const { user, loading, profile, onboardingResolved } = useAuth();
 
-  useEffect(() => {
-    if (loading || !user) {
-      setIsExistingUser(null);
-      return;
-    }
-    if (onboardingResolved === true) {
-      setIsExistingUser(true);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('created_at')
-          .eq('id', user.id)
-          .maybeSingle();
-        if (cancelled) return;
-        // If the profiles row doesn't exist yet, the handle_new_user trigger
-        // hasn't fired — this is an OAuth (Apple/Google) signup mid-flight.
-        // Treat as a fresh signup so they're routed into the quiz.
-        if (!data?.created_at) {
-          setIsExistingUser(false);
-          return;
-        }
-        const createdAt = new Date(data.created_at).getTime();
-        setIsExistingUser(createdAt < ONBOARDING_LAUNCH_AT);
-      } catch {
-        // On real read failure, default to bypass — safer than looping existing users.
-        if (!cancelled) setIsExistingUser(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, loading, onboardingResolved]);
+  /**
+   * Is this a pre-existing account that should skip the quiz?
+   *
+   * Derived from the profile AuthContext has already loaded, rather than
+   * re-reading profiles here. The old version issued its own query and, on any
+   * failure, defaulted to "existing" and silently bypassed onboarding forever.
+   * That is a bad default: a transient read error should not permanently cost
+   * someone the quiz, and it made the guard's behaviour depend on a race
+   * between two independent fetches of the same row.
+   *
+   * null means not known yet, and the guard waits rather than guessing.
+   */
+  const isExistingUser: boolean | null = (() => {
+    if (!user) return null;
+    if (!profile?.created_at) return null;
+    return Date.parse(profile.created_at) < ONBOARDING_LAUNCH_AT;
+  })();
 
   useEffect(() => {
     if (loading) return;
     if (!user) return;
     if (onboardingResolved !== false) return; // null = still loading, true = done
-    if (isExistingUser !== false) return;          // null = still checking, true = bypass
+    if (isExistingUser !== false) return;     // null = still loading, true = bypass
 
     const path = pathname ?? '';
+    // Onboarding routes obviously, and auth routes because the login screen
+    // does its own navigation and the two would fight.
     if (path.startsWith('/onboarding') || path.startsWith('/auth')) return;
 
     router.replace('/onboarding/quiz');
